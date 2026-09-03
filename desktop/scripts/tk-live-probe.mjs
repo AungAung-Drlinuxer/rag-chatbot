@@ -1,0 +1,22 @@
+import puppeteer from "puppeteer-core";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const browser = await puppeteer.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: "new", args: ["--no-sandbox"] });
+const page = await browser.newPage();
+await page.setViewport({ width: 1500, height: 950 });
+await page.goto("https://chat.drlinuxer.com/", { waitUntil: "networkidle0" });
+await page.waitForSelector("#login-username");
+await page.type("#login-username", process.env.VERIFY_USER);
+await page.type("#login-password", process.env.VERIFY_PASS);
+await page.keyboard.press("Enter");
+await sleep(3500);
+const nav = await page.evaluate(() => { [...document.querySelectorAll("button")].find(x=>/^tickets$/i.test((x.textContent||"").trim()))?.click(); return 1; });
+await sleep(6000);
+const r = await page.evaluate(() => {
+  const idBtn = [...document.querySelectorAll("tbody tr td button")].find(b => /^ITHD-\d+/.test((b.textContent||"").trim()));
+  if (!idBtn) return { found:false, rows: document.querySelectorAll("tbody tr").length };
+  idBtn.click(); return { found:true, id: idBtn.textContent.trim() };
+});
+await sleep(3000);
+const h3s = await page.evaluate(() => [...document.querySelectorAll("aside h3")].map(h=>(h.textContent||"").trim()).slice(0,12));
+console.log(JSON.stringify(r), "aside h3s:", JSON.stringify(h3s));
+await browser.close();
