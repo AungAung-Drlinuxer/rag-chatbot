@@ -1,0 +1,53 @@
+name: ci
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+jobs:
+  gates:
+    name: gates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      - name: Type check (tsc)
+        run: npx tsc --noEmit
+
+      - name: Governance lint (eslint)
+        run: npx eslint src
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Production build (vite)
+        run: npm run build
+        env:
+          VITE_API_URL: ""
+
+  # ── Backend gates: uncomment when D:\ragchatbot backend becomes deploy source ──
+  # backend:
+  #   name: backend
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: backend
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: astral-sh/setup-uv@v4
+  #     - run: uv sync
+  #     - run: uv run ruff check app workers
+  #     - run: uv run pytest -q
