@@ -1,0 +1,35 @@
+# --- Python (backend) ---
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- Node / desktop ---
+node_modules/
+dist/
+.vite/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# --- secrets & local env ---
+.env
+.env.local
+*.pem
+kubeconfig*
+*_token.txt
+devpw
+
+# --- build/QA scratch ---
+*.log
+*.tar
+preview.log
+served.js
+blocked-scripts/
+
+# --- editors / OS ---
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

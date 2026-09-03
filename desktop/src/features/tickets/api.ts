@@ -1,0 +1,66 @@
+/** Tickets feature API — list/create/update + comments + attachments (mirrors /api/tickets*). */
+import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
+
+export async function listTickets(limit = 50) {
+  const r = await apiFetch(`${BASE}/api/tickets?limit=${limit}`, { headers: authHeaders() });
+  return r.json();
+}
+
+export async function createTicketApi(body: {
+  subject: string; description: string; domain: string; priority: string;
+  assignee?: string | null; due_date?: string | null;
+}) {
+  const r = await apiFetch(`${BASE}/api/tickets`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function ticketUpdate(ref: string, patch: {
+  status?: string; assignee?: string | null; due_date?: string | null;
+  subject?: string; description?: string;
+}) {
+  const r = await apiFetch(`${BASE}/api/tickets/${ref}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(patch),
+  });
+  return r.json();
+}
+
+export async function ticketComments(ref: string) {
+  const r = await apiFetch(`${BASE}/api/tickets/${ref}/comments`, { headers: authHeaders() });
+  return r.json();
+}
+
+export async function ticketAddComment(ref: string, body: string) {
+  const r = await apiFetch(`${BASE}/api/tickets/${ref}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ body }),
+  });
+  return r.json();
+}
+
+export async function ticketAttachments(ref: string) {
+  const r = await apiFetch(`${BASE}/api/tickets/${ref}/attachments`, { headers: authHeaders() });
+  return r.json();
+}
+
+export async function ticketAttachmentAdd(ref: string, file: File) {
+  const buf = await file.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const r = await apiFetch(`${BASE}/api/tickets/${ref}/attachments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ filename: file.name, content_type: file.type, data_base64: b64 }),
+  });
+  return r.json();
+}
+
+export function attachmentUrl(ref: string, id: number) {
+  return `${BASE}/api/tickets/${ref}/attachments/${id}/download`;
+}

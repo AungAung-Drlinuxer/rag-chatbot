@@ -1,0 +1,171 @@
+/** Settings feature API — user prefs, admin knobs, SMTP + integration config (mirrors /api/settings*, /api/admin/settings*, /api/integrations*). */
+import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
+
+export type UserSettings = {
+  username?: string;
+  theme: string;                 // light | dark | system
+  density: string;               // comfortable | compact
+  chat_font_size: number;
+  code_font: string;
+  show_token_usage: boolean;
+  show_rag_sources: boolean;
+  stream_responses: boolean;
+  markdown_rendering: boolean;
+  auto_escalate_on_caution: boolean;
+  history_retention_days: number;
+  escalate_include_transcript: boolean;
+  escalate_include_sources: boolean;
+  escalate_open_new_tab: boolean;
+  updated_at?: string | null;
+};
+
+export type Knob = { key: string; type: string; default: number | string; current: number | string; overridden: boolean };
+
+export type IntegrationStatus = Record<string, any>;
+
+// --- user settings (two historical spellings kept for compatibility) ---
+export async function getUserSettings(): Promise<{ settings: Record<string, any> }> {
+  const r = await apiFetch(`${BASE}/api/settings`, { headers: { ...authHeaders() } });
+  if (!r.ok) throw new Error(`settings fetch failed (HTTP ${r.status})`);
+  return r.json();
+}
+
+export async function putUserSettings(settings: Record<string, any>) {
+  const r = await apiFetch(`${BASE}/api/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ settings }),
+  });
+  if (!r.ok) {
+    let msg = `settings save failed (HTTP ${r.status})`;
+    try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export async function getMySettings(): Promise<UserSettings> {
+  const r = await apiFetch(`${BASE}/api/settings`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function updateMySettings(patch: Partial<UserSettings>): Promise<UserSettings> {
+  const r = await apiFetch(`${BASE}/api/settings`, {
+    method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// --- admin knobs ---
+export async function getAdminSettings(): Promise<{ knobs: Knob[] }> {
+  const r = await apiFetch(`${BASE}/api/admin/settings`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function saveAdminSettings(knobs: Record<string, number | string>) {
+  const r = await apiFetch(`${BASE}/api/admin/settings`, {
+    method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ knobs }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json(); // { applied, knobs }
+}
+
+export async function resetAdminSetting(key: string) {
+  const r = await apiFetch(`${BASE}/api/admin/settings/${key}`, { method: "DELETE", headers: authHeaders() });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json(); // { reset: key }
+}
+
+// --- SMTP ---
+export async function getSmtpSettings(): Promise<{ smtp: Record<string, any> }> {
+  const r = await apiFetch(`${BASE}/api/settings/smtp`, { headers: { ...authHeaders() } });
+  if (!r.ok) throw new Error(`SMTP settings fetch failed (HTTP ${r.status})`);
+  return r.json();
+}
+
+export async function putSmtpSettings(smtp: Record<string, any>): Promise<{ ok: boolean }> {
+  const r = await apiFetch(`${BASE}/api/settings/smtp`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ smtp }),
+  });
+  if (!r.ok) {
+    let msg = `SMTP save failed (HTTP ${r.status})`;
+    try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export async function sendTestEmail(to: string): Promise<{ ok: boolean; to: string }> {
+  const r = await apiFetch(`${BASE}/api/settings/smtp/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ to }),
+  });
+  if (!r.ok) {
+    let msg = `Test email failed (HTTP ${r.status})`;
+    try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+// --- integrations ---
+export async function getIntegrationSettings(key: string): Promise<{ integration: string; settings: Record<string, any> }> {
+  const r = await apiFetch(`${BASE}/api/settings/integrations/${key}`, { headers: { ...authHeaders() } });
+  if (!r.ok) throw new Error(`integration settings fetch failed (HTTP ${r.status})`);
+  return r.json();
+}
+
+export async function putIntegrationSettings(key: string, settings: Record<string, any>): Promise<{ ok: boolean }> {
+  const r = await apiFetch(`${BASE}/api/settings/integrations/${key}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ settings }),
+  });
+  if (!r.ok) {
+    let msg = `integration save failed (HTTP ${r.status})`;
+    try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+export async function testIntegration(key: string): Promise<{ ok: boolean; status?: number; detail?: string }> {
+  const r = await apiFetch(`${BASE}/api/settings/integrations/${key}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+  });
+  try {
+    return await r.json();
+  } catch {
+    return { ok: false, detail: `Test failed (HTTP ${r.status})` };
+  }
+}
+
+export async function getIntegrationsStatus(): Promise<IntegrationStatus> {
+  const r = await apiFetch(`${BASE}/api/integrations/status`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// --- runtime knobs (v0.21.83 — admin RAG params, 403 for other roles) ---
+export async function getRuntime(): Promise<any | null> {
+  const r = await apiFetch(`${BASE}/api/runtime`, { headers: authHeaders() });
+  return r.ok ? r.json() : null;
+}
+
+export async function putRuntime(overrides: Record<string, number>) {
+  const r = await apiFetch(`${BASE}/api/runtime`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ overrides }),
+  });
+  return r.json().catch(() => ({}));
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IT Help Chatbot</title>
+        <script>
+      // v0.21.44 — apply persisted theme before first paint (fixes theme reset on reload
+      // of non-settings pages).
+      try {
+        var d = localStorage.getItem("ith.dark") === "1";
+        var c = localStorage.getItem("ith.compact") === "1";
+        document.documentElement.setAttribute("data-theme", d ? "dark" : "light");
+        document.documentElement.dataset.compact = c ? "1" : "0";
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

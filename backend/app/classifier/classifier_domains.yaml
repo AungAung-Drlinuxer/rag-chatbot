@@ -1,0 +1,158 @@
+# Domain classifier vocabulary (GOVERNANCE Rule 5: configuration is externalized).
+# Stage 1 fast keyword rules: substring match on the lowercased query.
+# Weighted domains get their hit count multiplied before the argmax.
+# SECURITY_TERMS is kept for compatibility but weighting is expressed via `weights`.
+
+stage1_confidence: 0.7        # below this, the pipeline trusts the top retrieved doc's domain
+lockdown_domain: general      # fallback domain when nothing matches
+base_confidence: 0.75         # confidence for a single hit
+per_extra_hit: 0.1            # confidence gained per additional hit
+max_confidence: 0.98
+
+weights:
+  security: 2.0
+  kubernetes: 1.5
+  storage: 1.5
+  application: 1.5
+
+domains:
+  database:
+    - database
+    - postgres
+    - oracle
+    - sql
+    - ora-
+    - timeout
+    - connection refused
+    - disk full
+    - backup
+    - slow query
+    - deadlock
+    - replication
+    - pool exhaust
+    - vacuum
+    - wal
+  network:
+    - network
+    - internet
+    - dns
+    - wifi
+    - firewall
+    - vpn
+    - no internet
+    - speed
+    - connectivity
+    - ip
+    - interface
+    - eth0
+    - gateway
+    - proxy
+    - ntp
+    - chrony
+    - latency
+    - route
+    - traceroute
+    - ping
+  security:
+    - security
+    - password
+    - unauthorized
+    - access denied
+    - permission
+    - account
+    - 2fa
+    - mfa
+    - lockout
+    - phishing
+    - suspicious
+    - breach
+    - certificate
+    - tls
+    - ssl
+    - apparmor
+    - credential
+    - brute force
+  server:
+    - server
+    - service
+    - cpu
+    - memory
+    - ram
+    - crash
+    - restart
+    - reboot
+    - process
+    - resource
+    - kill
+    - oom
+    - out of memory
+    - systemd
+    - journalctl
+    - disk usage
+    - filesystem
+    - lvm
+    - kubernetes
+    - k8s
+    - kubectl
+    - pod
+    - pvc
+    - helm
+    - imagepullbackoff
+    - crashloopbackoff
+    - statefulset
+    - deployment
+    - rollout
+    - daemonset
+    - nfs
+    - storage
+    - mount
+    - disk io
+    - iops
+    - partition
+    - application
+    - app crash
+    - outlook
+    - teams
+    - zoom
+    - office
+    - excel
+    - word
+    - browser
+    - chrome
+    - edge
+    - print
+    - printer
+    - license
+    - install
+    - update failed
+    - software
+  kubernetes:
+    - kubernetes
+    - k8s
+    - kubectl
+    - pod
+    - node notready
+    - pvc
+    - pv
+    - helm
+    - crashloopbackoff
+    - imagepullbackoff
+    - oomkilled
+    - deployment
+    - ingress
+    - namespace
+    - rke2
+    - container
+  storage:
+    - storage
+    - nfs
+    - mount
+    - filesystem
+    - disk space
+    - smb
+    - share
+    - ceph
+    - volume
+    - partition
+    - lvm
+    - raid
