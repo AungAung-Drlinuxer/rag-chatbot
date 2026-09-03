@@ -22,6 +22,15 @@ export default defineConfig({
     // We only ship the 8 langs we registered, but rollup still emits per-grammar
     // chunks; cap what the browser preloads so page load stays fast.
     chunkSizeWarningLimit: 700,
-    rollupOptions: { output: { manualChunks: undefined } },
+    rollupOptions: {
+      output: {
+        // split the heavy vendors out of the app entry chunk
+        manualChunks: {
+          react: ["react", "react-dom"],
+          markdown: ["react-markdown", "remark-gfm"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
   },
 });

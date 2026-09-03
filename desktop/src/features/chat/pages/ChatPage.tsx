@@ -115,9 +115,12 @@ export default function Chat({
       } catch { /* ignore transient */ }
     }
     poll();
-    const iv = setInterval(() => { if (!approval) poll(); }, 15000);
+    const iv = setInterval(() => { if (!approvalRef.current) poll(); }, 15000);
     return () => { alive = false; clearInterval(iv); };
   }, [role]);
+  // approval read through a ref inside the poll interval (effect deps stay [role])
+  const approvalRef = useRef(approval);
+  approvalRef.current = approval;
   const [showSources] = useState(true);
   const [mobileHistory, setMobileHistory] = useState(false);
 
@@ -308,7 +311,7 @@ export default function Chat({
         { role: "assistant", content: streamed },
       ];
       refreshConversations();
-    } catch (err) {
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId

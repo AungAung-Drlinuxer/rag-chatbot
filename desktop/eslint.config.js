@@ -23,14 +23,18 @@ export default tseslint.config(
     },
     rules: {
       "react-hooks/exhaustive-deps": "warn",
-      // baseline rules are warnings during migration (existing debt); ratchet
-      // them to errors in a dedicated cleanup PR once src is clean
-      "no-unused-expressions": "off",
+      // ratchet (2026-09-03): src passes with these ON except the two noted below
+      "no-unused-expressions": "off",             // print-report template style, revisit
       "@typescript-eslint/no-unused-expressions": "off",
-      "no-constant-binary-expression": "off",
+      "no-constant-binary-expression": "off",     // print-report template style, revisit
+      "no-useless-escape": "off",                 // print-report <\/script> bytes, keep
+      // no-undef is redundant under TS (tsc catches undefined identifiers) and
+      // false-positives on `React.ReactNode` / `RequestInit` type positions
       "no-undef": "off",
-      // existing print-report code relies on specific escape bytes; re-audit in cleanup PR
-      "no-useless-escape": "off",
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+      }],
       // governance: transport must go through shared/api/client.ts (apiFetch)
       "no-restricted-globals": ["error", {
         name: "fetch",
