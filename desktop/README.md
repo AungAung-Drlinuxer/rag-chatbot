@@ -29,7 +29,8 @@ shared UI primitives, or a feature module owning its own api/page/components.
 desktop/
 ├── src/
 │   ├── main.tsx                     # React root
-│   ├── App.tsx                      # session bootstrap + route switch (1,060L — see BACKLOG)
+│   ├── App.tsx                      # session bootstrap + route switch (1,060L; split
+│                              #   into app/{theme,router,session} = known backlog)
 │   ├── styles.css                   # design tokens (borderless/soft-shadow system, Inter)
 │   ├── vite-env.d.ts
 │   │
