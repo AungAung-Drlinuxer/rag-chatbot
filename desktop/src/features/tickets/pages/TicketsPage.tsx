@@ -3,7 +3,6 @@ import {
   Printer,
   AlertCircle,
   Pencil,
-  RefreshCcw,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -96,6 +95,7 @@ export default function Tickets({
 
 
   const [busy, setBusy] = useState(false);
+  const [listBusy, setListBusy] = useState(false); // Refresh owns its own state — shared busy froze other affordances
 
   const [newTicket, setNewTicket] = useState({
     subject: "",
@@ -114,6 +114,7 @@ export default function Tickets({
   const [commentText, setCommentText] = useState("");
   const [editFields, setEditFields] = useState<{ subject: string; description: string; assignee: string; due_date: string } | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [statusSaving, setStatusSaving] = useState<string | null>(null);
 
   const loadComments = (ref: string) => {
     ticketComments(ref).then((d) => setComments((d?.comments ?? []) as Comment[])).catch(() => setComments([]));
@@ -133,19 +134,27 @@ export default function Tickets({
   }
 
   async function handleUpdateStatus(status: string) {
-    if (!selected) return;
+    if (!selected || statusSaving) return;
+    const prevStatus = selected.status;
+    setStatusSaving(status);
+    setSelected({ ...selected, status: status as Ticket["status"] }); // optimistic
     try {
       await ticketUpdate(selected.id, { status });
-      setSelected({ ...selected, status: status as Ticket["status"] });
       setStatusOpen(false);
       setComments((prev) => [...prev, {
         id: Date.now(), author: userName, body: `status → ${status}`, kind: "status",
         created_at: new Date().toISOString(),
       }]);
       onToast("Status updated");
-      listTickets(50).then((d) => setTickets((d?.tickets ?? []) as Ticket[])).catch(() => {});
+      listTickets(50).then((d) => {
+        setTickets((d?.tickets ?? []) as Ticket[]);
+        setSelected((cur) => (cur ? (d?.tickets ?? []).find((x: Ticket) => x.id === cur.id) ?? cur : cur));
+      }).catch(() => {});
     } catch {
+      setSelected({ ...selected, status: prevStatus }); // rollback
       onToast("Status update failed", "err");
+    } finally {
+      setStatusSaving(null);
     }
   }
 
@@ -610,20 +619,23 @@ export default function Tickets({
                     className="h-9 rounded-lg"
                     onClick={async () => {
                       setQuery("");
-                      setBusy(true);
+                      setListBusy(true);
                       try {
                         const d = await listTickets(50);
                         setTickets((d?.tickets ?? []) as Ticket[]);
+                        // re-sync open detail panel with fresh statuses
+                        setSelected((cur) => (cur ? (d?.tickets ?? []).find((x: Ticket) => x.id === cur.id) ?? cur : cur));
                         onToast("Ticket list refreshed");
                       } catch {
-                        onToast("Refresh failed — try again");
+                        onToast("Refresh failed — try again", "err");
                       } finally {
-                        setBusy(false);
+                        setListBusy(false);
                       }
                     }}
+                    disabled={listBusy}
                   >
-                    <RefreshIcon />
-                    Refresh
+                    <RefreshIcon className={listBusy ? "animate-spin" : ""} />
+                    {listBusy ? "Refreshing…" : "Refresh"}
                   </Button>
                 </div>
               </div>
@@ -936,25 +948,39 @@ export default function Tickets({
                       Activity
                     </h3>
 
-                    {/* v0.20.0 — status picker */}
-                    {statusOpen && (
-                      <div className="mb-3 flex flex-wrap gap-2 rounded-xl border bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/50">
-                        {["open", "pending", "resolved", "closed"].map((st) => (
-                          <button
-                            key={st}
-                            onClick={() => handleUpdateStatus(st)}
-                            className={[
-                              "rounded-lg border px-3 py-1.5 text-[10px] font-semibold capitalize transition",
-                              selected.status === st
-                                ? "border-blue-500 bg-blue-50 text-blue-600 dark:bg-blue-950/30"
-                                : "hover:bg-muted",
-                            ].join(" ")}
-                          >
-                            {st}
-                          </button>
-                        ))}
+                    {/* v0.21.99 — status = always-visible segmented control.
+                        Clicking a segment SAVES IMMEDIATELY (optimistic PUT);
+                        no Save button by design. Edit form keeps its own Save. */}
+                    <div className="mb-4">
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Status — click to change (saves instantly)
+                      </h3>
+                      <div className="flex flex-wrap gap-1.5 rounded-xl bg-slate-50 p-1.5 dark:bg-slate-800/50">
+                        {(["open", "pending", "resolved", "closed"] as const).map((st) => {
+                          const m = statusMeta(st);
+                          const active = selected.status === st;
+                          const saving = statusSaving === st;
+                          return (
+                            <button
+                              key={st}
+                              disabled={!!statusSaving}
+                              onClick={() => handleUpdateStatus(st)}
+                              aria-pressed={active}
+                              className={[
+                                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold capitalize transition",
+                                active
+                                  ? "bg-white text-foreground shadow-sm ring-1 ring-slate-900/10 dark:bg-slate-900 dark:ring-white/10"
+                                  : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-slate-900/60",
+                                saving ? "opacity-60" : "",
+                              ].join(" ")}
+                            >
+                              <span className={"size-1.5 rounded-full " + m.dot} />
+                              {saving ? "saving…" : m.label}
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
+                    </div>
 
                     {/* v0.20.0 — edit form */}
                     {editFields ? (
@@ -1107,8 +1133,9 @@ export default function Tickets({
 
                           <Button variant="outline" size="sm" className="rounded-xl text-xs"
                             onClick={() => setStatusOpen((v) => !v)}
+                            aria-expanded={statusOpen}
                           >
-                            <RefreshCcw className="mr-1.5 size-3.5" />
+                            <ChevronDown className={"mr-1.5 size-3.5 transition-transform " + (statusOpen ? "rotate-180" : "")} />
                             Update status
                           </Button>
 

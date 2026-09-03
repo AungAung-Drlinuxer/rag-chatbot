@@ -1,0 +1,24 @@
+import puppeteer from "puppeteer-core";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const browser = await puppeteer.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: "new", args: ["--no-sandbox"] });
+const page = await browser.newPage();
+await page.setViewport({ width: 1500, height: 950 });
+await page.goto("http://localhost:1420/", { waitUntil: "networkidle0" });
+await page.waitForSelector("#login-username");
+await page.type("#login-username", process.env.VERIFY_USER);
+await page.type("#login-password", process.env.VERIFY_PASS);
+await page.keyboard.press("Enter");
+await sleep(3000);
+// click the row (tr) rather than td
+const navd = await page.evaluate(() => { const b=[...document.querySelectorAll("button")].find(x=>/^tickets$/i.test((x.textContent||"").trim())); b?.click(); return !!b; });
+await sleep(4500);
+const rows = await page.evaluate(() => document.querySelectorAll("tbody tr").length);
+const clicked = await page.evaluate(() => {
+  const tr = document.querySelector("tbody tr");
+  if (!tr) return false; tr.click(); return true;
+});
+await sleep(1500);
+const h3s = await page.evaluate(() => [...document.querySelectorAll("h3")].map(h => (h.textContent||"").trim()).slice(0,20));
+console.log("nav:", navd, "| rows:", rows, "| clicked:", clicked);
+console.log("h3s:", JSON.stringify(h3s));
+await browser.close();

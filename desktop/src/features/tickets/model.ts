@@ -21,21 +21,25 @@ export type Attachment = { id: number; filename: string; size: number; created_b
 export const STATUS_META = {
   open: {
     label: "Open",
+    dot: "bg-blue-500",
     className:
       "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300",
   },
   pending: {
     label: "Pending",
+    dot: "bg-amber-500",
     className:
       "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
   },
   resolved: {
     label: "Resolved",
+    dot: "bg-emerald-500",
     className:
       "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
   },
   closed: {
     label: "Closed",
+    dot: "bg-slate-400",
     className:
       "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400",
   },
