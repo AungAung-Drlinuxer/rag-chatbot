@@ -57,16 +57,16 @@ export default function PageSidebar({
       {collapsed ? (
         /* Rail mode: fixed top row = expand button only (Task-1: it was pushed
            out of the h-16 row by the logo stack + bell — unreachable). */
-        <div className="flex h-16 flex-col items-center justify-center gap-1 border-b px-2 dark:border-slate-800">
+        <div className="flex h-auto flex-col items-center justify-center gap-2.5 border-b px-2 py-3 dark:border-slate-800">
           {onToggleCollapsed && (
             <button
               type="button"
               onClick={onToggleCollapsed}
               title="Expand sidebar (Ctrl+B)"
               aria-label="Expand sidebar"
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
-              <PanelLeftOpen className="size-4" />
+              <PanelLeftOpen className="size-4.5" />
             </button>
           )}
           {canManage && (
@@ -81,7 +81,7 @@ export default function PageSidebar({
             <div className="text-[10px] text-slate-400">Enterprise Assistant</div>
           </div>
           {canManage && (
-            <div className="ml-auto mr-1">
+            <div className="ml-auto mr-2">
               <NotificationBell notices={notices} onOpen={onNavigate} />
             </div>
           )}
@@ -203,7 +203,7 @@ export default function PageSidebar({
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-[var(--sidebar-bg)] transition-all border-[var(--sidebar-border)] lg:static lg:z-auto lg:translate-x-0 " + (collapsed ? "w-[64px]" : "w-[250px]"),
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-[var(--sidebar-bg)] transition-all border-[var(--sidebar-border)] lg:static lg:z-auto lg:translate-x-0 " + (collapsed ? "w-[72px]" : "w-[250px]"),
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
