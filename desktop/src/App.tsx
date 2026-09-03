@@ -3,11 +3,14 @@
  * Governance (see desktop/README.md): this file owns NO endpoint logic and NO
  * feature UI. Feature pages live in src/features/<domain>/pages, shared nav in
  * components/PageSidebar.tsx, theme/router/session in src/app/.
+ * B-3: collapsible sidebar (Cmd/Ctrl+B, persisted). B-4: global Cmd+K palette.
  */
 import { useEffect, useState } from "react";
 import { useToast, ToastHost } from "@/shared/useToast";
 import PageSidebar from "@/components/PageSidebar";
+import CommandPalette from "@/components/CommandPalette";
 import { useHashNav } from "@/app/router";
+import { useSidebarCollapsed } from "@/app/useSidebar";
 import { applyStoredTheme, applyUserPrefs } from "@/app/theme";
 import { usernameFromToken } from "@/app/session";
 import {
@@ -31,7 +34,21 @@ export default function App() {
   // did, so refreshing on other pages reset the theme).
   useEffect(() => { applyStoredTheme(); }, []);
   const [nav, setNav] = useHashNav();
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const toast = useToast();
+
+  // B-4 — global Cmd/Ctrl+K opens the shell-level palette
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const [authed, setAuthed] = useState(false);
   const [loginUser, setLoginUser] = useState("");
@@ -90,9 +107,19 @@ export default function App() {
     <>
       <div className="flex h-screen overflow-hidden">
         <PageSidebar active={active} onNavigate={setNav} userName={userName} role={role}
-          displayRole={meDisplay} perms={perms} onLogout={onLogout} />
+          displayRole={meDisplay} perms={perms} onLogout={onLogout}
+          collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
         <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
       </div>
+      {authed && (
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          onNavigate={setNav}
+          onOpenConversation={(id) => { setNav("chat"); window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: id })); }}
+          enabled={perms}
+        />
+      )}
       <ToastHost toast={toast.toast} />
     </>
   );
@@ -112,6 +139,15 @@ export default function App() {
       return (
         <>
           <ChatPage userName={userName} role={role} onNavigate={setNav} onLogout={onLogout} />
+          {authed && (
+            <CommandPalette
+              open={paletteOpen}
+              onClose={() => setPaletteOpen(false)}
+              onNavigate={setNav}
+              onOpenConversation={(id) => { setNav("chat"); window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: id })); }}
+              enabled={perms}
+            />
+          )}
           <ToastHost toast={toast.toast} />
         </>
       );
@@ -133,6 +169,15 @@ export default function App() {
       return (
         <>
           <ChatPage userName={userName} role={role} onNavigate={setNav} onLogout={onLogout} />
+          {authed && (
+            <CommandPalette
+              open={paletteOpen}
+              onClose={() => setPaletteOpen(false)}
+              onNavigate={setNav}
+              onOpenConversation={(id) => { setNav("chat"); window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: id })); }}
+              enabled={perms}
+            />
+          )}
           <ToastHost toast={toast.toast} />
         </>
       );
