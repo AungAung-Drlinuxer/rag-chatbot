@@ -1,6 +1,8 @@
-# Gitea SSH on 2222 — patch: pod listens 22 (in-container), NodePort 30222 exposes it.
-# DNS git.drlinuxer.com -> 10.10.10.16 (reverse-proxy VM) must forward tcp/2222 -> 10.10.10.200:30222,
-# OR users use ssh://git@git.drlinuxer.com:30222/... directly (NodePort).
+# Gitea SSH as a dedicated LoadBalancer service (B-3 follow-up).
+# MetalLB lan-pool assigns the next free IP (10.10.10.200-205 range).
+# DNS: add/point "gitssh.drlinuxer.com" (or keep git.drlinuxer.com for 22)
+# to the assigned IP. Clone URL becomes:
+#   git clone git@git.drlinuxer.com:ragchatbot/ragchatbot.git   (port 22, standard)
 ---
 apiVersion: v1
 kind: Service
@@ -8,12 +10,12 @@ metadata:
   name: gitea-ssh
   namespace: gitea
   annotations:
-    meta.helm.sh/note: "NodePort for git-over-ssh; external proxy may map 22 -> this"
+    metallb.io/allow-shared-ip: ""   # dedicated IP, do not share with ingress
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector: { app: gitea }
   ports:
     - name: ssh
-      port: 22
-      targetPort: 22
-      nodePort: 30222
+      port: 22          # standard git-over-ssh port on the LB IP
+      targetPort: 22    # gitea container ssh (START_SSH_SERVER, SSH_LISTEN_PORT=22)
+      protocol: TCP
