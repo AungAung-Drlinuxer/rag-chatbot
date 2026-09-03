@@ -225,23 +225,19 @@ export default function Dashboard(_props: Props) {
 
             {/* KPI */}
 
-            {/* B-7 — bento: hero card spans 2 on xl */}
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 
-              <div className="md:col-span-2 xl:col-span-2">
-                <KpiCard
-                  icon={
-                    <MessageSquare className="size-4" />
-                  }
-                  value={stats ? String(stats.total_conversations) : "—"}
-                  title="Total Conversations"
-                  change="+18.6%"
-                  positive
-                  description="vs last 7 days — all channels"
-                  loading={loading}
-                  hero
-                />
-              </div>
+              <KpiCard
+                icon={
+                  <MessageSquare className="size-4" />
+                }
+                value={stats ? String(stats.total_conversations) : "—"}
+                title="Total Conversations"
+                change="+18.6%"
+                positive
+                description="vs last 7 days"
+                loading={loading}
+              />
 
               <KpiCard
                 icon={
@@ -665,7 +661,6 @@ function KpiCard({
   description,
   positive,
   loading,
-  hero,
 }: {
   icon: ReactNode;
   value: string;
@@ -674,16 +669,15 @@ function KpiCard({
   description: string;
   positive: boolean;
   loading: boolean;
-  hero?: boolean;
 }) {
   return (
-    <Card className={"relative overflow-hidden rounded-2xl p-4 " + (hero ? "bg-gradient-to-br from-[color-mix(in_srgb,var(--card)_94%,var(--accent))] to-[var(--card)] ring-1 ring-[color-mix(in_srgb,var(--accent)_35%,transparent)]" : "")}>
+    <Card className="relative overflow-hidden rounded-2xl p-4">
 
       <div className="flex items-start justify-between">
 
         <div>
 
-          <div className={"font-semibold tracking-tight " + (hero ? "text-3xl" : "text-2xl")}>
+          <div className="text-2xl font-semibold tracking-tight">
             {loading ? (
               <div className="h-7 w-20 animate-pulse rounded bg-muted" />
             ) : (
