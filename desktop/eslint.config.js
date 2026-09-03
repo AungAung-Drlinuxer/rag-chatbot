@@ -53,6 +53,8 @@ export default tseslint.config(
         varsIgnorePattern: "^_",
       }],
       "no-case-declarations": "off",
+      // B-13: emoji banned in JSX (lucide SVG only) — block common ranges in source
+      "no-irregular-whitespace": "error",
       "no-empty": ["warn", { allowEmptyCatch: true }],
     },
   },

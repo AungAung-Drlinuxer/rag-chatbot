@@ -26,7 +26,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-xs: 6px;
+  --dur-fast: 150ms;  /* B-8 unified interactive timing */
+  --dur-slow: 200ms;  /* B-8 overlays / panels */
+--radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;

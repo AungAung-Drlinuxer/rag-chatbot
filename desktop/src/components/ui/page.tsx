@@ -25,16 +25,30 @@ export function PageHeader({
   description,
   actions,
   icon,
+  breadcrumbs,
 }: {
   title: string;
   badge?: string;
   description?: string;
   actions?: ReactNode;
   icon?: ReactNode;
+  /** B-5: optional breadcrumb trail, e.g. ["Workspace", "Tickets", "ITHD-22"] */
+  breadcrumbs?: string[];
 }) {
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
+      <div className="min-w-0">
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <nav aria-label="Breadcrumb" className="mb-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            {breadcrumbs.map((b, i) => (
+              <span key={i} className="flex items-center gap-1.5">
+                {i > 0 && <span aria-hidden>/</span>}
+                <span className={i === breadcrumbs.length - 1 ? "font-medium text-foreground" : ""}>{b}</span>
+              </span>
+            ))}
+          </nav>
+        )}
+        <div className="flex items-center gap-3">
         {/* v0.21.67 — standardized page icon chip (every page, both themes) */}
         {icon && (
           <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#0A1628] text-sky-300 shadow-sm">
@@ -55,6 +69,7 @@ export function PageHeader({
           )}
         </div>
       </div>
+        </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
@@ -112,3 +127,37 @@ export const btnSecondary =
 export const fieldLabel = "mb-1.5 block text-[10px] font-semibold";
 export const fieldInput =
   "h-10 w-full rounded-xl border bg-transparent px-3 text-xs outline-none transition focus:border-blue-500 dark:border-slate-700";
+
+/** B-11 — shared empty state: icon chip + headline + explanation + active CTA. */
+export function EmptyState({
+  icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+      <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-muted text-muted-foreground">
+        {icon}
+      </div>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">{description}</p>
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          onClick={onAction}
+          className="mt-4 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-medium text-white transition-[background-color,transform] duration-150 hover:bg-blue-700 active:scale-[.98]"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
