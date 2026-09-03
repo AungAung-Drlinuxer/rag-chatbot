@@ -55,3 +55,7 @@ ssh -T -p 30222 git@10.10.10.94     # Option B
 ## 4. Cleanup note
 `%LOCALAPPDATA%\Temp\gitea_admin_pw` still holds the OLD admin password —
 delete it (password already rotated in the UI).
+
+## DONE (2026-09-03)
+- gitssh.drlinuxer.com -> 10.10.10.201 registered in internal DNS
+- remote gitea = git@gitssh.drlinuxer.com:ragchatbot/ragchatbot.git (verified)
