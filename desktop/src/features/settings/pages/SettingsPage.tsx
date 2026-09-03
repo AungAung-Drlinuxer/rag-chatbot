@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
+import { listConversations, clearConversations, type Conv } from "@/features/conversations/api";
+import { MessagesSquare, Plus, Search, Trash2, ChevronRight } from "lucide-react";
 import { dashHealth } from "@/features/dashboard/api";
 import {
   getUserSettings, putUserSettings, getIntegrationSettings,
@@ -92,6 +94,16 @@ export default function Settings({ role }: { role?: string }) {
   // v0.21.90 — role gating: user/IT Support/Knowledge Manager only see General,
   // Appearance, AI Assistant, Notifications. Integrations + Mail are admin-only.
   const isAdmin = role === "admin";
+
+  // Task-2 — conversations management (moved from chat sidebar)
+  const [convs, setConvs] = useState<Conv[]>([]);
+  const [convQ, setConvQ] = useState("");
+  const [confirmClearConv, setConfirmClearConv] = useState(false);
+  useEffect(() => {
+    listConversations()
+      .then((d: any) => setConvs(Array.isArray(d?.conversations) ? d.conversations : []))
+      .catch(() => setConvs([]));
+  }, []);
   const [saved, setSaved] =
     useState(false);
 
@@ -320,8 +332,66 @@ export default function Settings({ role }: { role?: string }) {
         />
 
         {/* Main content */}
-        <main className="mx-auto max-w-5xl pb-8">
+        <main className="mx-auto max-w-[1400px] pb-8">
           <div className="space-y-5">
+            {/* ==================== CONVERSATIONS (Task-2) ==================== */}
+            <SectionCard icon={<MessagesSquare className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+              iconTone="bg-indigo-50 dark:bg-indigo-950/40"
+              title="Conversations"
+              description="Manage your chat history — start new conversations, search, or clear old ones.">
+              <div className="px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => { localStorage.setItem("ith.nav", "chat"); location.hash = "#/chat"; }}
+                    className="inline-flex h-9 items-center gap-2 rounded-xl bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700">
+                    <Plus className="size-3.5" /> New conversation
+                  </button>
+                  <div className="relative min-w-[220px] flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input value={convQ} onChange={(e) => setConvQ(e.target.value)} placeholder="Search conversations…"
+                      className="h-9 w-full rounded-xl bg-transparent pl-9 pr-3 text-xs outline-none ring-1 ring-slate-900/10 focus:ring-2 focus:ring-sky-600 dark:ring-white/10" />
+                  </div>
+                  {convs.length > 0 && (
+                    confirmClearConv ? (
+                      <span className="flex items-center gap-2 text-[11px] text-red-600">
+                        Delete all?
+                        <button type="button" className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[10px] font-semibold text-white hover:bg-red-700"
+                          onClick={async () => { await clearConversations().catch(() => {}); setConvs([]); setConfirmClearConv(false); }}>Yes, clear</button>
+                        <button type="button" className="rounded-lg px-2.5 py-1.5 text-[10px] font-semibold ring-1 ring-slate-900/10 dark:ring-white/10"
+                          onClick={() => setConfirmClearConv(false)}>Cancel</button>
+                      </span>
+                    ) : (
+                      <button type="button" title="Clear all conversations" onClick={() => setConfirmClearConv(true)}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium text-red-600 ring-1 ring-red-500/30 transition hover:bg-red-500/10">
+                        <Trash2 className="size-3.5" /> Clear all
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <div className="mt-3 max-h-[260px] overflow-y-auto rounded-xl ring-1 ring-slate-900/5 dark:ring-white/5">
+                  {(() => {
+                    const q = convQ.trim().toLowerCase();
+                    const shown = convs.filter((c) => !q || (c.title || "").toLowerCase().includes(q) || (c.session_id || "").toLowerCase().includes(q));
+                    if (shown.length === 0) return (
+                      <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                        {convs.length === 0 ? "No conversations yet — start one from the Chat page." : "No conversations match your search."}
+                      </div>
+                    );
+                    return shown.map((c) => (
+                      <button key={c.session_id} type="button"
+                        onClick={() => { location.hash = "#/chat"; }}
+                        className="flex w-full items-center gap-3 border-b px-4 py-2.5 text-left transition last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
+                        <MessagesSquare className="size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium">{c.title || "New conversation"}</span>
+                        {c.last_at && <span className="shrink-0 text-[10px] text-muted-foreground">{String(c.last_at).slice(0, 10)}</span>}
+                        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
+            </SectionCard>
+
             {/* ==================== GENERAL ==================== */}
             <SectionCard icon={<Globe className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
               iconTone="bg-sky-50 dark:bg-sky-950/40"

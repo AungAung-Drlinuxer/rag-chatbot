@@ -221,7 +221,7 @@ export default function Dashboard(_props: Props) {
               CONTENT
           ================================================= */}
 
-          <div className="mx-auto max-w-[1500px] space-y-5 p-5 lg:p-7">
+          <div className="mx-auto max-w-[1400px] space-y-5 p-5 lg:p-8">
 
             {/* KPI */}
 

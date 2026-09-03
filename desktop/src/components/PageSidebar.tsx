@@ -54,32 +54,51 @@ export default function PageSidebar({
 
   const navBody = (
     <>
-      <div className={"flex h-16 items-center border-b dark:border-slate-800 " + (collapsed ? "flex-col justify-center gap-2 px-2" : "gap-3 px-5")}>
-        <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
-        {!collapsed && (
+      {collapsed ? (
+        /* Rail mode: fixed top row = expand button only (Task-1: it was pushed
+           out of the h-16 row by the logo stack + bell — unreachable). */
+        <div className="flex h-16 flex-col items-center justify-center gap-1 border-b px-2 dark:border-slate-800">
+          {onToggleCollapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              title="Expand sidebar (Ctrl+B)"
+              aria-label="Expand sidebar"
+              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+          )}
+          {canManage && (
+            <NotificationBell notices={notices} collapsed onOpen={onNavigate} />
+          )}
+        </div>
+      ) : (
+        <div className="flex h-16 items-center gap-3 border-b px-5 dark:border-slate-800">
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
           <div className="min-w-0">
             <div className="text-sm font-semibold">IT Help Chatbot</div>
             <div className="text-[10px] text-slate-400">Enterprise Assistant</div>
           </div>
-        )}
-        {canManage && (
-          <div className={collapsed ? "" : "ml-auto mr-1"}>
-            <NotificationBell notices={notices} collapsed={collapsed} onOpen={onNavigate} />
-          </div>
-        )}
-        {onToggleCollapsed && (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={"rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 " + (collapsed ? "" : "ml-auto")}
-          >
-            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-          </button>
-        )}
-      </div>
-      
+          {canManage && (
+            <div className="ml-auto mr-1">
+              <NotificationBell notices={notices} onOpen={onNavigate} />
+            </div>
+          )}
+          {onToggleCollapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              title="Collapse sidebar (Ctrl+B)"
+              aria-label="Collapse sidebar"
+              className="ml-auto rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              <PanelLeftClose className="size-4" />
+            </button>
+          )}
+        </div>
+      )}
+
       <nav className={"flex-1 py-4 " + (collapsed ? "px-2" : "px-3")}>
         {items.map((item) => {
           const locked = item.cap ? perms && perms[item.cap] === false : false;

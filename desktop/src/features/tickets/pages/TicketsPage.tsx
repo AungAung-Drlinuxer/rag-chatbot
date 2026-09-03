@@ -469,7 +469,7 @@ export default function Tickets({
       }
     />
 
-          <div className="mx-auto grid max-w-[1600px] grid-cols-1 items-start gap-5 p-5 lg:p-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="mx-auto grid max-w-[1400px] grid-cols-1 items-start gap-5 p-5 lg:p-8 xl:grid-cols-[minmax(0,1fr)_380px]">
               <div className="space-y-6">
 
             {/* =================================================

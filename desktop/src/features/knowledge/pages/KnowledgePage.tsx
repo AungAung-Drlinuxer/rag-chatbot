@@ -454,7 +454,7 @@ export default function Knowledge({
         </>}
       />
 
-          <div className="mx-auto max-w-[1400px] space-y-7 p-5 lg:p-8">
+          <div className="mx-auto max-w-[1400px] space-y-5 p-5 lg:p-8">
 
             {/* =================================================
                 SEARCH HERO
