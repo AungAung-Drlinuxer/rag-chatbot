@@ -749,7 +749,7 @@ export default function Knowledge({
 
                               <Badge
                                 variant="outline"
-                                className="hidden text-[9px] capitalize sm:inline-flex"
+                                className="hidden text-[10px] capitalize sm:inline-flex"
                               >
                                 {meta.label}
                               </Badge>
@@ -956,7 +956,7 @@ export default function Knowledge({
                                             <td className="px-3 py-3">
                                               <Badge
                                                 variant="outline"
-                                                className="text-[9px] capitalize"
+                                                className="text-[10px] capitalize"
                                               >
                                                 {
                                                   meta.label
@@ -1127,7 +1127,7 @@ export default function Knowledge({
 
                             <Badge
                               variant="outline"
-                              className="border-emerald-200 bg-emerald-50 text-[9px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30"
+                              className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30"
                             >
                               <span className="mr-1 size-1.5 rounded-full bg-emerald-500" />
                               {status?.healthy

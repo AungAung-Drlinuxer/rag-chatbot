@@ -213,11 +213,20 @@ export default function AuditsPage() {
                 </tr>
               </thead>
               <tbody>
+                {loading && (
+                  Array.from({ length: 10 }).map((_, i) => (
+                    <tr key={"sk" + i}>
+                      <td colSpan={6} className="px-4 py-2">
+                        <div className="h-4 animate-pulse rounded bg-muted" style={{ width: `${70 + ((i * 13) % 30)}%` }} />
+                      </td>
+                    </tr>
+                  ))
+                )}
                 {shown.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100 transition hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800/40">
                     <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmt(r.created_at)}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex rounded-md px-2 py-0.5 text-[9px] font-semibold ${toneFor(r.action)}`}>
+                      <span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold ${toneFor(r.action)}`}>
                         {r.action}
                       </span>
                     </td>
@@ -226,16 +235,16 @@ export default function AuditsPage() {
                     <td className="truncate px-4 py-2.5 text-muted-foreground" title={r.detail ?? ""}>{r.detail ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right">
                       {r.decision ? (
-                        <span className={["text-[9px] font-semibold",
+                        <span className={["text-[10px] font-semibold",
                           r.decision === "answer" ? "text-emerald-600" :
                           r.decision === "approved" ? "text-emerald-600" :
                           r.decision === "rejected" ? "text-red-500" : "text-orange-500"].join(" ")}>
                           {r.decision}
                         </span>
                       ) : r.confidence != null ? (
-                        <span className="text-[9px] text-muted-foreground">{Math.round(r.confidence * 100)}%</span>
+                        <span className="text-[10px] text-muted-foreground">{Math.round(r.confidence * 100)}%</span>
                       ) : (
-                        <span className="text-[9px] text-muted-foreground">—</span>
+                        <span className="text-[10px] text-muted-foreground">—</span>
                       )}
                     </td>
                   </tr>
@@ -243,7 +252,7 @@ export default function AuditsPage() {
                 {shown.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-[11px] text-muted-foreground">
-                      {loading ? "Loading audit events…" : "No audit events match the current filters."}
+                      {loading ? "" : "No audit events match the current filters."}
                     </td>
                   </tr>
                 )}

@@ -47,7 +47,7 @@ export function TypingIndicator({ stage }: { stage?: string }) {
                 <span className="size-1 animate-bounce rounded-full bg-blue-400 [animation-delay:-0.15s]" />
                 <span className="size-1 animate-bounce rounded-full bg-blue-400" />
               </div>
-              <span className="text-[9px] tabular-nums text-muted-foreground">{elapsed}s</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{elapsed}s</span>
             </div>
           </div>
         </div>

@@ -85,7 +85,7 @@ export function StatusBadge({
   return (
     <Badge
       variant="outline"
-      className={["rounded-lg text-[9px]", meta.className].join(" ")}
+      className={["rounded-lg text-[10px]", meta.className].join(" ")}
     >
       {meta.label}
     </Badge>

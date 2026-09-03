@@ -5,6 +5,7 @@ import {
   BookOpen, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
   Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
+import { useNotifications, NotificationBell } from "@/components/NotificationBell";
 
 /* ============================================================
    PageSidebar — shared nav for non-chat pages (v0.13.0)
@@ -33,6 +34,9 @@ export default function PageSidebar({
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [denied, setDenied] = useState<string | null>(null);
+  // B-6 — admin/agent see HITL approvals + LDAP-gated accounts as notifications
+  const canManage = role === "admin" || role === "agent";
+  const notices = useNotifications(role || "user", !!canManage);
 
   // v0.21.57 — nav items are capability-aware. Locked items stay visible (so the
   // user knows the feature exists) but clicking one shows WHY access is denied.
@@ -56,6 +60,11 @@ export default function PageSidebar({
           <div className="min-w-0">
             <div className="text-sm font-semibold">IT Help Chatbot</div>
             <div className="text-[10px] text-slate-400">Enterprise Assistant</div>
+          </div>
+        )}
+        {canManage && (
+          <div className={collapsed ? "" : "ml-auto mr-1"}>
+            <NotificationBell notices={notices} collapsed={collapsed} onOpen={onNavigate} />
           </div>
         )}
         {onToggleCollapsed && (
@@ -124,7 +133,7 @@ export default function PageSidebar({
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs font-semibold text-slate-100">{userName ?? "User"}</div>
-              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold", (role === "admin" ? "bg-sky-500/20 text-sky-300" : role === "agent" ? "bg-cyan-500/20 text-cyan-300" : role === "knowledge" ? "bg-teal-500/20 text-teal-300" : "bg-slate-500/20 text-slate-300")].join(" ")}>
+              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", (role === "admin" ? "bg-sky-500/20 text-sky-300" : role === "agent" ? "bg-cyan-500/20 text-cyan-300" : role === "knowledge" ? "bg-teal-500/20 text-teal-300" : "bg-slate-500/20 text-slate-300")].join(" ")}>
                 {pretty}
               </span>
             </div>

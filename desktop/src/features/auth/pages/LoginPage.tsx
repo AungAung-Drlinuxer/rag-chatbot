@@ -43,7 +43,7 @@ export default function Login({
   }, []);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f7f8fa] text-slate-900 dark:bg-[#0b0d10] dark:text-slate-100">
+    <div className="min-h-screen overflow-x-hidden bg-[var(--background)] text-slate-900 dark:bg-[#0b0d10] dark:text-slate-100">
       <div className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_520px]">
         {/* =========================================================
             LEFT BRAND PANEL
@@ -67,7 +67,7 @@ export default function Login({
           <div className="relative flex min-h-screen w-full flex-col justify-between gap-6 px-12 py-8 xl:px-16">
             {/* Brand — matches sidebar (v0.21.31) */}
             <div className="flex items-center gap-3">
-              <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[#2563eb] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]">
+              <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--brand-logo)] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]">
                 ITH
               </div>
 
@@ -147,7 +147,7 @@ export default function Login({
         {/* =========================================================
             RIGHT LOGIN PANEL
         ========================================================= */}
-        <main className="flex min-h-screen items-center justify-center bg-[#f7f8fa] px-5 py-10 dark:bg-[#0b0d10] sm:px-8">
+        <main className="flex min-h-screen items-center justify-center bg-[var(--background)] px-5 py-10 dark:bg-[#0b0d10] sm:px-8">
           <div className="w-full max-w-[400px]">
             {/* Mobile brand */}
             <div className="mb-8 flex items-center gap-3 lg:hidden">

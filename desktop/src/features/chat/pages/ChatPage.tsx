@@ -49,6 +49,7 @@ import {
   submitFeedback as pushFeedback,
 } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
+import { useNotifications, NotificationBell } from "@/components/NotificationBell";
 import {
   type Message,
   type Source,
@@ -97,6 +98,9 @@ export default function Chat({
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<{ id: string; filename: string; mime: string }[]>([]);
+  // B-6 — notification bell data (admin/agent)
+  const canManage = role === "admin" || role === "agent";
+  const notices = useNotifications(role || "user", !!canManage);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isTyping, setIsTyping] = useState(false);
@@ -437,13 +441,18 @@ export default function Chat({
           mobileHistory ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        {/* Brand — matches PageSidebar */}
+        {/* Brand — matches PageSidebar (B-6: notification bell for admin/agent) */}
         <div className="flex h-16 items-center gap-3 border-b border-[var(--sidebar-border)] px-5">
-          <div className="grid size-9 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
-          <div>
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
+          <div className="min-w-0">
             <div className="text-sm font-semibold">IT Help Chatbot</div>
             <div className="text-[10px] text-muted-foreground">Enterprise Assistant</div>
           </div>
+          {(role === "admin" || role === "agent") && (
+            <div className="ml-auto mr-1">
+              <NotificationBell notices={notices} onOpen={(n) => onNavigate?.(n)} />
+            </div>
+          )}
         </div>
 
         {/* User profile card — matches PageSidebar */}
@@ -468,7 +477,7 @@ export default function Chat({
           >
             <Search className="size-3.5 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">Search conversations...</span>
-            <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--sidebar-text-muted)] sm:inlinek:bg-slate-900">
+            <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sidebar-text-muted)] sm:inlinek:bg-slate-900">
               Ctrl K
             </kbd>
           </button>
@@ -477,7 +486,7 @@ export default function Chat({
         {/* Conversation history */}
         <div className="mt-3 flex-1 overflow-y-auto px-2">
           <div className="flex items-center justify-between px-2 py-2">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--sidebar-text-muted)]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-text-muted)]">
               Recent conversations
             </span>
             {(conversations ?? []).length > 0 && (
@@ -615,7 +624,7 @@ export default function Chat({
             <button className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setMobileHistory(true)}>
               <Menu className="size-5" />
             </button>
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#0A1628] text-sky-300 shadow-sm">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-chip)] text-sky-300 shadow-sm">
               <Bot className="size-5" />
             </div>
             <div className="min-w-0">
@@ -715,7 +724,7 @@ export default function Chat({
         <div className="border-t border-[var(--border)] bg-[var(--topbar-bg)]">
           <div className="mx-auto max-w-[1000px] px-4 py-4 lg:px-8">
             <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <Sparkles className="size-3 text-blue-500" />
                 Answers are grounded in your internal knowledge base.
               </div>
@@ -791,7 +800,7 @@ export default function Chat({
               </div>
             </form>
 
-            <div className="mt-2 text-center text-[9px] text-muted-foreground">
+            <div className="mt-2 text-center text-[10px] text-muted-foreground">
               AI-generated answers may require verification. Sensitive information is protected by RBAC.
             </div>
           </div>
@@ -804,7 +813,7 @@ export default function Chat({
           <div className="flex h-16 items-center justify-between border-b px-5">
             <div>
               <h2 className="text-sm font-semibold">Knowledge sources</h2>
-              <p className="text-[9px] text-muted-foreground">Retrieved for this conversation</p>
+              <p className="text-[10px] text-muted-foreground">Retrieved for this conversation</p>
             </div>
             <Link2 className="size-4 text-muted-foreground" />
           </div>
@@ -819,7 +828,7 @@ export default function Chat({
                 <History className="size-3.5 text-blue-500" />
                 <span className="text-[10px] font-semibold">Retrieval information</span>
               </div>
-              <div className="mt-3 space-y-2 text-[9px] text-muted-foreground">
+              <div className="mt-3 space-y-2 text-[10px] text-muted-foreground">
                 <Row label="Chunks retrieved" value={String(latestSources(messages).length || 0)} />
                 <Row label="Sources used" value={String(latestSources(messages).length || 0)} />
                 <Row label="Search type" value="Hybrid + rerank" />
@@ -1047,7 +1056,7 @@ export default function Chat({
                 placeholder="Search conversations..."
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
-              <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-[9px] text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
+              <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-[10px] text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
                 Esc
               </kbd>
             </div>
@@ -1079,7 +1088,7 @@ export default function Chat({
                 ))
               )}
             </div>
-            <div className="border-t px-4 py-2 text-[9px] text-muted-foreground dark:border-slate-700">
+            <div className="border-t px-4 py-2 text-[10px] text-muted-foreground dark:border-slate-700">
               Enter open · Esc close
             </div>
           </div>
@@ -1145,7 +1154,7 @@ function MessageBubble({
             isUser ? "justify-end" : "justify-start",
           ].join(" ")}
         >
-          <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Clock3 className="size-3" />
             {message.timestamp}
           </span>
@@ -1154,7 +1163,7 @@ function MessageBubble({
           )}
           {!isUser && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
             <span
-              className="flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-[9px] font-medium text-[var(--muted-foreground)]"
+              className="flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)]"
               title={message.latencyMs ? `Generated in ${(message.latencyMs / 1000).toFixed(1)}s` : undefined}
             >
               <Zap className="size-3 text-amber-500" />
@@ -1164,7 +1173,7 @@ function MessageBubble({
             </span>
           )}
           {!isUser && caution && (
-            <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+            <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               <AlertTriangle className="size-3" />
               caution — verify before proceeding
             </span>
@@ -1231,7 +1240,7 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   return (
     <span
       className={[
-        "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-medium",
+        "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
         high
           ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
           : medium
@@ -1259,24 +1268,24 @@ function SourceCard({ source, index }: { source: Source; index: number }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="line-clamp-2 text-[10px] font-semibold">{source.title}</div>
-          <div className="mt-1 text-[9px] text-muted-foreground">{source.space}</div>
+          <div className="mt-1 text-[10px] text-muted-foreground">{source.space}</div>
         </div>
       </div>
       {source.relevance == null ? (
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-[9px] text-muted-foreground">Type</span>
-          <span className="text-[9px] font-semibold text-blue-600">Ticket</span>
+          <span className="text-[10px] text-muted-foreground">Type</span>
+          <span className="text-[10px] font-semibold text-blue-600">Ticket</span>
         </div>
       ) : (
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-[9px] text-muted-foreground">Relevance</span>
-          <span className="text-[9px] font-semibold text-emerald-600">{source.relevance}%</span>
+          <span className="text-[10px] text-muted-foreground">Relevance</span>
+          <span className="text-[10px] font-semibold text-emerald-600">{source.relevance}%</span>
         </div>
       )}
       <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <div className="h-full rounded-full bg-emerald-500" style={{ width: `${source.relevance}%` }} />
       </div>
-      <p className="mt-3 line-clamp-3 text-[9px] leading-4 text-muted-foreground">{source.excerpt}</p>
+      <p className="mt-3 line-clamp-3 text-[10px] leading-4 text-muted-foreground">{source.excerpt}</p>
     </>
   );
   return source.url ? (

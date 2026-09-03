@@ -51,7 +51,7 @@ export function PageHeader({
         <div className="flex items-center gap-3">
         {/* v0.21.67 — standardized page icon chip (every page, both themes) */}
         {icon && (
-          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#0A1628] text-sky-300 shadow-sm">
+          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand-chip)] text-sky-300 shadow-sm">
             {icon}
           </div>
         )}

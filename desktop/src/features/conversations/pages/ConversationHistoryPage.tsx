@@ -208,7 +208,17 @@ export default function ConversationHistoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {shown.map((c) => (
+                  
+                {loading && (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={"sk" + i}>
+                      <td colSpan={4} className="px-4 py-2.5">
+                        <div className="h-4 animate-pulse rounded bg-muted" style={{ width: `${60 + ((i * 17) % 40)}%` }} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+{shown.map((c) => (
                     <tr
                       key={c.session_id}
                       onClick={() => view(c)}
@@ -221,7 +231,7 @@ export default function ConversationHistoryPage() {
                     >
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
-                          <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[9px] font-bold ${toneFor(c.username)}`}>
+                          <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${toneFor(c.username)}`}>
                             {c.username.slice(0, 1).toUpperCase()}
                           </span>
                           <span className="truncate font-semibold">{c.username}</span>

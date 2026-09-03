@@ -219,6 +219,14 @@ export default function Tickets({
     else setAttachments([]);
   }, [selected?.id]);
 
+  // B-9 — column sorting
+  const [sortKey, setSortKey] = useState<null | "id" | "subject" | "status" | "priority" | "requester" | "updated">(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const toggleSort = (k: NonNullable<typeof sortKey>) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("desc"); }
+  };
+
   const filteredTickets = useMemo(() => {
     if (!tickets) return [];
 
@@ -258,6 +266,37 @@ export default function Tickets({
     statusFilter,
     priorityFilter,
   ]);
+
+  const sortedTickets = useMemo(() => {
+    if (!sortKey) return filteredTickets;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const prioRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const statusRank: Record<string, number> = { open: 0, pending: 1, resolved: 2, closed: 3 };
+    return [...filteredTickets].sort((a, b) => {
+      let r: number;
+      if (sortKey === "priority") r = (prioRank[a.priority] ?? 9) - (prioRank[b.priority] ?? 9);
+      else if (sortKey === "status") r = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+      else if (sortKey === "updated") r = String(a.updated_at).localeCompare(String(b.updated_at));
+      else r = String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""));
+      return r * dir;
+    });
+  }, [filteredTickets, sortKey, sortDir]);
+
+  const SortTh = ({ k, label, className = "px-3 py-3" }: { k: NonNullable<typeof sortKey>; label: string; className?: string }) => (
+    <th className={className + " font-semibold text-muted-foreground"}>
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={"inline-flex items-center gap-1 transition hover:text-foreground " + (sortKey === k ? "text-foreground" : "")}
+        aria-sort={sortKey === k ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      >
+        {label}
+        <svg viewBox="0 0 12 12" className={"size-2.5 transition " + (sortKey === k ? (sortDir === "asc" ? "rotate-180" : "") : "opacity-30")}>
+          <path d="M6 9L2 4h8z" fill="currentColor" />
+        </svg>
+      </button>
+    </th>
+  );
 
   const stats = useMemo(() => {
     const list = tickets ?? [];
@@ -689,30 +728,12 @@ export default function Tickets({
                       </colgroup>
                       <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
                         <tr className="text-left">
-                          <th className="px-4 py-3 font-semibold text-muted-foreground first:pl-5">
-                            Ticket
-                          </th>
-
-                          <th className="px-4 py-3 font-semibold text-muted-foreground">
-                            Subject
-                          </th>
-
-                          <th className="px-3 py-3 font-semibold text-muted-foreground">
-                            Status
-                          </th>
-
-                          <th className="px-3 py-3 font-semibold text-muted-foreground">
-                            Priority
-                          </th>
-
-                          <th className="px-3 py-3 font-semibold text-muted-foreground">
-                            Requester
-                          </th>
-
-                          <th className="px-3 py-3 font-semibold text-muted-foreground">
-                            Updated
-                          </th>
-
+                          <SortTh k="id" label="Ticket" className="px-4 py-3 first:pl-5" />
+                          <SortTh k="subject" label="Subject" className="px-4 py-3" />
+                          <SortTh k="status" label="Status" />
+                          <SortTh k="priority" label="Priority" />
+                          <SortTh k="requester" label="Requester" />
+                          <SortTh k="updated" label="Updated" />
                           <th className="px-3 py-3 text-right font-semibold text-muted-foreground">
                             Action
                           </th>
@@ -720,7 +741,7 @@ export default function Tickets({
                       </thead>
 
                       <tbody>
-                        {filteredTickets.map(
+                        {sortedTickets.map(
                           (ticket) => {
                             const status =
                               statusMeta(ticket.status);
@@ -786,7 +807,7 @@ export default function Tickets({
                                   <Badge
                                     variant="outline"
                                     className={[
-                                      "rounded-lg text-[9px]",
+                                      "rounded-lg text-[10px]",
                                       status.className,
                                     ].join(" ")}
                                   >

@@ -26,6 +26,15 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--accent-foreground);
+  --fs-2xs: 10px;   /* B-2 ramp: badges/chips (replaces text-[9px]) */
+  --fs-xs: 11px;    /* meta labels */
+  --fs-sm: 12px;    /* body-dense */
+  --fs-md: 13px;    /* body */
+  --fs-lg: 14px;    /* subhead */
+  --fs-xl: 16px;    /* h2 */
+  --fs-2xl: 20px;   /* h1 */
+  --fs-3xl: 24px;   /* display/KPI */
   --dur-fast: 150ms;  /* B-8 unified interactive timing */
   --dur-slow: 200ms;  /* B-8 overlays / panels */
 --radius-xs: 6px;
@@ -60,6 +69,8 @@
   /* v0.21.65 — Sidebar vs main panel: two-tone. Sidebar = navy #0A1628,
      main content = soft blue-gray. Professional separation without borders. */
   --sidebar-bg: #0A1628;        /* deep ocean navy sidebar */
+  --brand-chip: #0A1628;        /* page-header icon chip (v0.21.67) */
+  --brand-logo: #2563eb;        /* iTH logo blue (login + app) */
   --sidebar-border: #0F1D33;
   --sidebar-text: #CBD5E1;
   --sidebar-text-muted: #64748B;
@@ -690,4 +701,11 @@ code, pre, .mono { font-family: var(--mono); }
 .dark select option:checked {
   background-color: #172554;
   color: #f1f5f9;
+}
+
+/* B-12 - keyboard focus visibility (a11y) */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 8px;
 }

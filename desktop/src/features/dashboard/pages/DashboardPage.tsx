@@ -225,19 +225,23 @@ export default function Dashboard(_props: Props) {
 
             {/* KPI */}
 
+            {/* B-7 — bento: hero card spans 2 on xl */}
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 
-              <KpiCard
-                icon={
-                  <MessageSquare className="size-4" />
-                }
-                value={stats ? String(stats.total_conversations) : "—"}
-                title="Total Conversations"
-                change="+18.6%"
-                positive
-                description="vs last 7 days"
-                loading={loading}
-              />
+              <div className="md:col-span-2 xl:col-span-2">
+                <KpiCard
+                  icon={
+                    <MessageSquare className="size-4" />
+                  }
+                  value={stats ? String(stats.total_conversations) : "—"}
+                  title="Total Conversations"
+                  change="+18.6%"
+                  positive
+                  description="vs last 7 days — all channels"
+                  loading={loading}
+                  hero
+                />
+              </div>
 
               <KpiCard
                 icon={
@@ -584,7 +588,7 @@ export default function Dashboard(_props: Props) {
                     System health
                   </h2>
 
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                     All systems operational
                   </span>
 
@@ -661,6 +665,7 @@ function KpiCard({
   description,
   positive,
   loading,
+  hero,
 }: {
   icon: ReactNode;
   value: string;
@@ -669,15 +674,16 @@ function KpiCard({
   description: string;
   positive: boolean;
   loading: boolean;
+  hero?: boolean;
 }) {
   return (
-    <Card className="relative overflow-hidden rounded-2xl p-4">
+    <Card className={"relative overflow-hidden rounded-2xl p-4 " + (hero ? "bg-gradient-to-br from-[color-mix(in_srgb,var(--card)_94%,var(--accent))] to-[var(--card)] ring-1 ring-[color-mix(in_srgb,var(--accent)_35%,transparent)]" : "")}>
 
       <div className="flex items-start justify-between">
 
         <div>
 
-          <div className="text-2xl font-semibold tracking-tight">
+          <div className={"font-semibold tracking-tight " + (hero ? "text-3xl" : "text-2xl")}>
             {loading ? (
               <div className="h-7 w-20 animate-pulse rounded bg-muted" />
             ) : (
@@ -1101,7 +1107,7 @@ function DomainRow({
               {domain.count}
             </span>
 
-            <span className="w-10 text-right text-[9px] text-muted-foreground">
+            <span className="w-10 text-right text-[10px] text-muted-foreground">
               {domain.percentage}%
             </span>
 
@@ -1272,8 +1278,8 @@ function ResultBadge({
       variant="outline"
       className={
         resolved
-          ? "rounded-md border-emerald-200 bg-emerald-50 text-[9px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-          : "rounded-md border-orange-200 bg-orange-50 text-[9px] text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300"
+          ? "rounded-md border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+          : "rounded-md border-orange-200 bg-orange-50 text-[10px] text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300"
       }
     >
       {result}
@@ -1302,7 +1308,7 @@ function StatusBadge({
   return (
     <Badge
       variant="outline"
-      className={`rounded-md text-[9px] ${styles[status]}`}
+      className={`rounded-md text-[10px] ${styles[status]}`}
     >
       {status}
     </Badge>
@@ -1326,7 +1332,7 @@ function PriorityBadge({
   };
 
   return (
-    <span className="flex w-16 shrink-0 items-center gap-1.5 text-[9px]">
+    <span className="flex w-16 shrink-0 items-center gap-1.5 text-[10px]">
 
       <span
         className={`size-1.5 rounded-full ${styles[priority]}`}

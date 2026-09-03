@@ -409,11 +409,11 @@ function StatCard({ icon, title, value, description, positive, warning }: {
           {icon}
         </div>
         {positive && (
-          <span className="flex items-center gap-1 text-[9px] font-semibold text-emerald-600">
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
             <Activity className="size-3" /> Healthy
           </span>
         )}
-        {warning && <span className="text-[9px] font-semibold text-orange-600">Attention</span>}
+        {warning && <span className="text-[10px] font-semibold text-orange-600">Attention</span>}
       </div>
       <div className="mt-4">
         <div className="text-2xl font-semibold tracking-tight">{value}</div>
@@ -430,7 +430,7 @@ function StatCard({ icon, title, value, description, positive, warning }: {
 
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <th className={["px-4 py-3 text-left text-[9px] font-semibold uppercase tracking-wider text-muted-foreground", className].join(" ")}>
+    <th className={["px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", className].join(" ")}>
       {children}
     </th>
   );
@@ -448,15 +448,15 @@ function UserRow({ user, onSelect, onToggle }: { user: User; onSelect: () => voi
           <Avatar name={user.name} />
           <div className="min-w-0">
             <div className="truncate text-[11px] font-semibold hover:text-sky-600" title={user.name}>{user.name}</div>
-            <div className="truncate text-[9px] text-muted-foreground">@{user.username}</div>
+            <div className="truncate text-[10px] text-muted-foreground">@{user.username}</div>
           </div>
         </button>
       </td>
       <td className="px-4 py-3"><span className="text-[10px]" title={user.department}>{user.department || "—"}</span></td>
       <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
       <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
-      <td className="px-4 py-3"><span className="text-[9px] text-muted-foreground" title={user.lastLogin}>{formatDateTime(user.lastLogin)}</span></td>
-      <td className="px-4 py-3"><span className="text-[9px] text-muted-foreground" title={user.joined}>{formatDate(user.joined)}</span></td>
+      <td className="px-4 py-3"><span className="text-[10px] text-muted-foreground" title={user.lastLogin}>{formatDateTime(user.lastLogin)}</span></td>
+      <td className="px-4 py-3"><span className="text-[10px] text-muted-foreground" title={user.joined}>{formatDate(user.joined)}</span></td>
       <td className="px-3 py-3">
         <div className="flex justify-end gap-0.5">
           <button type="button" onClick={onSelect} title="View user"
@@ -772,7 +772,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                   {user.groups.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {user.groups.map((group) => (
-                        <span key={group} className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-[9px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        <span key={group} className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
                           {group}
                         </span>
                       ))}
@@ -797,7 +797,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                     </div>
                     <div>
                       <div className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">Managed by Active Directory</div>
-                      <p className="mt-1 text-[9px] leading-4 text-amber-800 dark:text-amber-300">
+                      <p className="mt-1 text-[10px] leading-4 text-amber-800 dark:text-amber-300">
                         This password is managed in Active Directory and cannot be changed here.
                       </p>
                     </div>
@@ -855,7 +855,7 @@ function DrawerSection({ title, icon, children }: { title: string; icon: ReactNo
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-h-[40px] items-center justify-between gap-4 border-b px-3 last:border-b-0 dark:border-slate-800">
-      <span className="shrink-0 text-[9px] text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-[10px] text-muted-foreground">{label}</span>
       <span className="max-w-[245px] truncate text-right text-[10px] font-medium" title={value}>{value}</span>
     </div>
   );
@@ -949,7 +949,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <InputField label="Department" value={department} onChange={setDepartment} placeholder="IT Operations" />
             <div>
-              <label className="mb-1.5 block text-[9px] font-semibold">Role</label>
+              <label className="mb-1.5 block text-[10px] font-semibold">Role</label>
               <div className="relative">
                 <select value={role} onChange={(event) => setRole(event.target.value as UserRole)}
                   className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-8 text-[11px] outline-none dark:border-slate-700 dark:bg-slate-950">
@@ -963,7 +963,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <InputField label="Password" value={password} onChange={setPassword} placeholder="Minimum 8 characters" type="password" />
-          <div className="rounded-xl bg-sky-50 p-3 text-[9px] leading-4 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+          <div className="rounded-xl bg-sky-50 p-3 text-[10px] leading-4 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
             <div className="flex gap-2">
               <Shield className="mt-0.5 size-3.5 shrink-0" />
               <span>LDAP / AD users should normally be synchronized from Active Directory. Their passwords are managed by AD.</span>
@@ -994,7 +994,7 @@ function InputField({ label, value, onChange, placeholder, type = "text" }: {
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[9px] font-semibold">{label}</span>
+      <span className="mb-1.5 block text-[10px] font-semibold">{label}</span>
       <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
         className="h-10 w-full rounded-xl border bg-white px-3 text-[11px] outline-none placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-sky-950" />
     </label>
