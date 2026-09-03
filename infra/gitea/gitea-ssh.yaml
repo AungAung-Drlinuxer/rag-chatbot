@@ -1,0 +1,19 @@
+# Gitea SSH on 2222 — patch: pod listens 22 (in-container), NodePort 30222 exposes it.
+# DNS git.drlinuxer.com -> 10.10.10.16 (reverse-proxy VM) must forward tcp/2222 -> 10.10.10.200:30222,
+# OR users use ssh://git@git.drlinuxer.com:30222/... directly (NodePort).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea-ssh
+  namespace: gitea
+  annotations:
+    meta.helm.sh/note: "NodePort for git-over-ssh; external proxy may map 22 -> this"
+spec:
+  type: NodePort
+  selector: { app: gitea }
+  ports:
+    - name: ssh
+      port: 22
+      targetPort: 22
+      nodePort: 30222
