@@ -181,15 +181,18 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Jira Project Route (Optional)
+                Jira Project Key (မဖြေနိုင်ပါက Ticket လွှဲပို့မည့် Project)
               </label>
               <input
                 type="text"
                 value={jiraProject}
                 onChange={(e) => setJiraProject(e.target.value)}
-                placeholder="e.g. ITHR, ITSAP"
+                placeholder="e.g. ITDB, ITNET (မသုံးပါက ကွက်လပ်ထားပါ)"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
+              <p className="text-2xs text-slate-400 mt-1">
+                Confluence KB တွင် အဖြေမတွေ့ပါက လူဆီလွှဲရန် သက်ဆိုင်ရာ Team ၏ Jira Project Code ဖြစ်ပါသည်။
+              </p>
             </div>
 
             <div>

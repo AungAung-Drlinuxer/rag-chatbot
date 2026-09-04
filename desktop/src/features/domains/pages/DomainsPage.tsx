@@ -73,6 +73,27 @@ export default function DomainsPage({
       />
 
       <main className="mx-auto max-w-[1400px] p-6">
+        {/* Quick Guide for Domain Managers */}
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40 text-xs">
+            <h5 className="font-semibold text-sky-900 dark:text-sky-300 flex items-center gap-1.5 mb-1.5">
+              <span>📖</span> ၁။ Confluence Knowledge Base (အဖြေရှာရန်)
+            </h5>
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              User မေးတဲ့ မေးခွန်းထဲက Keyword ကို ကြည့်ပြီး Chatbot က သက်ဆိုင်ရာ Domain ရဲ့ <strong>Confluence KB Articles</strong> တွေကို အရင်ဆုံး အလိုအလျောက် ရှာဖွေဖတ်ရှုပြီး တိုက်ရိုက် ဖြေကြားပေးပါတယ်။
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs">
+            <h5 className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-1.5">
+              <span>🎫</span> ၂။ Jira Ticket Routing (မဖြေနိုင်ပါက လူဆီလွှဲရန်)
+            </h5>
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              ပြဿနာကို Bot က မဖြေရှင်းနိုင်ဘဲ User က အကူအညီတောင်းခံသည့်အခါ (Escalate/Create Ticket)၊ သက်ဆိုင်ရာ အဖွဲ့ထံသို့ အရောက်ပို့ပေးရန် <strong>Jira Project Key (e.g. ITDB, ITNET)</strong> ကို သတ်မှတ်ပေးခြင်း ဖြစ်ပါသည်။ (မလိုအပ်ပါက အလွတ်ထားနိုင်ပါသည်)
+            </p>
+          </div>
+        </div>
+
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           {error && (
             <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-sm border-b border-rose-200 dark:border-rose-900">
