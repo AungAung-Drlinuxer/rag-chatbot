@@ -581,7 +581,7 @@ export default function Chat({
               <button
                 key={item.id}
                 onClick={() => onNavigate?.(item.id)}
-                className="mb-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-hover)]r:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                className="mb-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[var(--sidebar-text)] transition text-slate-400 hover:bg-slate-800 hover:text-slate-100"
               >
                 {item.icon}
                 {item.label}

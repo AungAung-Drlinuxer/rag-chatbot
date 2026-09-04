@@ -136,12 +136,12 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
     from_addr = cfg.get("from_address") or username
     to_addr = payload.get("to") or username
     if not host or not from_addr:
-        raise HTTPException(status_code=400, detail="SMTP host / from address မသတ်မှတ်ရသေးပါ")
+        raise HTTPException(status_code=400, detail="SMTP host or from address is not configured")
     msg = MIMEMultipart()
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg["Subject"] = "iTH Enterprise — Test email"
-    msg.attach(MIMEText("SMTP configuration စမ်းသပ်မှု အောင်မြင်ပါသည်။ (iTH Enterprise Assistant)", "plain", "utf-8"))
+    msg.attach(MIMEText("SMTP configuration test successful. (iTH Enterprise Assistant)", "plain", "utf-8"))
     try:
         use_ssl = port == 465
         if use_ssl:

@@ -43,9 +43,7 @@ _SYSTEM_PROMPT = (
     "answer, do NOT guess and do NOT pull in unrelated KB articles. Reply gently with one or "
     "two sentences IN THE USER'S LANGUAGE, for example (English question): 'I couldn't find "
     "information about that in the knowledge base. You can check the Tickets page for live "
-    "ticket details.' / (Burmese question): 'မေးခွန်းနဲ့ သက်ဆိုင်တဲ့ အချက်အလက်ကို "
-    "knowledge base ထဲမှာ မတွေ့ပါဘူး။ Ticket details အတွက် Tickets page မှာ တိုက်ရိုက် "
-    "ကြည့်နိုင်ပါတယ်။' "
+    "ticket details.' "
     "Keep the reply short and helpful.\n\n"
     "CONTEXT:\n{context}"
 )

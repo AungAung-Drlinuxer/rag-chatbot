@@ -140,7 +140,7 @@ def _node_tools(state: RAGState) -> dict:
     intent = detect_ticket_create_intent(q)
     out["tool_used"] = "tickets" if intent else None
     # v0.21.95 — create-ticket intent ALWAYS requires admin approval (HITL design:
-    # "Approve ရပြီးမှသာ Tool node ခေါ်"). The old `intent and weak` condition let a
+    # "Call Tool node only after approval"). The old `intent and weak` condition let a
     # confident KB answer silently swallow the escalation.
     out["needs_approval"] = bool(intent)
     return out
