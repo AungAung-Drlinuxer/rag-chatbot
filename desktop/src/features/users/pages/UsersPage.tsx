@@ -41,6 +41,7 @@ type UserStatus = "Active" | "Inactive" | "Locked" | "Disabled" | "Pending";
 
 type UserRole =
   | "Administrator"
+  | "Domain Manager"
   | "IT Support"
   | "Knowledge Manager"
   | "User";
@@ -65,7 +66,8 @@ type PermissionKey =
   | "kb_search"
   | "create_tickets"
   | "manage_kb"
-  | "manage_users";
+  | "manage_users"
+  | "manage_domains";
 
 type PermissionMap = Record<PermissionKey, boolean>;
 
@@ -75,6 +77,7 @@ const RBAC_CAPABILITIES: { key: PermissionKey; label: string }[] = [
   { key: "create_tickets", label: "Create tickets" },
   { key: "manage_kb", label: "Manage knowledge" },
   { key: "manage_users", label: "Manage users" },
+  { key: "manage_domains", label: "Manage routing domains" },
 ];
 
 const EMPTY_PERMISSIONS: PermissionMap = {
@@ -83,14 +86,16 @@ const EMPTY_PERMISSIONS: PermissionMap = {
   create_tickets: false,
   manage_kb: false,
   manage_users: false,
+  manage_domains: false,
 };
 
 /* Canonical role → permission defaults (matches backend /api/rbac/matrix) */
 const ROLE_DEFAULTS: Record<UserRole, PermissionMap> = {
-  Administrator: { chatbot: true, kb_search: true, create_tickets: true, manage_kb: true, manage_users: true },
-  "IT Support": { chatbot: true, kb_search: true, create_tickets: true, manage_kb: false, manage_users: false },
-  "Knowledge Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: true, manage_users: false },
-  User: { chatbot: true, kb_search: true, create_tickets: false, manage_kb: false, manage_users: false },
+  Administrator: { chatbot: true, kb_search: true, create_tickets: true, manage_kb: true, manage_users: true, manage_domains: true },
+  "Domain Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: false, manage_users: false, manage_domains: true },
+  "IT Support": { chatbot: true, kb_search: true, create_tickets: true, manage_kb: false, manage_users: false, manage_domains: false },
+  "Knowledge Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: true, manage_users: false, manage_domains: false },
+  User: { chatbot: true, kb_search: true, create_tickets: false, manage_kb: false, manage_users: false, manage_domains: false },
 };
 
 /* ============================================================
@@ -309,7 +314,7 @@ export default function Users() {
                     <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter}
                       options={["All", "Active", "Inactive", "Locked", "Disabled"]} />
                     <FilterSelect label="Role" value={roleFilter} onChange={setRoleFilter}
-                      options={["All", "Administrator", "IT Support", "Knowledge Manager", "User"]} />
+                      options={["All", "Administrator", "Domain Manager", "IT Support", "Knowledge Manager", "User"]} />
                     <FilterSelect label="Department" value={departmentFilter} onChange={setDepartmentFilter}
                       options={departmentOptions} />
                     <button type="button" onClick={resetFilters} title="Clear filters"
@@ -496,6 +501,7 @@ function RoleBadge({ role }: { role: UserRole }) {
     Administrator: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300",
     "IT Support": "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-300",
     "Knowledge Manager": "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-300",
+    "Domain Manager": "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
     User: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
   };
   return <span className={["inline-flex items-center rounded-md border px-2.5 py-1 text-[8px] font-semibold", styles[role]].join(" ")}>{role}</span>;
@@ -710,6 +716,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                       <option value="Administrator">Administrator</option>
                       <option value="IT Support">IT Support</option>
                       <option value="Knowledge Manager">Knowledge Manager</option>
+                      <option value="Domain Manager">Domain Manager</option>
                       <option value="User">User</option>
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -956,6 +963,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
                   <option value="User">User</option>
                   <option value="IT Support">IT Support</option>
                   <option value="Knowledge Manager">Knowledge Manager</option>
+                      <option value="Domain Manager">Domain Manager</option>
                   <option value="Administrator">Administrator</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />

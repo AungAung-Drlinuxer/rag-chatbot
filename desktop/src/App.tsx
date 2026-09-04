@@ -24,6 +24,7 @@ import ChatPage from "@/features/chat/pages/ChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import KnowledgePage from "@/features/knowledge/pages/KnowledgePage";
 import TicketsPage from "@/features/tickets/pages/TicketsPage";
+import DomainsPage from "@/features/domains/pages/DomainsPage";
 import UsersPage from "@/features/users/pages/UsersPage";
 import ConversationHistoryPage from "@/features/conversations/pages/ConversationHistoryPage";
 import AuditsPage from "@/features/audits/pages/AuditsPage";
@@ -157,6 +158,8 @@ export default function App() {
       return shell("articles", <KnowledgePage role={role} userName={userName} onToast={toast.push} />);
     case "tickets":
       return shell("tickets", <TicketsPage role={role} userName={userName} onToast={toast.push} />);
+    case "domains":
+      return shell("domains", <DomainsPage role={role} perms={perms} />);
     case "users":
       return shell("users", <UsersPage />);
     case "history":

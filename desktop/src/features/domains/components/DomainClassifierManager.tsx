@@ -5,15 +5,15 @@ import {
   createClassifierDomain,
   updateClassifierDomain,
   deleteClassifierDomain,
-} from "@/features/settings/api";
+} from "@/features/domains/api";
 
 interface Props {
   domains: ClassifierDomainItem[];
   onRefresh: () => void;
-  isAdmin: boolean;
+  canManage: boolean;
 }
 
-export function DomainClassifierManager({ domains, onRefresh, isAdmin }: Props) {
+export function DomainClassifierManager({ domains, onRefresh, canManage }: Props) {
   const [editingDomain, setEditingDomain] = useState<ClassifierDomainItem | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -111,18 +111,18 @@ export function DomainClassifierManager({ domains, onRefresh, isAdmin }: Props) 
   return (
     <div className="space-y-4">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Active Routing Domains</h4>
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Configured Routing Domains</h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Manage real-time keyword rules and Jira escalation routing without rebuilding backend containers.
+            Real-time keyword triggers, domain classifier thresholds, and Jira escalation project mapping.
           </p>
         </div>
-        {isAdmin && !isCreating && !editingDomain && (
+        {canManage && !isCreating && !editingDomain && (
           <button
             type="button"
             onClick={startCreate}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Domain
@@ -132,12 +132,12 @@ export function DomainClassifierManager({ domains, onRefresh, isAdmin }: Props) 
 
       {/* Form (Create / Edit) */}
       {(isCreating || editingDomain) && (
-        <form onSubmit={handleSave} className="p-5 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-indigo-200 dark:border-indigo-900/50 m-5 space-y-4">
+        <form onSubmit={handleSave} className="p-6 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-indigo-200 dark:border-indigo-900/50 m-6 space-y-4">
           <div className="flex items-center justify-between">
             <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
               {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
             </h5>
-            <span className="text-2xs text-slate-400">Changes apply immediately</span>
+            <span className="text-2xs text-slate-400">Changes apply immediately to classification engine</span>
           </div>
 
           {error && (
@@ -203,7 +203,7 @@ export function DomainClassifierManager({ domains, onRefresh, isAdmin }: Props) 
                   onChange={(e) => setIsActive(e.target.checked)}
                   className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
                 />
-                <span className="text-xs text-slate-700 dark:text-slate-300">Active (Included in routing)</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300">Active (Included in classifier routing)</span>
               </label>
             </div>
           </div>
@@ -259,8 +259,8 @@ export function DomainClassifierManager({ domains, onRefresh, isAdmin }: Props) 
       {/* Domain Cards List */}
       <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
         {domains.map((d) => (
-          <div key={d.id} className="p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition">
-            <div className="space-y-1.5 min-w-0">
+          <div key={d.id} className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition">
+            <div className="space-y-2 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm text-slate-900 dark:text-white">{d.display_name}</span>
                 <span className="px-2 py-0.5 rounded-full text-2xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
@@ -283,45 +283,40 @@ export function DomainClassifierManager({ domains, onRefresh, isAdmin }: Props) 
               </div>
 
               {d.description && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">{d.description}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{d.description}</p>
               )}
 
               {/* Keywords badge preview */}
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {d.keywords.slice(0, 10).map((kw, i) => (
+                {d.keywords.map((kw, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
                   >
                     <Tag className="w-2.5 h-2.5 opacity-40" />
                     {kw}
                   </span>
                 ))}
-                {d.keywords.length > 10 && (
-                  <span className="text-2xs text-slate-400 self-center">
-                    +{d.keywords.length - 10} more
-                  </span>
-                )}
               </div>
             </div>
 
-            {isAdmin && (
+            {canManage && (
               <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-center">
                 <button
                   type="button"
                   onClick={() => startEdit(d)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                   title="Edit Domain"
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
+                  <Edit2 className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(d)}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                   title="Delete/Deactivate"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             )}

@@ -3,7 +3,7 @@
  *  onNavigate(id) for pages · onOpenConversation(id) for chats · links for KB. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BookOpen, Home, MessageSquare, MessagesSquare, ScrollText,
+  BookOpen, Home, Layers, MessageSquare, MessagesSquare, ScrollText,
   Search, Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
 
@@ -51,6 +51,7 @@ export default function CommandPalette({
       { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
       { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search" },
       { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
+      { id: "domains", label: "Domains", icon: <Layers className="size-4" />, cap: "manage_domains" },
       { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users" },
       { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users" },
       { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users" },

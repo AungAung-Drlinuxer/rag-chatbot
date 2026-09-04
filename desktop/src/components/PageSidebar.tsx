@@ -2,7 +2,7 @@
  * Capability-aware nav (v0.21.57): locked items stay visible; clicking shows WHY. */
 import { useState } from "react";
 import {
-  BookOpen, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
+  BookOpen, Home, Layers, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
   Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
@@ -45,12 +45,13 @@ export default function PageSidebar({
     { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
     { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
+    { id: "domains", label: "Domains", icon: <Layers className="size-4" />, cap: "manage_domains", capLabel: "Manage routing domains & classifier rules" },
     { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
     { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review conversation history" },
     { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
     { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
   ];
-  const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager" } as Record<string, string>)[role || "user"] || "User";
+  const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Domain Manager" } as Record<string, string>)[role || "user"] || "User";
 
   const navBody = (
     <>
