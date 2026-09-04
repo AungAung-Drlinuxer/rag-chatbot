@@ -474,11 +474,11 @@ export default function Chat({
         <div className="px-3">
           <button
             onClick={() => setPaletteOpen(true)}
-            className="flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-3 text-left text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-active-bg)]er:border-blue-700"
+            className="flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-3 text-left text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-active-bg)]"
           >
             <Search className="size-3.5 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">Search conversations...</span>
-            <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sidebar-text-muted)] sm:inlinek:bg-slate-900">
+            <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sidebar-text-muted)] sm:inline">
               Ctrl K
             </kbd>
           </button>
@@ -537,7 +537,7 @@ export default function Chat({
                   <button
                     aria-label="Conversation menu"
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-2 top-2 hidden rounded-md p-1 text-[var(--sidebar-text-muted)] transition hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:blockrk:hover:bg-slate-700"
+                    className="absolute right-2 top-2 hidden rounded-md p-1 text-[var(--sidebar-text-muted)] transition hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:block"
                   >
                     <MoreHorizontal className="size-3.5" />
                   </button>
