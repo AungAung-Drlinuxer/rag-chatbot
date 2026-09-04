@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status
 from app.auth.deps import get_current_user
 from app.config import SETTINGS
 
-ROLES = ("admin", "agent", "user")
+ROLES = ("admin", "agent", "user", "domain_manager")
 
 
 def get_groups(username: str) -> list[str]:
@@ -88,7 +88,7 @@ def allowed_domains(role: str) -> set[str] | None:
 def require_role(*roles: str):
     """FastAPI dependency factory — returns the role or 403 if the user lacks one."""
     _ROLE_LABEL = {"admin": "Administrator", "agent": "IT Support",
-                   "knowledge": "Knowledge Manager", "user": "User"}
+                   "knowledge": "Knowledge Manager", "domain_manager": "Domain Manager", "user": "User"}
 
     def dependency(user: str = Depends(get_current_user)) -> str:
         role = get_role(user)  # already override-aware (v0.21.57)
@@ -127,6 +127,7 @@ CAPABILITIES = {
     "create_tickets": "Create & escalate tickets",
     "manage_kb": "Manage knowledge base (sync, write-back)",
     "manage_users": "Manage users, roles & settings",
+    "manage_domains": "Manage routing domains & classifier keywords",
 }
 
 # Map the internal role (admin/agent/user + knowledge) to the matrix display role.
@@ -134,14 +135,16 @@ _MATRIX_ROLE_FOR = {
     "admin": "Administrator",
     "agent": "IT Support",
     "knowledge": "Knowledge Manager",
+    "domain_manager": "Domain Manager",
     "user": "User",
 }
 
 _DEFAULT_MATRIX = {
-    "Administrator": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": True, "manage_users": True},
-    "IT Support": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": False, "manage_users": False},
-    "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False},
-    "User": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False},
+    "Administrator": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": True, "manage_users": True, "manage_domains": True},
+    "Domain Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": True},
+    "IT Support": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": False, "manage_users": False, "manage_domains": False},
+    "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": False},
+    "User": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": False},
 }
 
 

@@ -164,8 +164,7 @@ from app.classifier.engine import reload_rules_cache
 
 
 @router.get("/api/admin/domains")
-def list_domains(user: str = Depends(get_current_user),
-                 role: str = Depends(require_role("admin"))) -> dict:
+def list_domains(user: str = Depends(require_cap("manage_domains"))) -> dict:
     """List all registered classifier domains and their keywords."""
     with SessionLocal() as s:
         domains = s.query(ClassifierDomain).order_by(ClassifierDomain.id.asc()).all()
@@ -190,8 +189,7 @@ def list_domains(user: str = Depends(get_current_user),
 
 @router.post("/api/admin/domains")
 def create_domain(req: DomainCreateRequest,
-                  user: str = Depends(get_current_user),
-                  role: str = Depends(require_role("admin"))) -> dict:
+                  user: str = Depends(require_cap("manage_domains"))) -> dict:
     """Create a new domain with its classification keywords."""
     key = req.domain_key.strip().lower()
     cleaned_keywords = [str(k).lower().strip() for k in req.keywords if str(k).strip()]
@@ -223,8 +221,7 @@ def create_domain(req: DomainCreateRequest,
 @router.put("/api/admin/domains/{domain_id}")
 def update_domain(domain_id: int,
                   req: DomainUpdateRequest,
-                  user: str = Depends(get_current_user),
-                  role: str = Depends(require_role("admin"))) -> dict:
+                  user: str = Depends(require_cap("manage_domains"))) -> dict:
     """Update domain keywords or configuration."""
     with SessionLocal() as s:
         d = s.query(ClassifierDomain).filter(ClassifierDomain.id == domain_id).first()
@@ -254,8 +251,7 @@ def update_domain(domain_id: int,
 
 @router.delete("/api/admin/domains/{domain_id}")
 def delete_domain(domain_id: int,
-                  user: str = Depends(get_current_user),
-                  role: str = Depends(require_role("admin"))) -> dict:
+                  user: str = Depends(require_cap("manage_domains"))) -> dict:
     """Delete a classifier domain (or deactivate if it is a core domain)."""
     with SessionLocal() as s:
         d = s.query(ClassifierDomain).filter(ClassifierDomain.id == domain_id).first()
