@@ -137,7 +137,7 @@ export async function putIntegrationSettings(key: string, settings: Record<strin
   return r.json();
 }
 
-export async function testIntegration(key: string): Promise<{ ok: boolean; status?: number; detail?: string }> {
+export async function testIntegration(key: string): Promise<{ ok: boolean; status?: number; detail?: string; user?: string; error?: string }> {
   const r = await apiFetch(`${BASE}/api/settings/integrations/${key}/test`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },

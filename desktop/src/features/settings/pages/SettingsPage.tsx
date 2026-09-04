@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
 
 import { dashHealth } from "@/features/dashboard/api";
+import { IntegrationsConfig } from "../components/IntegrationsConfig";
 import {
   getUserSettings, putUserSettings, getIntegrationSettings,
   getSmtpSettings, putSmtpSettings, sendTestEmail, getRuntime, putRuntime,
@@ -392,7 +393,9 @@ export default function Settings({ role }: { role?: string }) {
             <SectionCard icon={<Link2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />}
               iconTone="bg-teal-50 dark:bg-teal-950/40"
               title="Integrations" description="Connect external tools and services.">
-              <div className="p-5">
+              <IntegrationsConfig />
+              <div className="border-t border-slate-100 dark:border-slate-800 px-5 pb-5 pt-4">
+                <p className="mb-3 text-2xs font-semibold uppercase tracking-wider text-slate-400">Service status</p>
                 <IntegrationStatusCards />
                 <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
                   <ToggleRow checked={autoSync} onChange={setAutoSync}
