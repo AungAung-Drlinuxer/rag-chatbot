@@ -1,0 +1,22 @@
+[project]
+name = "rerank-svc"
+version = "1.0.0"
+description = "Standalone bge-reranker-base cross-encoder scoring service for it-help-chatbot"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    # CPU-only torch — pulls the ~200MB cpu wheel index, not the 2.5GB CUDA build
+    "torch>=2.3",
+    "sentence-transformers>=3.0",
+]
+
+[tool.uv]
+# Keep the image lean: CPU torch only.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
