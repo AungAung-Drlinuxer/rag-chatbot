@@ -57,3 +57,25 @@ class ArticleRequest(StrictModel):
     body: str
     domain: str = "general"
     source_url: str | None = None
+
+
+# --- Domain Management Schemas ---
+from typing import Any
+from pydantic import BaseModel, Field
+
+class DomainCreateRequest(BaseModel):
+    domain_key: str = Field(..., min_length=2, max_length=64, description="Unique domain key e.g. 'hr'")
+    display_name: str = Field(..., min_length=2, max_length=128, description="Display title e.g. 'Human Resources'")
+    description: str | None = Field(None, description="Scope or summary of domain")
+    keywords: list[str] = Field(default_factory=list, description="Keywords/phrases for classifier matching")
+    jira_project: str | None = Field(None, max_length=32)
+    jira_assignee: str | None = Field(None, max_length=64)
+    is_active: bool = True
+
+class DomainUpdateRequest(BaseModel):
+    display_name: str | None = None
+    description: str | None = None
+    keywords: list[str] | None = None
+    jira_project: str | None = None
+    jira_assignee: str | None = None
+    is_active: bool | None = None

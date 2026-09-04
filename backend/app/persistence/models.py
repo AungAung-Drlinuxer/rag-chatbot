@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import (
+    Integer,
     Boolean,
     JSON,
     BigInteger,
@@ -238,4 +240,19 @@ class LocalUserCredential(Base):
     username: Mapped[str] = mapped_column(String(64), primary_key=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     source: Mapped[str] = mapped_column(String(8), nullable=False, default="local")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ClassifierDomain(Base):
+    """Admin-managed domains and keywords for dynamic classification."""
+    __tablename__ = "classifier_domains"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    domain_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    keywords: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    jira_project: Mapped[str | None] = mapped_column(String(32))
+    jira_assignee: Mapped[str | None] = mapped_column(String(64))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

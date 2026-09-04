@@ -151,3 +151,128 @@ def eval_cases_endpoint(user: str = Depends(get_current_user)) -> dict:
                        "must_contain": c.answer_must_contain,
                        "expected_sources": c.expected_source_page_ids} for c in cases]}
 
+
+
+# --------------------------------------------------------------------------
+# Classifier Domains Management (Admin-only)
+#   /api/admin/domains         GET, POST
+#   /api/admin/domains/{id}    PUT, DELETE
+# --------------------------------------------------------------------------
+from app.schemas import DomainCreateRequest, DomainUpdateRequest
+from app.persistence.models import ClassifierDomain
+from app.classifier.engine import reload_rules_cache
+
+
+@router.get("/api/admin/domains")
+def list_domains(user: str = Depends(get_current_user),
+                 role: str = Depends(require_role("admin"))) -> dict:
+    """List all registered classifier domains and their keywords."""
+    with SessionLocal() as s:
+        domains = s.query(ClassifierDomain).order_by(ClassifierDomain.id.asc()).all()
+        return {
+            "domains": [
+                {
+                    "id": d.id,
+                    "domain_key": d.domain_key,
+                    "display_name": d.display_name,
+                    "description": d.description,
+                    "keywords": d.keywords,
+                    "jira_project": d.jira_project,
+                    "jira_assignee": d.jira_assignee,
+                    "is_active": d.is_active,
+                    "created_at": d.created_at.isoformat() if d.created_at else None,
+                    "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+                }
+                for d in domains
+            ]
+        }
+
+
+@router.post("/api/admin/domains")
+def create_domain(req: DomainCreateRequest,
+                  user: str = Depends(get_current_user),
+                  role: str = Depends(require_role("admin"))) -> dict:
+    """Create a new domain with its classification keywords."""
+    key = req.domain_key.strip().lower()
+    cleaned_keywords = [str(k).lower().strip() for k in req.keywords if str(k).strip()]
+
+    with SessionLocal() as s:
+        existing = s.query(ClassifierDomain).filter(ClassifierDomain.domain_key == key).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Domain key '{key}' already exists.")
+
+        d = ClassifierDomain(
+            domain_key=key,
+            display_name=req.display_name.strip(),
+            description=req.description,
+            keywords=cleaned_keywords,
+            jira_project=req.jira_project.strip() if req.jira_project else None,
+            jira_assignee=req.jira_assignee.strip() if req.jira_assignee else None,
+            is_active=req.is_active,
+        )
+        s.add(d)
+        s.commit()
+        s.refresh(d)
+        new_id = d.id
+
+    reload_rules_cache()
+    audit("domain_created", user, detail=f"domain={key}")
+    return {"status": "ok", "id": new_id, "domain_key": key}
+
+
+@router.put("/api/admin/domains/{domain_id}")
+def update_domain(domain_id: int,
+                  req: DomainUpdateRequest,
+                  user: str = Depends(get_current_user),
+                  role: str = Depends(require_role("admin"))) -> dict:
+    """Update domain keywords or configuration."""
+    with SessionLocal() as s:
+        d = s.query(ClassifierDomain).filter(ClassifierDomain.id == domain_id).first()
+        if not d:
+            raise HTTPException(status_code=404, detail="Domain not found.")
+
+        if req.display_name is not None:
+            d.display_name = req.display_name.strip()
+        if req.description is not None:
+            d.description = req.description
+        if req.keywords is not None:
+            d.keywords = [str(k).lower().strip() for k in req.keywords if str(k).strip()]
+        if req.jira_project is not None:
+            d.jira_project = req.jira_project.strip() if req.jira_project else None
+        if req.jira_assignee is not None:
+            d.jira_assignee = req.jira_assignee.strip() if req.jira_assignee else None
+        if req.is_active is not None:
+            d.is_active = req.is_active
+
+        s.commit()
+        key = d.domain_key
+
+    reload_rules_cache()
+    audit("domain_updated", user, detail=f"domain={key}")
+    return {"status": "ok", "id": domain_id, "domain_key": key}
+
+
+@router.delete("/api/admin/domains/{domain_id}")
+def delete_domain(domain_id: int,
+                  user: str = Depends(get_current_user),
+                  role: str = Depends(require_role("admin"))) -> dict:
+    """Delete a classifier domain (or deactivate if it is a core domain)."""
+    with SessionLocal() as s:
+        d = s.query(ClassifierDomain).filter(ClassifierDomain.id == domain_id).first()
+        if not d:
+            raise HTTPException(status_code=404, detail="Domain not found.")
+
+        key = d.domain_key
+        # If it's a default/core domain, toggle is_active=false instead of hard delete
+        if key in ("database", "network", "security", "server"):
+            d.is_active = False
+            s.commit()
+            action = "deactivated"
+        else:
+            s.delete(d)
+            s.commit()
+            action = "deleted"
+
+    reload_rules_cache()
+    audit(f"domain_{action}", user, detail=f"domain={key}")
+    return {"status": "ok", "action": action, "domain_key": key}
