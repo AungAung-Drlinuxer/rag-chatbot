@@ -1,16 +1,25 @@
-/** B-3 — collapsible sidebar state, shared by every shell (persisted ith.sidebar). */
+/** Collapsible sidebar state (in-memory state across shell views). */
 import { useEffect, useState } from "react";
 
-const KEY = "ith.sidebar"; // "expanded" (default) | "collapsed"
+let globalCollapsed = false;
+const listeners = new Set<(v: boolean) => void>();
 
 export function useSidebarCollapsed(): [boolean, () => void] {
-  const [collapsed, setCollapsed] = useState<boolean>(() => localStorage.getItem(KEY) === "collapsed");
+  const [collapsed, setCollapsedState] = useState<boolean>(globalCollapsed);
 
   useEffect(() => {
-    localStorage.setItem(KEY, collapsed ? "collapsed" : "expanded");
-  }, [collapsed]);
+    const handler = (v: boolean) => setCollapsedState(v);
+    listeners.add(handler);
+    return () => { listeners.delete(handler); };
+  }, []);
 
-  // Cmd/Ctrl+B toggles globally (Linear/Notion convention)
+  const setCollapsed = (val: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof val === "function" ? val(globalCollapsed) : val;
+    globalCollapsed = next;
+    listeners.forEach((fn) => fn(next));
+  };
+
+  // Cmd/Ctrl+B toggles globally
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {

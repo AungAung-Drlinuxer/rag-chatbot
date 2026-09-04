@@ -100,42 +100,20 @@ export default function Settings({ role }: { role?: string }) {
   const [saved, setSaved] =
     useState(false);
 
-  // General — all live state (initialized from localStorage so settings persist)
-  const [appName, setAppName] = useState(
-    () => localStorage.getItem("ith.appName") ?? "IT Help Chatbot",
-  );
-  const [language, setLanguage] = useState(
-    () => localStorage.getItem("ith.language") ?? "English",
-  );
-  const [darkMode, setDarkMode] = useState(
-    () => localStorage.getItem("ith.dark") === "1",
-  );
-  const [compact, setCompact] = useState(
-    () => localStorage.getItem("ith.compact") === "1",
-  );
+  // General — server DB backed live state
+  const [appName, setAppName] = useState("IT Help Chatbot");
+  const [language, setLanguage] = useState("English");
+  const [darkMode, setDarkMode] = useState(false);
+  const [compact, setCompact] = useState(false);
   const [timezone, setTimezone] = useState(
-    () =>
-      localStorage.getItem("ith.timezone") ??
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   );
-  const [dateFormat, setDateFormat] = useState(
-    () => localStorage.getItem("ith.dateFormat") ?? "YYYY-MM-DD",
-  );
-  const [itemsPerPage, setItemsPerPage] = useState(
-    () => Number(localStorage.getItem("ith.pageSize") ?? "20"),
-  );
-  const [animations, setAnimations] = useState(
-    () => localStorage.getItem("ith.animations") !== "0",
-  );
-  const [sounds, setSounds] = useState(
-    () => localStorage.getItem("ith.sounds") === "1",
-  );
-  const [welcome, setWelcome] = useState(
-    () => localStorage.getItem("ith.welcome") !== "0",
-  );
-  const [rememberLast, setRememberLast] = useState(
-    () => localStorage.getItem("ith.rememberLast") !== "0",
-  );
+  const [dateFormat, setDateFormat] = useState("YYYY-MM-DD");
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [animations, setAnimations] = useState(true);
+  const [sounds, setSounds] = useState(false);
+  const [welcome, setWelcome] = useState(true);
+  const [rememberLast, setRememberLast] = useState(true);
 
   // other sections (unchanged)
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -158,56 +136,29 @@ export default function Settings({ role }: { role?: string }) {
   const [embeddingModel, setEmbeddingModel] = useState("nomic-embed-text");
   const [confidenceGate, setConfidenceGate] = useState(true);
 
-  // Real side-effects (run live as the user changes anything)
+  // Real DOM side-effects (visual only, server DB is the source of truth)
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
-    localStorage.setItem("ith.dark", darkMode ? "1" : "0");
   }, [darkMode]);
 
-  // v0.21.16 — apply saved settings to <html> immediately on load and after save.
-  // Bypasses React state propagation so the change is visible without
-  // a second click.
   function applyThemeNow(dark: boolean, compact: boolean, anim: boolean) {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
     document.documentElement.dataset.compact = compact ? "1" : "0";
     document.documentElement.classList.toggle("animations-off", !anim);
   }
+
   useEffect(() => {
     document.documentElement.dataset.compact = compact ? "1" : "0";
-    localStorage.setItem("ith.compact", compact ? "1" : "0");
   }, [compact]);
+
   useEffect(() => {
-    localStorage.setItem("ith.appName", appName);
     document.title = appName;
   }, [appName]);
-  useEffect(() => localStorage.setItem("ith.language", language), [language]);
-  useEffect(() => localStorage.setItem("ith.timezone", timezone), [timezone]);
-  useEffect(() => localStorage.setItem("ith.dateFormat", dateFormat), [dateFormat]);
-  useEffect(
-    () => localStorage.setItem("ith.pageSize", String(itemsPerPage)),
-    [itemsPerPage],
-  );
-  useEffect(
-    () => localStorage.setItem("ith.animations", animations ? "1" : "0"),
-    [animations],
-  );
-  useEffect(
-    () => localStorage.setItem("ith.sounds", sounds ? "1" : "0"),
-    [sounds],
-  );
-  useEffect(
-    () => localStorage.setItem("ith.welcome", welcome ? "1" : "0"),
-    [welcome],
-  );
-  useEffect(
-    () => localStorage.setItem("ith.rememberLast", rememberLast ? "1" : "0"),
-    [rememberLast],
-  );
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load saved settings from server on mount (server takes precedence over localStorage)
+  // Load saved settings from server DB on mount
   useEffect(() => {
     let mounted = true;
     getUserSettings()
