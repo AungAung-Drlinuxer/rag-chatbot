@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.schemas import ChatRequest, EscalateRequest, FeedbackRequest
 
 import json
+import os
 import time
 import uuid
 from contextlib import contextmanager
