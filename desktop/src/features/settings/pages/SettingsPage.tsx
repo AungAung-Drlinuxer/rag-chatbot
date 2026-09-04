@@ -12,11 +12,14 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { Layers } from "lucide-react";
+import { DomainClassifierManager } from "../components/DomainClassifierManager";
 import { PageShell, PageHeader } from "@/components/ui/page";
 
 import { dashHealth } from "@/features/dashboard/api";
 import {
+  ClassifierDomainItem, getClassifierDomains,
   getUserSettings, putUserSettings, getIntegrationSettings,
   getSmtpSettings, putSmtpSettings, sendTestEmail, getRuntime, putRuntime,
 } from "@/features/settings/api";
@@ -292,6 +295,22 @@ export default function Settings({ role }: { role?: string }) {
 
   // v0.21.90 — real AI provider info (from /api/settings/integrations/llm), not a label
   const [llmCfg, setLlmCfg] = useState<Record<string, any> | null>(null);
+  const [classifierDomains, setClassifierDomains] = useState<ClassifierDomainItem[]>([]);
+
+  const loadDomains = useCallback(async () => {
+    try {
+      const res = await getClassifierDomains();
+      setClassifierDomains(res.domains || []);
+    } catch {
+      // non-admin or backend offline
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadDomains();
+    }
+  }, [isAdmin, loadDomains]);
   useEffect(() => {
     getIntegrationSettings("llm")
       .then((d: any) => setLlmCfg(d?.settings ?? d))
@@ -487,6 +506,22 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
             </SectionCard>
+
+            {/* ==================== DOMAINS & CLASSIFIER ==================== */}
+            {isAdmin && (
+              <SectionCard
+                icon={<Layers className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+                iconTone="bg-emerald-50 dark:bg-emerald-950/40"
+                title="Routing Domains & Classifier"
+                description="Manage categories, dynamic keywords, and Jira project routing in real-time without redeploying backend containers."
+              >
+                <DomainClassifierManager
+                  domains={classifierDomains}
+                  onRefresh={loadDomains}
+                  isAdmin={isAdmin}
+                />
+              </SectionCard>
+            )}
 
             {/* ==================== NOTIFICATIONS ==================== */}
             <SectionCard icon={<Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
