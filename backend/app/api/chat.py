@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from app.auth.deps import get_current_user
 from app.api.auth import _require_chatbot
-from app.auth.rbac import get_role, require_role
+from app.auth.rbac import get_role, require_role, allowed_domains
 from app.config import SETTINGS
 from app.observability.audit import audit
 from app.observability.telemetry import record_counter, record_histogram, start_span
