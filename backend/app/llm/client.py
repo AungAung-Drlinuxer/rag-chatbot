@@ -155,7 +155,11 @@ def make_chain():
     if not _cfg("api_key", SETTINGS.hchat_api_key):
         return None
     try:
-        if _cfg("provider", SETTINGS.hchat_provider) == "openai":
+        # Accept "openai", "openrouter", "deepseek", or any other OpenAI-compatible
+        # value as a directive to use the openai client. Only "anthropic" uses the
+        # Anthropic SDK (Claude-compatible H-Chat).
+        _prov = str(_cfg("provider", SETTINGS.hchat_provider) or "").strip().lower()
+        if _prov in ("openai", "openrouter", "deepseek", "ollama", "") and not _prov.startswith("anthrop"):
             return _build_openai()
         return _build_anthropic()
     except Exception as exc:
