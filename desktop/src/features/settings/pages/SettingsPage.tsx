@@ -374,7 +374,9 @@ export default function Settings({ role }: { role?: string }) {
               title="Branding"
               description="Custom logo and brand name shown on the login page and sidebar."
             >
-              <BrandingSettings />
+              <div className="p-5">
+                <BrandingSettings />
+              </div>
             </SectionCard>
             )}
 

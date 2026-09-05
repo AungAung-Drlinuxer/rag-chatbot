@@ -73,30 +73,30 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
   return (
     <div className="space-y-4">
       {/* Preview + upload zone */}
-      <div className="flex items-center gap-5 rounded-xl border bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-full border bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pb-5 border-b border-[var(--border)]">
+        <div className="grid size-18 shrink-0 place-items-center overflow-hidden rounded-2xl border border-[var(--border)] bg-muted/40 shadow-xs">
           {branding.logo ? (
-            <img src={branding.logo} alt="Current logo" className="size-full object-contain" />
+            <img src={branding.logo} alt="Current logo" className="size-full object-contain p-1.5" />
           ) : (
-            <span className="text-[11px] font-extrabold tracking-tight text-blue-700">iTH</span>
+            <span className="text-xs font-bold tracking-tight text-blue-600">iTH</span>
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium">
+          <p className="text-xs font-semibold text-slate-900 dark:text-white">
             {branding.logo ? "Custom logo active" : "Default iTH mark in use"}
           </p>
-          <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
-            PNG or JPG, square recommended, up to 2 MB. Shown on the login page and the sidebar.
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+            Upload a PNG or JPG logo (square recommended, up to 2 MB). It replaces the mark on the login page and top sidebar.
           </p>
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2.5">
             <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-sky-600 disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 disabled:opacity-50">
               {busy ? <ImageIcon className="size-3.5 animate-pulse" /> : <Upload className="size-3.5" />}
               {branding.logo ? "Replace logo" : "Upload logo"}
             </button>
             {branding.logo && (
               <button type="button" disabled={busy} onClick={reset}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[10px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
                 <Trash2 className="size-3.5" /> Reset to default
               </button>
             )}
@@ -107,15 +107,20 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
       </div>
 
       {/* Optional app-name override for the brand row */}
-      <div>
-        <label className="mb-1.5 block text-[10px] font-medium text-muted-foreground">
-          Brand name (next to the logo) — optional
-        </label>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+        <div className="min-w-0">
+          <label className="block text-xs font-semibold text-slate-900 dark:text-white">
+            Brand name (optional)
+          </label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Custom application title displayed beside the logo on the login page and header.
+          </p>
+        </div>
         <input
           value={appName ?? ""}
           onChange={(e) => setAppName(e.target.value)}
           placeholder="IT Help Chatbot"
-          className="h-9 w-full max-w-xs rounded-lg border bg-white px-3 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-900"
+          className="h-10 w-full sm:w-64 rounded-xl border border-[var(--border)] bg-background px-3 text-xs outline-none focus:border-blue-500 transition"
         />
       </div>
 
