@@ -46,7 +46,7 @@ from app.config import SETTINGS
 
 logger = logging.getLogger("langgraph_rag")
 
-MAX_RETRIES = 1  # bounded loop: one rewrite+retrieve retry
+MAX_RETRIES = 0  # v0.22.2 — latency: single retrieve; no rewrite loop (35s -> ~12s)
 
 
 class RAGState(TypedDict):
