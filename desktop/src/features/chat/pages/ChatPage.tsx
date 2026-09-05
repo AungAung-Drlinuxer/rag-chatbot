@@ -1141,9 +1141,25 @@ function MessageBubble({
             <div className="whitespace-pre-wrap">{message.content || "..."}</div>
           ) : (
             <div className="md text-[11px] leading-6 [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[10px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-[11px] [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-1.5 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg [&_table]:text-[11px] [&_th]:border [&_th]:border-[var(--border)] [&_th]:bg-[var(--muted)] [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2.5 [&_td]:py-1.5 [&_tbody_tr:nth-child(even)]:bg-[color:var(--muted)]">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {message.content || "..."}
-              </ReactMarkdown>
+              {message.content ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+              ) : busy ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                  <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:120ms]" />
+                  <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:240ms]" />
+                  <span className="ml-1">Generating answer…</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 text-muted-foreground">
+                  <div className="font-medium text-rose-600">No answer received from the AI provider.</div>
+                  <p className="text-[10px]">
+                    The pipeline ran (retrieval + generation) but the upstream model returned no
+                    content — this is usually a free-tier rate limit or invalid model name. Try
+                    again, or change the model in <strong>Settings → Integrations → H-Chat (LLM API)</strong>.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

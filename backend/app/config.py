@@ -25,10 +25,10 @@ class Settings(BaseSettings):
     embedding_dim: int = 768
 
     # H-Chat (Claude-compatible external API) — no local LLM, no GPU
-    hchat_base_url: str = Field("", validation_alias=AliasChoices("H_CHAT_BASE_URL", "hchat_base_url"))
-    hchat_api_key: str = Field("", validation_alias=AliasChoices("H_CHAT_API_KEY", "hchat_api_key"))
-    hchat_model: str = Field("claude-4.6", validation_alias=AliasChoices("H_CHAT_MODEL", "hchat_model"))
-    hchat_provider: str = Field("anthropic", validation_alias=AliasChoices("H_CHAT_PROVIDER", "hchat_provider"))
+    hchat_base_url: str = Field("", validation_alias=AliasChoices("HCHAT_BASE_URL", "H_CHAT_BASE_URL", "hchat_base_url"))
+    hchat_api_key: str = Field("", validation_alias=AliasChoices("HCHAT_API_KEY", "H_CHAT_API_KEY", "hchat_api_key"))
+    hchat_model: str = Field("claude-4.6", validation_alias=AliasChoices("HCHAT_MODEL", "H_CHAT_MODEL", "hchat_model"))
+    hchat_provider: str = Field("anthropic", validation_alias=AliasChoices("HCHAT_PROVIDER", "H_CHAT_PROVIDER", "hchat_provider"))
     llm_max_tokens: int = 2048             # v0.21.97 — 800 truncated answers mid-sentence (out=800 ceiling)
 
     # Phase 10 — fault-tolerant LLM fallback (H-Chat → local Ollama → dev mock)
