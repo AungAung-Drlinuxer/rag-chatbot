@@ -99,7 +99,7 @@ export function NotificationBell({
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-xl border bg-[var(--card)] p-2 shadow-xl dark:border-slate-700">
+        <div className="absolute left-0 top-full z-[60] mt-1 w-72 rounded-xl border bg-[var(--card)] p-2 shadow-xl dark:border-slate-700">
           {notices.length === 0 ? (
             <div className="px-3 py-6 text-center text-xs text-muted-foreground">You're all caught up ✓</div>
           ) : (
