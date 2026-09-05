@@ -111,10 +111,12 @@ def _ldap_authenticate(username: str, password: str) -> str | None:
             for bind_as in (user_dn, upn):
                 if not bind_as:
                     continue
-                with Connection(server, user=bind_as, password=password) as uc:
-                    if uc.bind():
-                        bound = True
-                        break
+                # v0.21.99 — no context manager: `with Connection(...)` raises
+                # LDAPBindError on a failed bind, aborting the remaining attempts.
+                uc = Connection(server, user=bind_as, password=password, auto_bind=False)
+                if uc.bind():
+                    bound = True
+                    break
             if not bound:
                 logger.warning("LDAP user bind failed for %s (52e-style)", username)
                 return None
@@ -174,7 +176,8 @@ def _ldap_authenticate(username: str, password: str) -> str | None:
         return None
     try:
         with Connection(server, user=upn, password=password) as uc:
-            if uc.bind():
+            uc2 = Connection(server, user=upn, password=password, auto_bind=False)
+            if uc2.bind():
                 logger.info("LDAP UPN bind OK for %s", username)
                 # v0.21.96 — registration gate mirrors the search path
                 try:
@@ -198,7 +201,7 @@ def _ldap_authenticate(username: str, password: str) -> str | None:
                     pass
                 return username.split("@")[0]
             logger.warning("LDAP UPN bind failed for %s (%s)", username,
-                           uc.result.get("description"))
+                           uc2.result.get("description"))
     except Exception as exc:
         logger.warning("LDAP UPN bind error (%s): %s", type(exc).__name__, exc)
     return None
