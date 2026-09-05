@@ -77,7 +77,7 @@ type HealthItem = {
    MAIN DASHBOARD
 ============================================================ */
 
-export default function Dashboard(_props: Props) {
+export default function Dashboard({ role }: Props) {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] =
     useState(new Date());
@@ -164,6 +164,7 @@ export default function Dashboard(_props: Props) {
     <PageShell>
       <PageHeader
       icon={<Activity className="size-5" />}
+      badge={role === "admin" ? "Administrator" : "User"}
       title="Dashboard"
       description="Overview of IT Help Chatbot and system activity"
       actions={<>
@@ -424,15 +425,15 @@ export default function Dashboard(_props: Props) {
 
                     <colgroup>
 
-                      <col className="w-[16%]" />
+                      <col className="w-[14%]" />
 
-                      <col className="w-[16%]" />
+                      <col className="w-[14%]" />
 
-                      <col className="w-[43%]" />
+                      <col className="w-[40%]" />
 
                       <col className="w-[12%]" />
 
-                      <col className="w-[13%]" />
+                      <col className="w-[20%]" />
 
                     </colgroup>
 
@@ -485,7 +486,7 @@ export default function Dashboard(_props: Props) {
                               {conversation.time}
                             </td>
 
-                            <td className="whitespace-nowrap px-4 py-3 text-[10px] font-medium">
+                            <td className="max-w-[120px] truncate px-4 py-3 text-[10px] font-medium" title={conversation.user}>
                               {conversation.user}
                             </td>
 

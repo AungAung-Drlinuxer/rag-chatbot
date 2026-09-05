@@ -4,8 +4,8 @@ import { apiFetch, authHeaders, BASE } from "@/shared/api/client";
 
 type Branding = { logo: string | null; appName: string | null };
 
-async function fetchBranding(): Promise<Branding> {
-  const r = await fetch(`${BASE}/api/branding`);
+export async function fetchBranding(): Promise<Branding> {
+  const r = await apiFetch(`${BASE}/api/branding`);
   if (!r.ok) return { logo: null, appName: null };
   return r.json();
 }

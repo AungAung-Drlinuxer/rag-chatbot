@@ -399,6 +399,7 @@ export default function Knowledge({
     <PageShell>
       <PageHeader
       icon={<BookOpen className="size-5" />}
+      badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : role === "knowledge" ? "Knowledge Manager" : "User"}
         title="Knowledge Base"
         description="Search and manage your IT knowledge base"
         actions={<>

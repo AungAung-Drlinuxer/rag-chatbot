@@ -458,6 +458,7 @@ export default function Tickets({
     return (
     <PageShell>
       <PageHeader
+        badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : "User"}
         icon={<TicketIcon className="size-5" />}
       title="Tickets"
       description="Track and manage IT support requests"

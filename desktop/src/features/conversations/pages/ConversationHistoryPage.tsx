@@ -125,7 +125,7 @@ export default function ConversationHistoryPage() {
         <PageHeader
           icon={<MessagesSquare className="size-5" />}
           title="Conversation History"
-          badge="Admin audit"
+          badge="History"
           description="Every user's chatbot conversations — review transcripts and export."
           actions={
             <button

@@ -709,3 +709,18 @@ code, pre, .mono { font-family: var(--mono); }
   box-shadow: var(--focus-ring);
   border-radius: 8px;
 }
+
+/* === v0.22.5 — unified scrollbar styling (all scroll containers) ============ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.35) transparent; /* slate-500/35 */
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.55); }
+[data-theme="dark"] *::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.55); }
+[data-theme="dark"] *::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.7); }
