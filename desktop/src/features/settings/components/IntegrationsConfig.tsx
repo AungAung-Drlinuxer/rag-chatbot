@@ -127,7 +127,7 @@ export function IntegrationsConfig() {
                 : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
             ].join(" ")}
           >
-            {META[k].label.split(" (")[0]}
+            {META[k].label.split(" (")[0].split(" /")[0].replace(" SSO", "")}
           </button>
         ))}
         <a
