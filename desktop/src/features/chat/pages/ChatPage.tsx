@@ -188,6 +188,7 @@ export default function Chat({
         topK: m.meta?.top_k,
         usage: m.meta?.usage,
         latencyMs: m.meta?.latency_ms,
+        serverId: m.message_id || undefined,  // feedback target (v0.21.90)
         sources: (m.meta?.hits ?? []).map((h: any) => ({
           page_id: h.page_id ?? null,
           title: h.title ?? "Untitled",
@@ -374,12 +375,11 @@ export default function Chat({
       .catch(() => chatAlert("Feedback failed", "err"));
   }
 
-  function openTicketForm(message: Message) {
-    const question = messages.filter((m) => m.role === "user").slice(-1)[0]?.content || "";
+  function openTicketForm(_message: Message) {
+    // v0.21.99 — open an EMPTY form; the user writes their own subject/description.
     setTicketForm({
-      subject: question.slice(0, 110) || "IT help escalation",
-      description:
-        `Raised from chat with the IT Help assistant.\n\nQuestion: ${question}\n\nAnswer summary: ${(message.content || "").slice(0, 500)}`,
+      subject: "",
+      description: "",
       domain: "general",
       priority: "medium",
       assignee: "",
