@@ -207,7 +207,15 @@ def get_my_settings(user: str = Depends(get_current_user)) -> dict:
 
 @router.put("/api/settings")
 def update_my_settings(payload: dict, user: str = Depends(get_current_user)) -> dict:
-    """Merge-update the current user's preferences. Unknown fields are ignored."""
+    """Merge-update the current user's preferences.
+
+    v0.22.3 — known fields map to ORM columns; EVERYTHING else (darkMode,
+    appName, animations, … the SettingsPage's flat prefs) is persisted into
+    the `prefs` JSONB blob. Previously the extra keys were silently dropped,
+    so a saved "light" theme never stuck and login kept the stale dark theme.
+    """
+    import json as _json
+    from sqlalchemy import text as _t
     from app.persistence.database import SessionLocal
 
     if not isinstance(payload, dict):
@@ -218,12 +226,39 @@ def update_my_settings(payload: dict, user: str = Depends(get_current_user)) -> 
         if row is None:
             row = UserSettings(username=user)
             s.add(row)
+        extras: dict = {}
         for k, v in payload.items():
             if k in _USER_SETTABLE_FIELDS and v is not None:
                 setattr(row, k, v)
+            elif v is not None:
+                extras[k] = v
+        if extras:
+            existing = s.execute(
+                _t("SELECT prefs FROM user_settings WHERE username = :u"), {"u": user}
+            ).first()
+            prefs = existing[0] if existing else {}
+            if isinstance(prefs, str):
+                try:
+                    prefs = _json.loads(prefs)
+                except Exception:
+                    prefs = {}
+            prefs = prefs or {}
+            prefs.update(extras)
+            s.execute(
+                _t(
+                    "INSERT INTO user_settings (username, theme, density, prefs) "
+                    "VALUES (:u, :t, :d, :p) "
+                    "ON CONFLICT (username) DO UPDATE SET prefs = :p, updated_at = NOW()"
+                ),
+                {"u": user, "t": row.theme or "light", "d": row.density or "comfortable",
+                 "p": _json.dumps(prefs)},
+            )
         s.commit()
         s.refresh(row)
-        return _serialize_user_settings(row)
+        out = _serialize_user_settings(row)
+        if extras:
+            out.update(extras)
+        return out
     finally:
         s.close()
 
