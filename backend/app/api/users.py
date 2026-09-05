@@ -116,7 +116,7 @@ def list_users(user: str = Depends(get_current_user)) -> dict:
                     "roleOverride": r.get("role_override"),
                     "status": r.get("status") or "Active",
                     "groups": app_group_map.get(u, []),
-                    "lastLogin": r["last_login"].strftime("%Y-%m-%d %H:%M") if r.get("last_login") else "—",
+                    "lastLogin": r["last_login"].isoformat() if r.get("last_login") else "—",
                     "joined": "—",
                     "source": "local",
                 }
@@ -173,7 +173,7 @@ def list_users(user: str = Depends(get_current_user)) -> dict:
                             if ticks > 9223372036854775807 // 2:  # never-logged-in sentinel
                                 last_login = "—"
                             else:
-                                last_login = _dt.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+                                last_login = _dt.fromtimestamp(ts, tz=_dt.timezone.utc).isoformat()
                     except Exception:
                         pass
                 # local record lookup (before first use — v0.21.74 bugfix)

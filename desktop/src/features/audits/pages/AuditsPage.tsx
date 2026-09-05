@@ -50,13 +50,14 @@ function toneFor(action: string): string {
 }
 
 function fmt(ts: string | null): string {
-  // Task-4 — render in the viewer's timezone (backend emits UTC "+00:00";
-  // the old .slice(0,19) dropped the offset and displayed UTC wall time).
   if (!ts) return "—";
-  const d = new Date(ts);
-  return Number.isNaN(d.getTime())
-    ? ts.slice(0, 19).replace("T", " ")
-    : d.toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  // Server times are UTC (timestamptz). Parse and render in the viewer's locale.
+  const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString(undefined, {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
 }
 
 export default function AuditsPage() {

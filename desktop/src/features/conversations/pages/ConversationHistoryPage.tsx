@@ -30,12 +30,14 @@ type Conv = {
 type Msg = { role: string; content: string; created_at: string | null };
 
 function fmt(ts: string | null): string {
-  // Task-4 — viewer-local time (backend emits UTC)
   if (!ts) return "—";
-  const d = new Date(ts);
-  return Number.isNaN(d.getTime())
-    ? ts.slice(0, 19).replace("T", " ")
-    : d.toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  // Server times are UTC (timestamptz). Parse and render in the viewer's locale.
+  const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString(undefined, {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
 }
 
 const AVATAR_TONES = [

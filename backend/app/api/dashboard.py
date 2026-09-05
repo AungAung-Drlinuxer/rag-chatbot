@@ -168,7 +168,7 @@ def dashboard_recent_conversations(
         created = r["created_at"]
         out.append(
             {
-                "time": created.strftime("%H:%M") if created else "",
+                "time": created.isoformat() if created else "",
                 "user": r.get("username") or "unknown",
                 "question": (r.get("content") or "")[:120],
                 "result": decision,
