@@ -131,7 +131,7 @@ export default function ConversationHistoryPage() {
             <button
               onClick={load}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-card px-4 py-2.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
               Refresh

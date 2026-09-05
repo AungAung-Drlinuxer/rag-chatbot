@@ -297,7 +297,7 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
               <SelectRow label="Language" description="Language used by the application"
-                value={language} onChange={setLanguage} options={["English", "Myanmar"]} />
+                value={language} onChange={setLanguage} options={["English"]} />
               <SelectRow label="Time zone" description="Used for timestamps and notifications"
                 value={timezone} onChange={setTimezone}
                 options={["Asia/Singapore", "Asia/Bangkok", "Asia/Yangon", "UTC", "Asia/Kolkata", "Europe/London"]} />

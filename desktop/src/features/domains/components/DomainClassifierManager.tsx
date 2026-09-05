@@ -158,7 +158,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 value={domainKey}
                 onChange={(e) => setDomainKey(e.target.value)}
                 placeholder="e.g. hr, sap, hardware"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-50"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-50"
                 required
               />
             </div>
@@ -172,7 +172,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="e.g. Human Resources & Benefits"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 required
               />
             </div>
@@ -188,7 +188,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 value={jiraProject}
                 onChange={(e) => setJiraProject(e.target.value)}
                 placeholder="e.g. ITDB, ITNET (leave blank if unused)"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
               <p className="text-2xs text-slate-400 mt-1">
                 Target Jira Project code for team escalation when the question cannot be answered from Confluence KB.
@@ -220,7 +220,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief summary of issues routed to this domain"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
             />
           </div>
 
@@ -233,7 +233,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               value={keywordsText}
               onChange={(e) => setKeywordsText(e.target.value)}
               placeholder="e.g. payroll, leave request, onboarding, tax deduction"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
             />
             <p className="text-2xs text-slate-400 mt-1">
               Any user prompt containing these phrases will score towards this domain.
