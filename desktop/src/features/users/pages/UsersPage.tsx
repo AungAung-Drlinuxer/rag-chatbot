@@ -98,6 +98,27 @@ const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   User: "End user: chat + search KB + own tickets only",
 };
 
+/* Normalize any backend/local variant (Agent, Admin, agent, IT Support…) to the
+   canonical display role used across the UI. Backend /api/users capitalizes the
+   role_override (agent -> Agent, admin -> Admin), LDAP-derived rows may be
+   "IT Support"/"Administrator", and overrides may be raw enum keys. */
+const ROLE_ALIASES: Record<string, UserRole> = {
+  "agent": "IT Support",
+  "admin": "Administrator",
+  "administrator": "Administrator",
+  "knowledge": "Knowledge Manager",
+  "knowledge manager": "Knowledge Manager",
+  "domain_manager": "Domain Manager",
+  "domain manager": "Domain Manager",
+  "it support": "IT Support",
+  "user": "User",
+};
+
+function normalizeRole(raw: string | null | undefined): UserRole {
+  const key = (raw || "").trim().toLowerCase();
+  return ROLE_ALIASES[key] ?? ((["Administrator", "Domain Manager", "IT Support", "Knowledge Manager", "User"].includes(raw || "") ? raw : "User") as UserRole);
+}
+
 /* Canonical role → permission defaults (matches backend /api/rbac/matrix) */
 const ROLE_DEFAULTS: Record<UserRole, PermissionMap> = {
   Administrator: { chatbot: true, kb_search: true, create_tickets: true, manage_kb: true, manage_users: true, manage_domains: true },
@@ -127,7 +148,7 @@ export default function Users() {
     if (showRefresh) setRefreshing(true);
     try {
       const data = await listUsers();
-      setUsers(data.users ?? data ?? []);
+      setUsers(((data.users ?? data ?? []) as User[]).map((u) => ({ ...u, role: normalizeRole(u.role as string) })));
     } catch (error) {
       console.warn("users fetch failed:", error);
     } finally {
@@ -148,7 +169,7 @@ export default function Users() {
     async function load() {
       try {
         const data = await listUsers();
-        if (mounted) setUsers(data.users ?? data ?? []);
+        if (mounted) setUsers(((data.users ?? data ?? []) as User[]).map((u) => ({ ...u, role: normalizeRole(u.role as string) })));
       } catch (error) {
         console.warn("users fetch failed:", error);
       } finally {
@@ -398,7 +419,7 @@ export default function Users() {
             onClose={() => setSelectedUser(null)}
             onUserUpdated={(updatedUser) => {
               setUsers((current) => current.map((item) => item.id === updatedUser.id ? updatedUser : item));
-              setSelectedUser((current) => current && current.id === updatedUser.id ? updatedUser : current);
+              setSelectedUser((current) => current && current.id === updatedUser.id ? { ...updatedUser, role: normalizeRole(updatedUser.role as string) } : current);
             }}
           />
         )}
@@ -635,7 +656,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
     try {
       await updateUserRole(user.username, selectedRole);
       const updatedUser: User = { ...user, role: selectedRole, roleOverride: selectedRole.toLowerCase() };
-      onUserUpdated?.(updatedUser);
+      onUserUpdated?.({ ...updatedUser, role: normalizeRole(updatedUser.role as string) });
       setRoleSaved(true);
       window.setTimeout(() => setRoleSaved(false), 2500);
       try {
