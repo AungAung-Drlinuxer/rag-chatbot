@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from app.schemas import LoginRequest, RefreshRequest
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +14,8 @@ from app.auth.rbac import allowed_domains, get_role, require_cap
 from app.config import SETTINGS
 from app.observability.audit import audit
 from app.persistence.models import UserSettings
+
+logger = logging.getLogger("auth")
 
 router = APIRouter()
 
