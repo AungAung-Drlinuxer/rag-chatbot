@@ -8,6 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { useBranding } from "@/app/useBranding";
 import { healthPing } from "@/features/auth/api";
 
 type Props = {
@@ -28,6 +29,7 @@ export default function Login({
   onSubmit,
 }: Props) {
   const [showPass, setShowPass] = useState(false);
+  const branding = useBranding();
   const [backendUp, setBackendUp] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -67,13 +69,18 @@ export default function Login({
           <div className="relative flex min-h-screen w-full flex-col justify-between gap-6 px-12 py-8 xl:px-16">
             {/* Brand — matches sidebar (v0.21.31) */}
             <div className="flex items-center gap-3">
-              <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--brand-logo)] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]">
-                ITH
-              </div>
+              {branding.logo ? (
+                <img src={branding.logo} alt="Company logo"
+                  className="size-11 shrink-0 rounded-full object-contain shadow-[0_4px_12px_rgba(37,99,235,0.35)]" />
+              ) : (
+                <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--brand-logo)] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]">
+                  ITH
+                </div>
+              )}
 
               <div>
                 <div className="text-sm font-bold tracking-tight">
-                  IT Help Chatbot
+                  {branding.appName || "IT Help Chatbot"}
                 </div>
 
                 <div className="text-xs text-muted-foreground">

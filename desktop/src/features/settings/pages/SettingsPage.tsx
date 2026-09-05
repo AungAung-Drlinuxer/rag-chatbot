@@ -17,6 +17,8 @@ import { PageShell, PageHeader } from "@/components/ui/page";
 
 import { dashHealth } from "@/features/dashboard/api";
 import { IntegrationsConfig } from "../components/IntegrationsConfig";
+import { BrandingSettings } from "../components/BrandingSettings";
+import { Image as ImageIcon } from "lucide-react";
 import {
   getUserSettings, putUserSettings, getIntegrationSettings,
   getSmtpSettings, putSmtpSettings, sendTestEmail, getRuntime, putRuntime,
@@ -361,6 +363,18 @@ export default function Settings({ role }: { role?: string }) {
                   </p>
                 </div>
               </div>
+            </SectionCard>
+            )}
+
+            {/* Branding — admin only (logo on login + sidebar) */}
+            {isAdmin && (
+            <SectionCard
+              icon={<ImageIcon className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-400" />}
+              iconTone="bg-fuchsia-50 dark:bg-fuchsia-950/40"
+              title="Branding"
+              description="Custom logo and brand name shown on the login page and sidebar."
+            >
+              <BrandingSettings />
             </SectionCard>
             )}
 

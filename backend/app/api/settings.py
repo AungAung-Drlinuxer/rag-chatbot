@@ -18,6 +18,8 @@ from app.persistence.database import SessionLocal, engine
 
 logger = logging.getLogger("dashboard")
 
+from fastapi import UploadFile as _UPLOAD_FILE, File as _FILE, Form as _FORM
+
 router = APIRouter(prefix="/api")
 
 def _db() -> Any:
@@ -347,4 +349,111 @@ def list_llm_models(user: str = Depends(get_current_user)) -> dict:
 # === v0.21.36 — chat attachments ===
 # Store uploaded files (images/docs) as bytea rows; the chat message references
 # attachment ids so the UI can render previews inline.
+
+
+# === v0.22.0 — Branding: admin-customizable logo (login + sidebar) ===========
+BRANDING_KEY = "branding"
+_ALLOWED_MIME = {"image/png": "png", "image/jpeg": "jpg"}
+_MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
+
+
+@router.get("/branding")
+def get_branding() -> dict:
+    """PUBLIC (no auth) — the login page needs the logo before any token exists.
+
+    Returns { logo: data-url | None, appName: str | None, updated_at }.
+    The data-url embeds the bytes, so the SPA can render it without a separate
+    authenticated fetch.
+    """
+    import json as _json
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        row = s.execute(_t(
+            "SELECT value, updated_at FROM system_settings WHERE key = :k"
+        ), {"k": BRANDING_KEY}).first()
+    val = row[0] if row else None
+    if isinstance(val, str):
+        try: val = _json.loads(val)
+        except Exception: val = {}
+    val = val or {}
+    return {
+        "logo": val.get("logo") or None,          # data:image/png;base64,...
+        "appName": val.get("appName") or None,
+        "updated_at": str(row[1]) if row and row[1] else None,
+    }
+
+
+@router.put("/admin/branding/logo")
+async def put_branding_logo(
+    user: str = Depends(get_current_user),
+    file: _UPLOAD_FILE = _FILE(...),
+    appName: str = _FORM(None),
+) -> dict:
+    """ADMIN — upload a logo (multipart form). PNG/JPG <= 2 MB.
+
+    Stored as a base64 data-url in system_settings.branding (replicated with
+    the DB; no PVC needed). Remove with DELETE /admin/branding/logo.
+    """
+    _require_admin(user)
+    import base64 as _b64
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > _MAX_LOGO_BYTES:
+        raise HTTPException(status_code=413, detail="Logo exceeds 2 MB limit")
+    mime = file.content_type or ""
+    if mime not in _ALLOWED_MIME:
+        raise HTTPException(status_code=415, detail="Only PNG and JPG images are allowed")
+    # Magic-byte sniffing (content-type header can lie)
+    if mime == "image/png" and not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise HTTPException(status_code=415, detail="File is not a real PNG")
+    if mime == "image/jpeg" and not data.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(status_code=415, detail="File is not a real JPEG")
+
+    data_url = f"data:{mime};base64," + _b64.b64encode(data).decode()
+    import json as _json
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
+                        {"k": BRANDING_KEY}).first()
+        cur = row[0] if row else {}
+        if isinstance(cur, str):
+            try: cur = _json.loads(cur)
+            except Exception: cur = {}
+        cur = cur or {}
+        cur["logo"] = data_url
+        if appName is not None:
+            cur["appName"] = str(appName).strip() or None
+        s.execute(_t(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+        ), {"k": BRANDING_KEY, "v": _json.dumps(cur)})
+        s.commit()
+    audit("branding.logo.update", user, detail=f"mime={mime} bytes={len(data)}")
+    return {"ok": True, "bytes": len(data), "mime": mime, "appName": cur.get("appName")}
+
+
+@router.delete("/admin/branding/logo")
+def delete_branding_logo(user: str = Depends(get_current_user)) -> dict:
+    """ADMIN — reset to the default built-in ITH mark."""
+    _require_admin(user)
+    import json as _json
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
+                        {"k": BRANDING_KEY}).first()
+        cur = row[0] if row else {}
+        if isinstance(cur, str):
+            try: cur = _json.loads(cur)
+            except Exception: cur = {}
+        cur = cur or {}
+        cur.pop("logo", None)
+        s.execute(_t(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+        ), {"k": BRANDING_KEY, "v": _json.dumps(cur)})
+        s.commit()
+    audit("branding.logo.reset", user)
+    return {"ok": True}
 

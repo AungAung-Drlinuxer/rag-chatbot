@@ -1,6 +1,7 @@
 /** Shared nav sidebar for non-chat pages (extracted verbatim from App.tsx).
  * Capability-aware nav (v0.21.57): locked items stay visible; clicking shows WHY. */
 import { useState } from "react";
+import { useBranding } from "@/app/useBranding";
 import {
   BookOpen, Home, Layers, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
   Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
@@ -32,6 +33,7 @@ export default function PageSidebar({
   collapsed?: boolean;      // B-3: icon rail mode (Cmd/Ctrl+B)
   onToggleCollapsed?: () => void;
 }) {
+  const branding = useBranding();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [denied, setDenied] = useState<string | null>(null);
   // B-6 — admin/agent see HITL approvals + LDAP-gated accounts as notifications
@@ -76,9 +78,13 @@ export default function PageSidebar({
         </div>
       ) : (
         <div className="flex h-16 items-center gap-3 border-b px-5 dark:border-slate-800">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
+          {branding.logo ? (
+            <img src={branding.logo} alt="Company logo" className="size-9 shrink-0 rounded-xl object-contain" />
+          ) : (
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
+          )}
           <div className="min-w-0">
-            <div className="text-sm font-semibold">IT Help Chatbot</div>
+            <div className="text-sm font-semibold">{branding.appName || "IT Help Chatbot"}</div>
             <div className="text-[10px] text-slate-400">Enterprise Assistant</div>
           </div>
           {canManage && (

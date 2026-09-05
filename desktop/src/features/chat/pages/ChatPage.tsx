@@ -32,6 +32,7 @@ import {
   Zap
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useBranding } from "@/app/useBranding";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -89,6 +90,7 @@ export default function Chat({
   onNavigate?: (nav: string) => void;
   onLogout?: () => void;
 }) {
+  const branding = useBranding();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [conversations, setConversations] = useState<Conv[]>([]);
@@ -444,9 +446,13 @@ export default function Chat({
       >
         {/* Brand — matches PageSidebar (B-6: notification bell for admin/agent) */}
         <div className="flex h-16 items-center gap-3 border-b border-[var(--sidebar-border)] px-5">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
+          {branding.logo ? (
+            <img src={branding.logo} alt="Company logo" className="size-9 shrink-0 rounded-xl object-contain" />
+          ) : (
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
+          )}
           <div className="min-w-0">
-            <div className="text-sm font-semibold">IT Help Chatbot</div>
+            <div className="text-sm font-semibold">{branding.appName || "IT Help Chatbot"}</div>
             <div className="text-[10px] text-muted-foreground">Enterprise Assistant</div>
           </div>
           {(role === "admin" || role === "agent") && (
