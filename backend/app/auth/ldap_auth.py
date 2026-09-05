@@ -17,7 +17,14 @@ DEV_PASSWORD = os.environ.get("DEV_PASSWORD", "Pwint@160320")
 
 
 def authenticate(username: str, password: str) -> str | None:
-    """Validate credentials; return the username (subject) on success, else None."""
+    """Validate credentials.
+
+    Returns:
+      "<username>"          — authenticated OK
+      "disabled:<username>" — AD bind succeeded but the account is admin-disabled
+      "pending:<username>"  — AD bind OK, awaiting registration approval
+      None                  — wrong credentials / user unknown / directory error
+    """
     if not username or not password:
         return None
 
@@ -126,7 +133,7 @@ def _ldap_authenticate(username: str, password: str) -> str | None:
                     ), {"u": canonical}).first()
                     if row and row.status == "Disabled":
                         logger.warning("login blocked for %s (status=Disabled)", canonical)
-                        return None
+                        return f"disabled:{canonical}"
                     if row and row.status == "Pending":
                         # v0.21.96 — registration flow: LDAP identity verified but the
                         # account is still awaiting admin approval → clear signal, no token.
@@ -178,7 +185,7 @@ def _ldap_authenticate(username: str, password: str) -> str | None:
                         row = s.execute(_t("SELECT status FROM users WHERE username IN (:a, :b)"),
                                         {"a": base, "b": username}).first()
                         if row and row.status == "Disabled":
-                            return None
+                            return f"disabled:{base}"
                         if not row or row.status == "Pending":
                             s.execute(_t(
                                 "INSERT INTO users (username, ldap_dn, status, last_seen) "

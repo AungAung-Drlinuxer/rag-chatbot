@@ -23,6 +23,16 @@ def login(req: LoginRequest) -> dict:
     subject = authenticate(req.username, req.password)
     if not subject:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    # v0.21.99 — admin-disabled accounts get a dedicated 403 (NOT the misleading
+    # 401 "Invalid credentials"): AD bind succeeded, so the password was correct —
+    # the account itself is blocked.
+    if subject.startswith("disabled:"):
+        who = subject.split(":", 1)[1]
+        logger.warning("login refused: %s is disabled", who)
+        raise HTTPException(
+            status_code=403,
+            detail="Your account has been disabled by an administrator. Please contact IT.",
+        )
     # v0.21.96 — LDAP registration gate: identity verified but account not yet
     # approved by an administrator → complete login is refused with a clear reason.
     if subject.startswith("pending:"):

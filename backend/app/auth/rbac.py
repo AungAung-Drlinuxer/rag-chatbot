@@ -254,6 +254,9 @@ def permissions_for(username: str) -> dict:
 
 
 def is_disabled(username: str) -> bool:
+    # v0.21.99 — tolerate the "disabled:<user>" sentinel from ldap_auth.
+    if username and username.startswith("disabled:"):
+        username = username.split(":", 1)[1]
     try:
         from sqlalchemy import text as _t
 
@@ -261,7 +264,8 @@ def is_disabled(username: str) -> bool:
 
         with SessionLocal() as s:
             row = s.execute(
-                _t("SELECT status FROM users WHERE username = :u"), {"u": username}
+                _t("SELECT status FROM users WHERE lower(username) = lower(:u)"),
+                {"u": username},
             ).first()
         return bool(row and row[0] == "Disabled")
     except Exception:
