@@ -91,19 +91,19 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
       {title && (
-        <div className="flex items-center justify-between gap-3 border-b px-5 py-4 dark:border-slate-800">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-muted/20 px-6 py-4.5">
+          <div className="flex min-w-0 items-center gap-3.5">
             {icon && (
-              <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-blue-50/80 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
                 {icon}
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold">{title}</h2>
+              <h2 className="truncate text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h2>
               {description && (
-                <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {description}
                 </p>
               )}
@@ -117,16 +117,16 @@ export function SectionCard({
   );
 }
 
-/** Standard primary button styles (use with shadcn Button className). */
+/** Standard primary button styles (use with shadcn Button className) — Linear/Stripe style. */
 export const btnPrimary =
-  "rounded-xl bg-blue-600 px-4 py-2.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-blue-700";
+  "rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98]";
 export const btnSecondary =
-  "rounded-xl border px-4 py-2.5 text-[11px] font-semibold transition hover:bg-muted";
+  "rounded-xl border border-[var(--border)] bg-background px-4 py-2 text-xs font-medium text-foreground shadow-xs transition hover:bg-muted/50 active:scale-[0.98]";
 
-/** Standard form field label + input classes. */
-export const fieldLabel = "mb-1.5 block text-[10px] font-semibold";
+/** Standard form field label + input classes — Linear/Stripe compact spacing. */
+export const fieldLabel = "mb-1.5 block text-xs font-semibold text-slate-900 dark:text-white";
 export const fieldInput =
-  "h-10 w-full rounded-xl border bg-transparent px-3 text-xs outline-none transition focus:border-blue-500 dark:border-slate-700";
+  "h-9 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-blue-500";
 
 /** B-11 — shared empty state: icon chip + headline + explanation + active CTA. */
 export function EmptyState({
