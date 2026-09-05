@@ -1,1 +1,5 @@
 infra/k8s/_source/
+
+# Python bytecode
+__pycache__/
+*.pyc
