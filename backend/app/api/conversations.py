@@ -10,6 +10,7 @@ from app.auth.deps import get_current_user
 from app.config import SETTINGS
 from app.observability.audit import audit
 from app.persistence.database import SessionLocal
+from app.rag.gate import DECISION_CAUTION, caution_message
 from app.persistence.models import ChatSession, ChatMessage
 
 router = APIRouter()
