@@ -302,6 +302,48 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
         return {"ok": False, "detail": str(exc)[:200]}
 
 
+@router.get("/settings/integrations/llm/models")
+def list_llm_models(user: str = Depends(get_current_user)) -> dict:
+    """Fetch the model catalogue from the configured provider (saved key required).
+
+    Returns [{id, name}] sorted by id. Used by the Settings -> Integrations ->
+    H-Chat (LLM API) model selector so admins pick from the provider's real list.
+    """
+    from app.auth.rbac import get_role as _get_role
+    if _get_role(user) != "admin":
+        raise HTTPException(status_code=403, detail="Administrator permission required.")
+    import httpx
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        row = s.execute(_t("SELECT value FROM system_settings WHERE key = 'llm'")).first()
+    import json as _json
+    cfg = row[0] if row else {}
+    if isinstance(cfg, str):
+        try: cfg = _json.loads(cfg)
+        except Exception: cfg = {}
+    cfg = cfg or {}
+    base = (cfg.get("base_url") or "").rstrip("/")
+    key = cfg.get("api_key") or ""
+    if not base:
+        raise HTTPException(status_code=400, detail="Base URL not set — save the integration first.")
+    if not key:
+        raise HTTPException(status_code=400, detail="API key not set — save your provider API key first.")
+    try:
+        r = httpx.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=20)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"provider unreachable: {exc}")
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"provider error {r.status_code}: {r.text[:150]}")
+    try:
+        data = r.json()
+        items = data.get("data", data if isinstance(data, list) else [])
+        models = [{"id": m.get("id"), "name": m.get("name") or m.get("id")} for m in items if m.get("id")]
+        models.sort(key=lambda m: m["id"].lower())
+        return {"models": models, "count": len(models)}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"unexpected provider response: {exc}")
+
+
 # === v0.21.36 — chat attachments ===
 # Store uploaded files (images/docs) as bytea rows; the chat message references
 # attachment ids so the UI can render previews inline.

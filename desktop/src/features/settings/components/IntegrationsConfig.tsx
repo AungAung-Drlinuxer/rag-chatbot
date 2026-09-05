@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon } from "lucide-react";
-import { getIntegrationSettings, putIntegrationSettings, testIntegration } from "@/features/settings/api";
+import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon, AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
+import { getIntegrationSettings, putIntegrationSettings, testIntegration, getLlmModels } from "@/features/settings/api";
+import type { ProviderModel } from "@/features/settings/api";
 
 type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm";
 
@@ -78,6 +79,26 @@ export function IntegrationsConfig() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [models, setModels] = useState<ProviderModel[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const isLlm = active === "llm";
+
+  async function fetchModels() {
+    setLoadingModels(true);
+    setModelsError(null);
+    try {
+      const res = await getLlmModels();
+      setModels(res.models || []);
+    if (!res.models?.length) setModelsError("Provider returned an empty model list.");
+    } catch (err: any) {
+      setModels([]);
+      setModelsError(err?.message || "Failed to load models");
+    } finally {
+      setLoadingModels(false);
+    }
+  }
 
   const load = async (key: IntegrationKey) => {
     setResult(null);
@@ -93,6 +114,8 @@ export function IntegrationsConfig() {
   const switchTab = (key: IntegrationKey) => {
     setActive(key);
     setShowSecret(false);
+    setModels([]);
+    setModelsError(null);
     load(key);
   };
 
@@ -155,7 +178,9 @@ export function IntegrationsConfig() {
         <p className="text-xs text-slate-500 dark:text-slate-400">{META[active].desc}</p>
 
         <div className="grid grid-cols-1 gap-3">
-          {META[active].fields.map((f) => (
+          {META[active].fields.map((f) => {
+            const isModelField = isLlm && f.key === "model";
+            return (
             <div key={f.key} className="space-y-1">
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
                 {f.label}
@@ -166,25 +191,72 @@ export function IntegrationsConfig() {
                 )}
               </label>
               <div className="relative">
-                <input
-                  type={f.isSecret && !showSecret ? "password" : (f.type || "text")}
-                  value={form[f.key] || ""}
-                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                  placeholder={f.isSecret && tokenSet ? "leave blank to keep current" : f.placeholder}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400"
-                />
+                {isModelField ? (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <select
+                        value={form[f.key] || ""}
+                        onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                        disabled={loadingModels || models.length === 0}
+                        className="w-full appearance-none rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-9 text-xs text-slate-900 dark:text-white disabled:opacity-60"
+                      >
+                        <option value="">
+                          {models.length === 0
+                            ? (loadingModels ? "Loading models..." : "— Load models first —")
+                            : models.some((m) => m.id === form[f.key])
+                              ? (form[f.key] as string)
+                              : `${form[f.key] || ""} (custom, not in list)`}
+                        </option>
+                        {models.map((m) => (
+                          <option key={m.id} value={m.id}>{m.id}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchModels}
+                      disabled={loadingModels}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                      title="Fetch the model catalogue from the provider using the saved API key"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${loadingModels ? "animate-spin" : ""}`} />
+                      {loadingModels ? "Loading..." : models.length ? "Reload" : "Load models"}
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type={f.isSecret && !showSecret ? "password" : (f.type || "text")}
+                    value={form[f.key] || ""}
+                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    placeholder={f.isSecret && tokenSet ? "leave blank to keep current" : f.placeholder}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400"
+                  />
+                )}
                 {f.isSecret && (
                   <button
                     type="button"
                     onClick={() => setShowSecret(!showSecret)}
-                    className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+                    className={isModelField ? "hidden" : "absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"}
                   >
                     {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
                 )}
               </div>
+              {isModelField && modelsError && (
+                <p className="mt-1 flex items-center gap-1 text-2xs text-rose-600">
+                  <AlertCircle className="h-3 w-3" /> {modelsError}
+                  <button type="button" onClick={fetchModels} className="ml-1 underline hover:no-underline">retry</button>
+                </p>
+              )}
+              {isModelField && models.length > 0 && (
+                <p className="mt-1 text-2xs text-slate-400">
+                  {models.length} models available from your provider — pick one, or keep a custom ID.
+                </p>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2 pt-2">

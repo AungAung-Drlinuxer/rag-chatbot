@@ -149,6 +149,17 @@ export async function testIntegration(key: string): Promise<{ ok: boolean; statu
   }
 }
 
+export type ProviderModel = { id: string; name: string };
+
+export async function getLlmModels(): Promise<{ models: ProviderModel[]; count: number }> {
+  const r = await apiFetch(`${BASE}/api/settings/integrations/llm/models`, { headers: { ...authHeaders() } });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(j?.detail || `model list failed (HTTP ${r.status})`);
+  }
+  return r.json();
+}
+
 export async function getIntegrationsStatus(): Promise<IntegrationStatus> {
   const r = await apiFetch(`${BASE}/api/integrations/status`, { headers: authHeaders() });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
