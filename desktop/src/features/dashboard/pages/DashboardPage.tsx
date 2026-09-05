@@ -482,8 +482,13 @@ export default function Dashboard({ role }: Props) {
                             className="border-t hover:bg-slate-50 dark:hover:bg-slate-900/50"
                           >
 
-                            <td className="whitespace-nowrap px-4 py-3 text-[10px] text-muted-foreground">
-                              {conversation.time}
+                            <td className="whitespace-nowrap px-4 py-3 text-[10px] text-muted-foreground" title={conversation.time}>
+                              {(() => {
+                                const d = conversation.time ? new Date(conversation.time.endsWith("Z") || conversation.time.includes("+") ? conversation.time : conversation.time + "Z") : null;
+                                return d && !Number.isNaN(d.getTime())
+                                  ? d.toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
+                                  : conversation.time;
+                              })()}
                             </td>
 
                             <td className="max-w-[120px] truncate px-4 py-3 text-[10px] font-medium" title={conversation.user}>
