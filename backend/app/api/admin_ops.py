@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -261,7 +262,7 @@ def decide_approval(approval_id: str, payload: dict, user: str = Depends(get_cur
         if decision == "approved":
             try:
                 from app.integrations.jira import escalate as jira_escalate
-                from app.persistence.models import JiraTicket
+                from app.persistence.models import ChatMessage, JiraTicket
 
                 summary = (res["question"] or "Escalation")[:120]
                 jr = jira_escalate(summary=summary, description=res["question"] or "",
@@ -281,16 +282,73 @@ def decide_approval(approval_id: str, payload: dict, user: str = Depends(get_cur
                     escalation_messages=[f"✅ Ticket ({jr.get('jira_key')}) opened successfully."])
             except Exception as exc2:
                 graph_state["escalation_messages"] = [f"escalation failed: {exc2}"]
+    # v0.22.1 — deliver the outcome to the REQUESTER, not just the admin UI:
+    # (1) persist an assistant ChatMessage in their thread so it shows on reload
+    # (2) email them the ticket info (or rejection notice)
+    ticket_id = graph_state.get("ticket_id")
+    messages = graph_state.get("escalation_messages") or []
+    requester = res.get("username")
+    thread_id_raw = res.get("thread_id")
     try:
-        audit("approval.decision", user, detail=f"id={approval_id} decision={decision}")
+        if requester and thread_id_raw:
+            import uuid as _uuid
+            from sqlalchemy import text as _t2
+            if decision == "approved" and ticket_id:
+                reply = (f"✅ **Your escalation was approved.**\n\n"
+                         f"**Ticket:** {ticket_id}\n"
+                         f"**Subject:** {(res.get('question') or '')[:120]}\n"
+                         f"**Status:** Open — the IT team will follow up shortly.\n"
+                         f"You will receive email updates when the status changes.")
+            else:
+                reply = ("❌ **Your escalation was rejected by the administrator.**\n\n"
+                         "If this still needs IT support, please contact the helpdesk "
+                         "directly or submit a ticket from the Tickets page.")
+            with SessionLocal() as s2:
+                sid = None
+                try:
+                    sid = _uuid.UUID(str(thread_id_raw))
+                except (ValueError, TypeError):
+                    sid = None
+                if sid is not None:
+                    exists = s2.execute(_t2(
+                        "SELECT 1 FROM chat_sessions WHERE id = :i AND username = :u"
+                    ), {"i": sid, "u": requester}).first()
+                    if exists:
+                        s2.add(ChatMessage(session_id=sid, role="assistant", content=reply,
+                                           meta=json.dumps({"decision": "answer", "escalation_outcome": decision})))
+                        s2.commit()
+    except Exception as _exc:
+        logger.warning("escalation outcome persistence skipped (%s): %s",
+                       type(_exc).__name__, _exc)
+
+    # (2) email the requester
+    try:
+        from app.notifier import notify_ticket_created, send_alert, user_email
+        if decision == "approved" and ticket_id:
+            notify_ticket_created(requester, ticket_id, (res.get("question") or "")[:120])
+        elif decision == "rejected":
+            send_alert(
+                "escalation_rejected",
+                "[iTH] Your escalation was not approved",
+                f"Your escalation request was reviewed and not approved.\n\n"
+                f"Request: {(res.get('question') or '')[:200]}\n"
+                f"Please contact the IT helpdesk if you still need assistance.\n",
+                to_addr=user_email(requester),
+            )
+    except Exception as _exc:
+        logger.warning("escalation requester email skipped (%s): %s",
+                       type(_exc).__name__, _exc)
+
+    try:
+        audit("approval.decision", user, detail=f"id={approval_id} decision={decision} ticket={ticket_id}")
     except Exception:
         pass
     return {
         "ok": True,
         "decision": decision,
         "approval_status": graph_state.get("approval_status"),
-        "ticket_id": graph_state.get("ticket_id"),
-        "messages": graph_state.get("escalation_messages") or [],
+        "ticket_id": ticket_id,
+        "messages": messages,
     }
 
 
