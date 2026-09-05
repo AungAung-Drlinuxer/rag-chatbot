@@ -84,7 +84,7 @@ export default function PageSidebar({
             <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
           )}
           <div className="min-w-0">
-            <div className="text-sm font-semibold">{branding.appName || "IT Help Chatbot"}</div>
+            <div className="text-sm font-semibold text-slate-100">{branding.appName || "IT Help Chatbot"}</div>
             <div className="text-[10px] text-slate-400">Enterprise Assistant</div>
           </div>
           {canManage && (
