@@ -89,6 +89,15 @@ const EMPTY_PERMISSIONS: PermissionMap = {
   manage_domains: false,
 };
 
+/* Role descriptions — shown in the role dropdown so admins pick correctly */
+const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  Administrator: "Full control: users, KB, domains, tickets, settings",
+  "IT Support": "Works tickets (view/edit all), syncs KB, receives escalations",
+  "Knowledge Manager": "Manages KB content only (sync, write-back)",
+  "Domain Manager": "Manages routing domains & classifier keywords only",
+  User: "End user: chat + search KB + own tickets only",
+};
+
 /* Canonical role → permission defaults (matches backend /api/rbac/matrix) */
 const ROLE_DEFAULTS: Record<UserRole, PermissionMap> = {
   Administrator: { chatbot: true, kb_search: true, create_tickets: true, manage_kb: true, manage_users: true, manage_domains: true },
@@ -721,14 +730,21 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   </div>
+                  <p className="mt-1.5 text-[9.5px] leading-4 text-muted-foreground">
+                    {ROLE_DESCRIPTIONS[selectedRole]}
+                  </p>
                 </div>
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground">Permissions</span>
-                    {selectedRole !== user.role && (
+                    {selectedRole !== user.role ? (
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[8.5px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                         Preview: {selectedRole}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[8.5px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                        Current: {user.role}
                       </span>
                     )}
                   </div>
@@ -742,8 +758,10 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                       <div className="divide-y dark:divide-slate-800">
                         {RBAC_CAPABILITIES.map((capability) => {
                           const enabled = previewPerms[capability.key];
+                          const changed = selectedRole !== user.role && enabled !== !!permissions[capability.key];
                           return (
-                            <div key={capability.key} className="flex items-center gap-2.5 px-3 py-2.5">
+                            <div key={capability.key} className={["flex items-center gap-2.5 px-3 py-2.5",
+                              changed ? "bg-amber-50/60 dark:bg-amber-950/20" : ""].join(" ")}>
                               <span className={["grid size-5 shrink-0 place-items-center rounded-full",
                                 enabled ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
                                   : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"].join(" ")}>
@@ -752,6 +770,13 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                               <span className={["text-[10.5px]", enabled ? "font-medium text-slate-800 dark:text-slate-200" : "text-muted-foreground"].join(" ")}>
                                 {capability.label}
                               </span>
+                              {changed && (
+                                <span className={["ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-semibold",
+                                  enabled ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                    : "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300"].join(" ")}>
+                                  {enabled ? "+ new" : "− removed"}
+                                </span>
+                              )}
                             </div>
                           );
                         })}
