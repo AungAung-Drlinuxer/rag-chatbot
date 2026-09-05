@@ -168,7 +168,16 @@ _USER_SETTABLE_FIELDS = {
 
 @router.get("/api/settings")
 def get_my_settings(user: str = Depends(get_current_user)) -> dict:
-    """Return the current user's preferences (creating the row on first read)."""
+    """Return the current user's preferences (creating the row on first read).
+
+    v0.22.2 — merges the ORM columns (theme, density, …) with the free-form
+    `prefs` JSONB blob the SettingsPage saves (darkMode, appName, …). Prefs
+    win on conflicts. Previously this endpoint only serialized the ORM columns,
+    so the saved darkMode was invisible on session restore and the theme reset
+    to light on every relogin.
+    """
+    import json as _json
+    from sqlalchemy import text as _t
     from app.persistence.database import SessionLocal
 
     s = SessionLocal()
@@ -179,7 +188,19 @@ def get_my_settings(user: str = Depends(get_current_user)) -> dict:
             s.add(row)
             s.commit()
             s.refresh(row)
-        return _serialize_user_settings(row)
+        out = _serialize_user_settings(row)
+        prefs_row = s.execute(
+            _t("SELECT prefs FROM user_settings WHERE username = :u"), {"u": user}
+        ).first()
+        prefs = prefs_row[0] if prefs_row else {}
+        if isinstance(prefs, str):
+            try:
+                prefs = _json.loads(prefs)
+            except Exception:
+                prefs = {}
+        if isinstance(prefs, dict):
+            out.update(prefs)  # prefs blob wins over ORM defaults
+        return out
     finally:
         s.close()
 
