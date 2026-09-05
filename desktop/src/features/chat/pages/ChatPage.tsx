@@ -504,8 +504,8 @@ export default function Chat({
                   className={[
                     "mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-medium transition",
                     isChatActive && !locked
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+                      ? "bg-sky-500/15 text-sky-400 font-semibold shadow-xs"
+                      : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
                     locked ? "opacity-60" : "",
                   ].join(" ")}
                 >
