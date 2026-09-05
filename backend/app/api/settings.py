@@ -18,6 +18,7 @@ from app.persistence.database import SessionLocal, engine
 
 logger = logging.getLogger("dashboard")
 
+from app.observability.audit import audit
 from fastapi import UploadFile as _UPLOAD_FILE, File as _FILE, Form as _FORM
 
 router = APIRouter(prefix="/api")
