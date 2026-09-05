@@ -1,0 +1,66 @@
+# === it-help-chatbot — redisinsight (Redis admin UI) =========================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redisinsight-data
+  namespace: it-help-chatbot
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: truenas-iscsi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisinsight
+  namespace: it-help-chatbot
+  labels:
+    app.kubernetes.io/name: redisinsight
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redisinsight
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redisinsight
+    spec:
+      containers:
+        - name: redisinsight
+          image: redis/redisinsight:2.56
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5540
+          env:
+            - name: RI_LOG_LEVEL
+              value: INFO
+          volumeMounts:
+            - name: data
+              mountPath: /db
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redisinsight-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisinsight-service
+  namespace: it-help-chatbot
+spec:
+  selector:
+    app.kubernetes.io/name: redisinsight
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

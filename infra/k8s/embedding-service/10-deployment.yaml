@@ -1,0 +1,83 @@
+# === it-help-chatbot — Embedding service (FastAPI / BAAI bge) =================
+# Air-gapped inference server for vector embeddings. Wraps a SentenceTransformers
+# model loaded from the shared `embedding-models-pvc` (same PVC as ollama) OR
+# from the in-container model directory. The bge-small-en model is pre-baked
+# into the image at build-time (no runtime downloads).
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-service
+  namespace: it-help-chatbot
+  labels:
+    app.kubernetes.io/name: embedding-service
+    app.kubernetes.io/component: ai-runtime
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: embedding-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: embedding-service
+    spec:
+      containers:
+        - name: embedding
+          image: harbor.drlinuxer.com/ragchatbot/embedding-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: EMBED_MODEL
+              value: "BAAI/bge-small-en"
+            - name: EMBED_DEVICE
+              value: "cpu"
+            - name: EMBED_MAX_BATCH
+              value: "32"
+            - name: EMBED_TIMEOUT
+              value: "30"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits:   { cpu: "2", memory: 2Gi }
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      imagePullSecrets: []   # Harbor public project — no pull secret needed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-service
+  namespace: it-help-chatbot
+spec:
+  selector:
+    app.kubernetes.io/name: embedding-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: embedding-service
+  namespace: it-help-chatbot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: embedding-service
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

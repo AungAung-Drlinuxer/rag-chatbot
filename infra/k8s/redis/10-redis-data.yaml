@@ -1,0 +1,172 @@
+# === it-help-chatbot — Redis (Sentinel HA: 3 primaries + 3 sentinels) =========
+# Topology:
+#   redis-data   (StatefulSet, 3 replicas)  — AOF + everysec fsync
+#   redis-sentinel (StatefulSet, 3 replicas) — monitors and elects a master
+# Application talks to `redis-service` (Sentinel-aware) for the master and
+# `redis-data-headless` for direct pod DNS during failover.
+#
+# Image: redis:7.4 (sentinel binary in PATH)
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-pass
+  namespace: it-help-chatbot
+type: Opaque
+stringData:
+  # ACL user 'app' used by the chat backend
+  password: __REPLACE_WITH_RANDOM_32_BYTES__
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: it-help-chatbot
+data:
+  redis.conf: |
+    bind 0.0.0.0
+    protected-mode yes
+    port 6379
+    supervised no
+    daemonize no
+
+    # Replication / persistence
+    appendonly yes
+    appendfsync everysec
+    auto-aof-rewrite-min-size 64mb
+    auto-aof-rewrite-percentage 100
+
+    # Memory & eviction
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+
+    # ACL (requirepass is set in command-line overlay, this is the user 'app')
+    aclfile /etc/redis/users.acl
+
+    # Slowlog for performance diagnostics
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    # Network
+    tcp-keepalive 60
+    timeout 0
+  sentinel.conf: |
+    bind 0.0.0.0
+    port 26379
+    supervised no
+    daemonize no
+
+    # Master set — three sentinels, 2 votes = quorum
+    sentinel monitor it-help-redis it-help-redis-0.redis-data-headless.it-help-chatbot.svc.cluster.local 6379 2
+    sentinel down-after-milliseconds it-help-redis 5000
+    sentinel failover-timeout it-help-redis 60000
+    sentinel parallel-syncs it-help-redis 1
+  users.acl: |
+    user default off
+    user app on >__REPLACE_WITH_RANDOM_32_BYTES__ ~* &* +@all
+    user sentinel on >__REPLACE_WITH_RANDOM_32_BYTES__ +@all -@dangerous
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-data
+  namespace: it-help-chatbot
+spec:
+  serviceName: redis-data-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: data
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/component: data
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: redis
+                    app.kubernetes.io/component: data
+      securityContext:
+        fsGroup: 999
+      initContainers:
+        - name: init-config
+          image: redis:7.4
+          command: ["/bin/sh","-c"]
+          args:
+            - |
+              # The first replica (index 0) is the bootstrap master, the others
+              # come up as replicas pointed at it via DNS.
+              if [ "$(hostname | rev | cut -d- -f1 | rev)" = "0" ]; then
+                cp /readonly/redis.conf /conf/redis.conf
+              else
+                cp /readonly/redis.conf /conf/redis.conf
+                echo "replicaof it-help-redis-0.redis-data-headless.it-help-chatbot.svc.cluster.local 6379" >> /conf/redis.conf
+              fi
+          volumeMounts:
+            - { name: conf,        mountPath: /conf }
+            - { name: conf-readonly, mountPath: /readonly }
+      containers:
+        - name: redis
+          image: redis:7.4
+          imagePullPolicy: IfNotPresent
+          command: ["redis-server","/conf/redis.conf","--aclfile","/etc/redis/users.acl","--requirepass","__REPLACE_WITH_RANDOM_32_BYTES__","--masterauth","__REPLACE_WITH_RANDOM_32_BYTES__","--replica-announce-ip","$(POD_IP)"]
+          env:
+            - { name: POD_IP, valueFrom: { fieldRef: { fieldPath: status.podIP } } }
+          ports:
+            - name: client
+              containerPort: 6379
+          volumeMounts:
+            - { name: data,   mountPath: /data }
+            - { name: conf,   mountPath: /conf }
+            - { name: acl,    mountPath: /etc/redis }
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits:   { cpu: "1",   memory: 2Gi }
+          livenessProbe:
+            exec:
+              command: ["redis-cli","-a","__REPLACE_WITH_RANDOM_32_BYTES__","-p","6379","ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: conf-readonly
+          configMap:
+            name: redis-config
+            items: [{ key: redis.conf, path: redis.conf }]
+        - name: acl
+          configMap:
+            name: redis-config
+            items: [{ key: users.acl,  path: users.acl }]
+        - name: conf
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: truenas-iscsi
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-data-headless
+  namespace: it-help-chatbot
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: data
+  ports:
+    - name: client
+      port: 6379
+      targetPort: client

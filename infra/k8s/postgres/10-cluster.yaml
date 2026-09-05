@@ -1,0 +1,93 @@
+# === it-help-chatbot — PostgreSQL HA (CloudNativePG) =========================
+# 3-instance primary/standby/standby streaming replication cluster with
+# pgvector extension enabled at bootstrap. Storage class is TrueNAS iSCSI
+# (project-managed); substitute with your storage class when replaying.
+#
+# Requires:
+#   kubectl apply -f infra/k8s/postgres/00-secret-app.yaml
+#   kubectl apply -f infra/k8s/postgres/01-secrets-replication.yaml
+#   kubectl apply -f infra/k8s/postgres/02-pvc.yaml     # optional if dynamic provisioner
+#   kubectl apply -f infra/k8s/postgres/10-cluster.yaml
+#   kubectl apply -f infra/k8s/postgres/20-services.yaml
+#   kubectl apply -f infra/k8s/postgres/30-pgadmin.yaml
+#   kubectl apply -f infra/k8s/postgres/40-monitoring.yaml
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-ha
+  namespace: it-help-chatbot
+  labels:
+    app.kubernetes.io/name: postgres-ha
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: it-help-chatbot
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.4
+
+  # 3 replicas across nodes when possible (anti-affinity preferred so
+  # dev/test clusters still schedule on a single node).
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname
+
+  bootstrap:
+    initdb:
+      database: assistant
+      owner: app
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector;
+      secret:
+        name: postgres-app-secret   # initial app user / password
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "1GB"
+      work_mem: "16MB"
+      maintenance_work_mem: "512MB"
+      archive_mode: "on"
+      archive_timeout: "5min"
+      wal_level: "replica"
+      log_min_duration_statement: "500ms"
+      log_checkpoints: "on"
+      log_connections: "on"
+      log_disconnections: "on"
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+
+  storage:
+    size: 30Gi
+    storageClass: truenas-iscsi   # <-- replace with your StorageClass
+
+  # Managed pooled connection (PgBouncer) — 2 replicas fronting the writer.
+  enablePools: true
+  pools:
+    - name: pooler
+      instances: 2
+      type: rw
+      maxDBConnections: 60
+      imageName: ghcr.io/cloudnative-pg/pgbouncer:1.22.1
+
+  monitoring:
+    enablePodMonitor: false
+    customQueriesConfigMap:
+      - name: cnpg-default-monitoring
+        key: queries
+
+  backup:
+    retention: "7d"
+    barmanObjectStore: null   # (no object storage configured — see /backup README)
+
+  network:
+    # PG listens on 5432 inside the cluster by default

@@ -1,0 +1,97 @@
+# === it-help-chatbot — Celery workers (async jobs) ===========================
+# celery-beat triggers periodic KB sync, classifier reload, model-warmup
+# celery-worker runs the actual task graph
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend
+  namespace: it-help-chatbot
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: it-help-chatbot
+  labels:
+    app.kubernetes.io/name: celery-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: celery-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: celery-worker
+    spec:
+      serviceAccountName: backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: celery-worker
+          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.13
+          command: ["celery","-A","app.workers.celery_app","worker","-l","info","-Q","celery","--concurrency=2"]
+          envFrom:
+            - configMapRef: { name: backend-config }
+            - secretRef:    { name: backend-secrets }
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits:   { cpu: "2",  memory: 3Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: it-help-chatbot
+  labels:
+    app.kubernetes.io/name: celery-beat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: celery-beat
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: celery-beat
+    spec:
+      serviceAccountName: backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: celery-beat
+          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.13
+          command: ["celery","-A","app.workers.celery_app","beat","-l","info"]
+          envFrom:
+            - configMapRef: { name: backend-config }
+            - secretRef:    { name: backend-secrets }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+---
+# KEDA ScaledObject — scale workers on Redis queue depth
+# Requires KEDA operator installed.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: keda-hpa-it-help-celery
+  namespace: it-help-chatbot
+spec:
+  scaleTargetRef:
+    name: celery-worker
+  pollingInterval: 5
+  cooldownPeriod: 60
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-service.it-help-chatbot.svc.cluster.local:6379
+        listName: celery
+        listLength: "5"
+        passwordFromEnv: REDIS_PASSWORD

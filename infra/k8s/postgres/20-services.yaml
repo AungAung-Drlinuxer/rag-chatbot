@@ -1,0 +1,72 @@
+# === it-help-chatbot — PostgreSQL services (CNPG-managed) ====================
+# rw/ro/r/pooler are reconciled by the operator — do not edit port numbers.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-ha-rw
+  namespace: it-help-chatbot
+  labels:
+    cnpg.io/cluster: postgres-ha
+spec:
+  type: ClusterIP
+  selector:
+    cnpg.io/cluster: postgres-ha
+    cnpg.io/instanceRole: primary
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-ha-r
+  namespace: it-help-chatbot
+  labels:
+    cnpg.io/cluster: postgres-ha
+spec:
+  type: ClusterIP
+  selector:
+    cnpg.io/cluster: postgres-ha
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-ha-ro
+  namespace: it-help-chatbot
+  labels:
+    cnpg.io/cluster: postgres-ha
+spec:
+  type: ClusterIP
+  selector:
+    cnpg.io/cluster: postgres-ha
+    cnpg.io/instanceRole: replica
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-ha-pooler
+  namespace: it-help-chatbot
+  labels:
+    cnpg.io/cluster: postgres-ha
+spec:
+  type: ClusterIP
+  selector:
+    cnpg.io/pooler: "true"
+  ports:
+    - name: pgbouncer
+      port: 5432
+      targetPort: 5432
+      protocol: TCP

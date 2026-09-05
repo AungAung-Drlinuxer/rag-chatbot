@@ -1,0 +1,40 @@
+# === it-help-chatbot — Namespace + Kustomize root =============================
+# Apply with:
+#   kubectl apply -f infra/k8s/00-namespace.yaml
+#   kubectl apply -k infra/k8s/
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: it-help-chatbot
+  labels:
+    name: it-help-chatbot
+    app.kubernetes.io/part-of: it-help-chatbot
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: it-help-chatbot
+
+commonLabels:
+  app.kubernetes.io/part-of: it-help-chatbot
+
+resources:
+  - postgres/00-secret-app.yaml
+  - postgres/01-secrets-replication.yaml
+  - postgres/10-cluster.yaml
+  - postgres/20-services.yaml
+  - postgres/30-pgadmin.yaml
+  - postgres/40-monitoring.yaml
+  - redis/10-redis-data.yaml
+  - redis/20-sentinel.yaml
+  - ollama/10-ollama.yaml
+  - embedding-service/10-deployment.yaml
+  - rerank-svc/10-deployment.yaml
+  - backend/10-deployment.yaml
+  - celery/10-worker.yaml
+  - frontend/10-deployment.yaml
+  - redisinsight/10-deployment.yaml
+  - ingress/10-ingress.yaml
