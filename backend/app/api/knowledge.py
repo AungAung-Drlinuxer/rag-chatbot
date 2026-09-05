@@ -106,23 +106,58 @@ def article_update(page_id: str, req: ArticleRequest, user: str = Depends(get_cu
 
 @router.get("/api/articles-domains")
 def article_domains(user: str = Depends(get_current_user)) -> dict:
-    """Domain browse cards for the Knowledge tab (counts from kb_meta, RBAC-filtered)."""
+    """Domain browse cards for the Knowledge tab (merges classifier_domains with kb_meta counts, RBAC-filtered)."""
     from sqlalchemy import text as _text
 
     from app.auth.rbac import allowed_domains, get_role
     from app.persistence.database import SessionLocal
+    from app.persistence.models import ClassifierDomain
 
     with SessionLocal() as s:
+        # Load all active classifier domains metadata
+        db_domains = s.query(ClassifierDomain).filter(ClassifierDomain.is_active == True).order_by(ClassifierDomain.id.asc()).all()
+        meta_dict = {
+            d.domain_key: {
+                "display_name": d.display_name,
+                "description": d.description,
+            }
+            for d in db_domains
+        }
+
+        # Page counts from kb_meta
         rows = s.execute(_text(
             "SELECT domain, count(*) AS pages, max(last_synced) AS last_synced "
             "FROM kb_meta GROUP BY domain ORDER BY pages DESC"
         )).mappings().all()
+
+    counts = {
+        (r["domain"] or "general"): {
+            "pages": r["pages"],
+            "last_synced": r["last_synced"].isoformat() if r["last_synced"] else None,
+        }
+        for r in rows
+    }
+
     allowed = allowed_domains(get_role(user))
-    domains = [
-        {"domain": r["domain"] or "general", "pages": r["pages"],
-         "last_synced": r["last_synced"].isoformat() if r["last_synced"] else None}
-        for r in rows if allowed is None or (r["domain"] or "general") in allowed
-    ]
+    all_keys = list(meta_dict.keys())
+    for k in counts.keys():
+        if k not in all_keys:
+            all_keys.append(k)
+
+    domains = []
+    for k in all_keys:
+        if allowed is not None and k not in allowed:
+            continue
+        c = counts.get(k, {"pages": 0, "last_synced": None})
+        m = meta_dict.get(k, {})
+        domains.append({
+            "domain": k,
+            "display_name": m.get("display_name") or k.capitalize(),
+            "description": m.get("description") or f"Guides and resources for {k}.",
+            "pages": c["pages"],
+            "last_synced": c["last_synced"],
+        })
+
     return {"domains": domains}
 
 

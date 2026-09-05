@@ -62,6 +62,8 @@ type Props = {
 
 type DomainCard = {
   domain: string;
+  display_name?: string;
+  description?: string;
   pages: number;
   last_synced: string | null;
 };
@@ -151,8 +153,15 @@ const DOMAIN_META: Record<
   },
 };
 
-function metaFor(domain?: string) {
-  return DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
+function metaFor(domain?: string, card?: DomainCard) {
+  const fallback = DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
+  return {
+    icon: fallback.icon,
+    iconClass: fallback.iconClass,
+    bgClass: fallback.bgClass,
+    label: card?.display_name || fallback.label,
+    description: card?.description || fallback.description,
+  };
 }
 
 
@@ -569,7 +578,8 @@ export default function Knowledge({
                 <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
                   {domains.map((domain, index) => {
                     const meta = metaFor(
-                      domain.domain
+                      domain.domain,
+                      domain
                     );
 
                     const Icon = meta.icon;

@@ -64,13 +64,19 @@ def _effective_domain(art: dict) -> str:
     Sources that set a meaningful domain keep it; space-key placeholders
     (e.g. Confluence 'ihkb') are re-classified from title+body keywords so
     the retriever's domain filter can actually match (v0.10.1).
+    Dynamically loads active domains from the database rules instead of static set.
     """
+    from app.classifier.engine import classify_domain, get_active_keyword_rules
+
     domain = (art.get("domain") or "").strip().lower()
-    known = {"database", "network", "security", "server", "kubernetes",
-             "storage", "general"}
-    if domain in known:
+    try:
+        active_domains = set(get_active_keyword_rules().keys())
+    except Exception:
+        active_domains = set()
+    active_domains.add("general")
+
+    if domain in active_domains:
         return domain
-    from app.classifier.engine import classify_domain
 
     # Title signal first (more reliable than body keywords) — v0.10.8.
     title = art.get("title", "") or ""
