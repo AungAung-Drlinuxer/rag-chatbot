@@ -537,7 +537,7 @@ export default function Chat({
                   <button
                     aria-label="Conversation menu"
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-2 top-2 hidden rounded-md p-1 text-[var(--sidebar-text-muted)] transition hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:block"
+                    className="absolute right-2 top-2 rounded-md p-1 text-[var(--sidebar-text-muted)] opacity-0 transition focus:opacity-100 hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:opacity-100"
                   >
                     <MoreHorizontal className="size-3.5" />
                   </button>
