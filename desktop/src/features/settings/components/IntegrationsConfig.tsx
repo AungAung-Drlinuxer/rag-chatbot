@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon } from "lucide-react";
 import { getIntegrationSettings, putIntegrationSettings, testIntegration } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak";
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -30,6 +30,31 @@ const META: Record<IntegrationKey, {
       { key: "email", label: "Account Email", placeholder: "you@your-domain.com" },
       { key: "api_token", label: "API Token", placeholder: "ATATT3xFfGF0...", isSecret: true },
       { key: "project_key", label: "Default Project Key", placeholder: "ITHD" },
+    ],
+  },
+  ldap: {
+    label: "LDAP / Active Directory",
+    desc: "Authenticate users against your corporate directory (AD). Used for login + group-based role mapping.",
+    docs: "https://ldap3.readthedocs.io/",
+    fields: [
+      { key: "host", label: "LDAP Server Host", placeholder: "ldaps://ad.your-domain.local or 10.10.10.10" },
+      { key: "port", label: "Port", placeholder: "389 or 636 (LDAPS)" },
+      { key: "bind_dn", label: "Bind DN (service account)", placeholder: "CN=svc-chatbot,OU=Service,DC=corp,DC=local" },
+      { key: "bind_password", label: "Bind Password", placeholder: "service account password", isSecret: true },
+      { key: "base_dn", label: "Base DN (search root)", placeholder: "DC=corp,DC=local" },
+      { key: "user_filter", label: "User Filter", placeholder: "(sAMAccountName={username})" },
+    ],
+  },
+  keycloak: {
+    label: "Keycloak SSO",
+    desc: "Single sign-on via Keycloak (OpenID Connect). Users sign in with the realm identity provider instead of local passwords.",
+    docs: "https://www.keycloak.org/documentation",
+    fields: [
+      { key: "issuer", label: "Issuer / Base URL", placeholder: "https://keycloak-chatbot.drlinuxer.com" },
+      { key: "realm", label: "Realm", placeholder: "ith-chatbot" },
+      { key: "client_id", label: "Client ID", placeholder: "it-help-chatbot" },
+      { key: "client_secret", label: "Client Secret", placeholder: "OIDC client secret", isSecret: true },
+      { key: "redirect_uri", label: "Redirect URI", placeholder: "https://chat.drlinuxer.com/auth/callback" },
     ],
   },
 };
@@ -91,7 +116,7 @@ export function IntegrationsConfig() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira"] as IntegrationKey[]).map((k) => (
+        {(["confluence", "jira", "ldap", "keycloak"] as IntegrationKey[]).map((k) => (
           <button
             key={k}
             onClick={() => switchTab(k)}
@@ -102,7 +127,7 @@ export function IntegrationsConfig() {
                 : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
             ].join(" ")}
           >
-            {META[k].label.split(" ")[0]}
+            {META[k].label.split(" (")[0]}
           </button>
         ))}
         <a
