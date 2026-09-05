@@ -127,8 +127,8 @@ export default function PageSidebar({
                   "mb-1 flex w-full items-center rounded-lg text-left text-xs font-medium transition",
                   collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                   active === item.id && !locked
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+                    ? "bg-white text-slate-900 shadow-sm font-semibold dark:bg-slate-800 dark:text-white"
+                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
                   locked ? "opacity-60" : "",
                 ].join(" ")}
               >
