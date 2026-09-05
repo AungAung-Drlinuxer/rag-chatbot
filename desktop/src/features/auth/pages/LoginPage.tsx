@@ -101,15 +101,28 @@ export default function Login({
                 help is needed.
               </p>
 
-              {/* Illustration (v0.20.10) — sits between the headline and the
-                  capability cards, matching the reference design. Hidden on
-                  short/narrow viewports so spacing stays balanced. */}
+              {/* Illustration (v0.21.100) — sits between the headline and the
+                  capability cards. v0.21.100 improvements:
+                  - aspect-ratio 2.5/1 so ANY source resolution (1280/1920/4K)
+                    renders with the same framed height — no layout shift on load
+                  - width: min(100%, 680px) — slightly larger on wide screens
+                  - width/height attributes set -> browser reserves space before
+                    the file downloads (no CLS), and retina screens stay sharp
+                  - fetchpriority=high + decoding async for faster login paint */}
               <div className="my-4 flex max-h-[420px] w-full shrink-0 items-center justify-center px-1 sm:px-2">
                 <img
                   src="/login-illustration.jpg"
+                  width={1280}
+                  height={512}
                   alt="IT Help assistant illustration — search IT knowledge, verify sources, escalate if needed"
-                  className="h-auto w-full max-w-[620px] rounded-2xl object-contain shadow-md select-none pointer-events-none"
-                  style={{ maxHeight: "min(40vh, 380px)" }}
+                  className="h-auto w-full max-w-[680px] rounded-2xl object-contain shadow-md select-none pointer-events-none"
+                  style={{
+                    aspectRatio: "2.5 / 1",
+                    maxHeight: "min(42vh, 400px)",
+                    width: "min(100%, 680px)",
+                  }}
+                  fetchPriority="high"
+                  decoding="async"
                   draggable={false}
                 />
               </div>
