@@ -49,14 +49,60 @@ _SYSTEM_PROMPT = (
 )
 
 
+_LLM_CFG_CACHE: dict | None = None
+_LLM_CFG_AT: float = 0.0
+_LLM_CFG_TTL = 30.0  # seconds; admin edits take at most 30s to apply cluster-wide
+
+
+def _llm_db_cfg() -> dict:
+    """DB-configured LLM settings (Settings -> Integrations -> H-Chat LLM API).
+
+    Returns {} when nothing is configured. Short-TTL cached: chat latency must
+    not grow a DB query per token, and 30s propagation is fine for admin edits.
+    """
+    global _LLM_CFG_CACHE, _LLM_CFG_AT
+    import time as _t
+    now = _t.time()
+    if _LLM_CFG_AT and (now - _LLM_CFG_AT) < _LLM_CFG_TTL and isinstance(_LLM_CFG_CACHE, dict):
+        return _LLM_CFG_CACHE
+    try:
+        import json as _json
+        from app.persistence.database import SessionLocal
+        from sqlalchemy import text as _t2
+        with SessionLocal() as s:
+            row = s.execute(_t2("SELECT value FROM system_settings WHERE key = 'llm'")).first()
+        val = row[0] if row else {}
+        if isinstance(val, str):
+            val = _json.loads(val)
+        _LLM_CFG_CACHE = val or {}
+        _LLM_CFG_AT = now
+        return _LLM_CFG_CACHE
+    except Exception:
+        _LLM_CFG_CACHE = {}
+        _LLM_CFG_AT = now
+        return {}
+
+
+def reload_llm_cfg() -> None:
+    """Force the next make_chain() to re-read the DB config (admin save hook)."""
+    global _LLM_CFG_AT
+    _LLM_CFG_AT = 0.0
+
+
+def _cfg(key: str, default: str = "") -> str:
+    """DB config value for `key` (stripped) or the env SETTINGS fallback."""
+    db = _llm_db_cfg().get(key)
+    return str(db) if db else default
+
+
 def _build_anthropic():
     from langchain_anthropic import ChatAnthropic
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
-    kwargs: dict = {"model": SETTINGS.hchat_model, "max_tokens": 1024, "streaming": True}
-    if SETTINGS.hchat_base_url:
-        kwargs["base_url"] = SETTINGS.hchat_base_url
+    kwargs: dict = {"model": _cfg("model", SETTINGS.hchat_model), "max_tokens": 1024, "streaming": True}
+    if _cfg("base_url", SETTINGS.hchat_base_url):
+        kwargs["base_url"] = _cfg("base_url", SETTINGS.hchat_base_url)
     llm = ChatAnthropic(**kwargs)
     prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM_PROMPT), ("human", "{question}")])
     return prompt | llm | StrOutputParser()
@@ -75,9 +121,9 @@ def _build_openai():
     from langchain_openai import ChatOpenAI
 
     llm = ChatOpenAI(
-        model=SETTINGS.hchat_model,
-        api_key=SETTINGS.hchat_api_key,
-        base_url=SETTINGS.hchat_base_url,
+        model=_cfg("model", SETTINGS.hchat_model),
+        api_key=_cfg("api_key", SETTINGS.hchat_api_key),
+        base_url=_cfg("base_url", SETTINGS.hchat_base_url),
         streaming=True,
         max_tokens=SETTINGS.llm_max_tokens,
         temperature=0.4,
@@ -106,10 +152,10 @@ def make_chain():
 
     `hchat_provider` selects the client: `anthropic` (H-Chat/Claude) or `openai`
     (OpenAI-compatible endpoints, e.g. OpenRouter)."""
-    if not SETTINGS.hchat_api_key:
+    if not _cfg("api_key", SETTINGS.hchat_api_key):
         return None
     try:
-        if SETTINGS.hchat_provider == "openai":
+        if _cfg("provider", SETTINGS.hchat_provider) == "openai":
             return _build_openai()
         return _build_anthropic()
     except Exception as exc:

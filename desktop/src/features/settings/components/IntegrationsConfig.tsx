@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon } from "lucide-react";
 import { getIntegrationSettings, putIntegrationSettings, testIntegration } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm";
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -55,6 +55,17 @@ const META: Record<IntegrationKey, {
       { key: "client_id", label: "Client ID", placeholder: "it-help-chatbot" },
       { key: "client_secret", label: "Client Secret", placeholder: "OIDC client secret", isSecret: true },
       { key: "redirect_uri", label: "Redirect URI", placeholder: "https://chat.drlinuxer.com/auth/callback" },
+    ],
+  },
+  llm: {
+    label: "H-Chat (LLM API)",
+    desc: "Primary AI provider for generating answers (OpenAI-compatible: OpenRouter, DeepSeek, local H-Chat, or Anthropic). Changes apply within 30 seconds without a rebuild.",
+    docs: "https://openrouter.ai/keys",
+    fields: [
+      { key: "provider", label: "Provider", placeholder: "openai or anthropic" },
+      { key: "base_url", label: "Base URL", placeholder: "https://openrouter.ai/api/v1" },
+      { key: "api_key", label: "API Key", placeholder: "sk-or-v1-...", isSecret: true },
+      { key: "model", label: "Model", placeholder: "z-ai/glm-5.3-flash" },
     ],
   },
 };
@@ -116,7 +127,7 @@ export function IntegrationsConfig() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira", "ldap", "keycloak"] as IntegrationKey[]).map((k) => (
+        {(["confluence", "jira", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
           <button
             key={k}
             onClick={() => switchTab(k)}

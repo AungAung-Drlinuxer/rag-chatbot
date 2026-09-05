@@ -208,6 +208,9 @@ def put_integration_settings(key: str, payload: dict, user: str = Depends(get_cu
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
         ), {"k": key, "v": _json.dumps(current)})
         s.commit()
+    if key == "llm":
+        from app.llm.client import reload_llm_cfg
+        reload_llm_cfg()
     return {"ok": True}
 
 @router.post("/settings/integrations/{key}/test")
@@ -245,7 +248,10 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
             base = (cfg.get("base_url") or "").rstrip("/")
             if not base:
                 raise ValueError("base_url not set")
-            _hdrs = {"Authorization": f"Bearer {cfg.get('api_key')}"} if cfg.get("api_key") else {}
+            _key = cfg.get("api_key") or ""
+            if not _key:
+                raise ValueError("api_key not set — enter your provider API key and Save first")
+            _hdrs = {"Authorization": f"Bearer {_key}"}
             r = httpx.get(f"{base}/models", headers=_hdrs, timeout=15)
             status = r.status_code
             detail = r.text[:200] if status != 200 else ""
