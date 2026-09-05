@@ -636,11 +636,9 @@ function MailSettings() {
             </div>
 
             {/* which events send alert mails */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-800">
-              <div className="border-b border-slate-200 px-5 py-3 dark:border-slate-800">
-                <p className="text-xs font-semibold">Alert emails — send on these events</p>
-              </div>
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="pt-2">
+              <p className="mb-2 text-xs font-semibold text-slate-900 dark:text-white">Alert emails — send on these events</p>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-b border-[var(--border)]">
                 <ToggleRow checked={!!alerts.approval_request}
                   onChange={(v) => setAlerts({ ...alerts, approval_request: v })}
                   title="Escalation awaiting approval"
@@ -657,7 +655,7 @@ function MailSettings() {
             </div>
 
             {/* test row — stacks cleanly on mobile */}
-            <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900">
+            <div className="rounded-xl border border-[var(--border)] bg-muted/30 p-4">
               <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
                 <label className="block min-w-0">
                   <span className={labelCls}>Send test email to</span>
