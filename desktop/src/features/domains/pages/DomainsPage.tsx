@@ -89,7 +89,7 @@ export default function DomainsPage({
               <span>🎫</span> 2. Jira Ticket Routing (Escalation Target)
             </h5>
             <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-              When a query cannot be resolved automatically and the user requests escalation, tickets are routed to the assigned <strong>Jira Project Key (e.g. ITDB, ITNET)</strong> for human IT follow-up.
+              When a query cannot be resolved automatically and the user requests escalation, tickets are routed to the assigned <strong>Jira Project Key (e.g. ITHD)</strong> for human IT follow-up.
             </p>
           </div>
         </div>

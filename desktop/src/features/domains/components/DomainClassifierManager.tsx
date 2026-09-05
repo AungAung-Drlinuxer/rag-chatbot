@@ -187,7 +187,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 type="text"
                 value={jiraProject}
                 onChange={(e) => setJiraProject(e.target.value)}
-                placeholder="e.g. ITDB, ITNET (leave blank if unused)"
+                placeholder="e.g. ITHD (leave blank if unused)"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
               <p className="text-2xs text-slate-400 mt-1">
