@@ -29,6 +29,8 @@ import {
   Pin,
   Pencil,
   MoreHorizontal,
+  Copy,
+  Share2,
   Zap
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -670,7 +672,8 @@ export default function Chat({
                     onHelpful={() => submitFeedback(m, 1)}
                     onNotHelpful={() => submitFeedback(m, -1)}
                     onOpenTicketForm={() => openTicketForm(m)}
-                    />
+                    onEditQuery={(text) => { setInput(text); window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 60); }}
+                  />
                 ))}
                 {isTyping && <TypingIndicator stage={stage} />}
                 {chatNote && (
@@ -1115,19 +1118,46 @@ function MessageBubble({
   onHelpful,
   onNotHelpful,
   onOpenTicketForm,
+  onEditQuery,
   busy = false,
 }: {
   message: Message;
   onHelpful: () => void;
   onNotHelpful: () => void;
   onOpenTicketForm: () => void;
+  onEditQuery?: (text: string) => void;
   busy?: boolean;
 }) {
   const isUser = message.role === "user";
   const caution = message.decision === "caution";
+  const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // clipboard API unavailable (http) — fallback
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  async function shareText(text: string) {
+    const nav = navigator as Navigator & { share?: (d: { title: string; text: string }) => Promise<void> };
+    if (nav.share) {
+      try { await nav.share({ title: "IT Help Chatbot", text }); return; } catch { /* cancelled */ }
+    }
+    await copyText(text); // share unsupported -> copy as fallback
+    setShared(true);
+    window.setTimeout(() => setShared(false), 1600);
+  }
 
   return (
-    <div className={["flex gap-3", isUser ? "justify-end" : "justify-start"].join(" ")}>
+    <div className={["group/msg flex gap-3", isUser ? "justify-end" : "justify-start"].join(" ")}>
       {!isUser && (
         <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm">
           <Bot className="size-4" />
@@ -1182,6 +1212,34 @@ function MessageBubble({
             <Clock3 className="size-3" />
             {message.timestamp}
           </span>
+          {isUser && (
+            <span className="flex items-center gap-1 opacity-0 transition group-hover/msg:opacity-100">
+              <button type="button" title="Edit query"
+                onClick={() => onEditQuery?.(message.content)}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                <Pencil className="size-3" /> Edit query
+              </button>
+              <button type="button" title="Copy query" onClick={() => copyText(message.content)}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </span>
+          )}
+          {!isUser && message.content && !busy && (
+            <span className="flex items-center gap-1 opacity-0 transition group-hover/msg:opacity-100">
+              <button type="button" title="Copy answer" onClick={() => copyText(message.content)}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <button type="button" title="Share answer" onClick={() => shareText(message.content)}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                {shared ? <Check className="size-3 text-emerald-500" /> : <Share2 className="size-3" />}
+                {shared ? "Copied" : "Share"}
+              </button>
+            </span>
+          )}
           {!isUser && message.confidence != null && (
             <ConfidenceBadge confidence={message.confidence} />
           )}
