@@ -139,7 +139,7 @@ export default function App() {
     case "chat":
       return (
         <>
-          <ChatPage userName={userName} role={role} onNavigate={setNav} onLogout={onLogout} />
+          <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />
           {authed && (
             <CommandPalette
               open={paletteOpen}

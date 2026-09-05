@@ -460,7 +460,7 @@ export default function Knowledge({
             {/* =================================================
                 SEARCH HERO
             ================================================= */}
-            <section className="rounded-2xl border bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-5 py-6 dark:border-slate-800 dark:from-blue-950/30 dark:via-slate-900 dark:to-indigo-950/30 lg:px-8">
+            <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-blue-50/50 via-card to-indigo-50/30 px-5 py-6 shadow-sm dark:from-blue-950/20 dark:via-card dark:to-indigo-950/20 lg:px-8">
 
               <div className="mx-auto max-w-4xl text-center">
                 <h2 className="text-xl font-semibold tracking-tight text-blue-800 dark:text-blue-300 lg:text-2xl">

@@ -1,15 +1,15 @@
 import {
-  MessagesSquare,
-  ScrollText,
   AlertTriangle,
   Trash2,
   ArrowUp,
-  BarChart3,
+  Home,
   BookOpen,
   Layers,
-  LifeBuoy,
+  MessagesSquare,
+  ScrollText,
+  Settings as SettingsIcon,
   Ticket as TicketIcon,
-  Users,
+  Users as UsersIcon,
   Bot,
   CheckCircle2,
   Clock3,
@@ -84,14 +84,32 @@ import { assignableUsers } from "@/features/users/api";
 export default function Chat({
   userName,
   role,
+  displayRole,
+  perms,
   onNavigate,
   onLogout,
 }: {
   userName?: string;
   role?: string;
+  displayRole?: string;
+  perms?: Record<string, boolean>;
   onNavigate?: (nav: string) => void;
   onLogout?: () => void;
 }) {
+  const [denied, setDenied] = useState<string | null>(null);
+  const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Domain Manager" } as Record<string, string>)[role || "user"] || "User";
+
+  const navItems: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
+    { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
+    { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
+    { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base" },
+    { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
+    { id: "domains", label: "Domains", icon: <Layers className="size-4" />, cap: "manage_domains", capLabel: "Manage routing domains & classifier rules" },
+    { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
+    { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review conversation history" },
+    { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
+    { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
+  ];
   const branding = useBranding();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -464,157 +482,176 @@ export default function Chat({
           )}
         </div>
 
-        {/* User profile card — matches PageSidebar */}
+        {/* Primary Page Navigation — Identical structure & order as PageSidebar */}
+        <nav className="border-b border-[var(--sidebar-border)] px-3 py-3">
+          {navItems.map((item) => {
+            const locked = item.cap ? perms && perms[item.cap] === false : false;
+            const isChatActive = item.id === "chat";
+            return (
+              <div key={item.id}>
+                <button
+                  onClick={() => {
+                    if (locked) {
+                      setDenied(denied === item.id ? null : item.id);
+                      return;
+                    }
+                    setDenied(null);
+                    if (!isChatActive) {
+                      onNavigate?.(item.id);
+                    }
+                  }}
+                  title={locked ? `No permission: ${item.capLabel}` : undefined}
+                  className={[
+                    "mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-medium transition",
+                    isChatActive && !locked
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+                    locked ? "opacity-60" : "",
+                  ].join(" ")}
+                >
+                  {item.icon}
+                  <span className="flex-1">{item.label}</span>
+                  {locked && (
+                    <svg viewBox="0 0 24 24" className="size-3.5 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  )}
+                </button>
+                {locked && denied === item.id && (
+                  <div className="mb-2 mx-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] leading-4 text-amber-200">
+                    Access restricted — your role ({pretty}) does not have permission:
+                    {" "}<b>{item.capLabel}</b>. Contact your administrator.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
 
-
-        {/* New conversation */}
-        <div className="p-3">
-          <button
-            onClick={newChat}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
-          >
-            <Plus className="size-4" />
-            New conversation
-          </button>
-        </div>
-
-        {/* Search (click or Ctrl+K to open palette) */}
-        <div className="px-3">
-          <button
-            onClick={() => setPaletteOpen(true)}
-            className="flex h-9 w-full items-center gap-2 rounded-lg border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-3 text-left text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-active-bg)]"
-          >
-            <Search className="size-3.5 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">Search conversations...</span>
-            <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sidebar-text-muted)] sm:inline">
-              Ctrl K
-            </kbd>
-          </button>
-        </div>
-
-        {/* Conversation history */}
-        <div className="mt-3 flex-1 overflow-y-auto px-2">
-          <div className="flex items-center justify-between px-2 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-text-muted)]">
-              Recent conversations
-            </span>
-            {(conversations ?? []).length > 0 && (
-              <button
-                onClick={async () => {
-                  if (!window.confirm("Delete ALL conversations? This cannot be undone.")) return;
-                  try {
-                    await clearConversations();
-                    setConversations([]);
-                    newChat();
-                  } catch { /* ignore */ }
-                }}
-                title="Clear all conversations"
-                className="rounded p-1 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
-              >
-                <Trash2 className="size-3" />
-              </button>
-            )}
+        {/* Chat Actions & Recent Conversations Section */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="p-3 pb-1">
+            <button
+              onClick={newChat}
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <Plus className="size-3.5" />
+              New conversation
+            </button>
           </div>
-          {filteredConversations.map((c) => (
-            <div key={c.session_id} className="group relative mb-1">
-              <button
-                onClick={() => openConversation(c.session_id)}
-                className={[
-                  "w-full rounded-lg px-3 py-2.5 pr-8 text-left transition",
-                  selectedConversation === c.session_id
-                    ? "bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "hover:bg-[var(--sidebar-hover)]",
-                ].join(" ")}
-              >
-                <div className="flex items-center gap-2">
-                  {c.is_pinned && <Pin className="size-3 shrink-0 rotate-45 text-blue-600 dark:text-blue-400" />}
-                  <MessageSquare
-                    className={[
-                      "size-4 shrink-0",
-                      selectedConversation === c.session_id ? "text-blue-600" : "text-muted-foreground",
-                    ].join(" ")}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
-                    {c.title || c.session_id.slice(0, 18)}
-                  </span>
-                </div>
-              </button>
-              {/* v0.21.41 — "..." menu anchored to the row (sibling, not nested) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    aria-label="Conversation menu"
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-2 top-2 rounded-md p-1 text-[var(--sidebar-text-muted)] opacity-0 transition focus:opacity-100 hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:opacity-100"
-                  >
-                    <MoreHorizontal className="size-3.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={2} collisionPadding={8} avoidCollisions side="bottom">
-                  <DropdownMenuItem
-                    onClick={() => pinConversation(c.session_id, !c.is_pinned).then(refreshConversations)}
-                  >
-                    <Pin className="size-3.5" /> {c.is_pinned ? "Unpin" : "Pin"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => { setRenameTarget({ id: c.session_id, title: c.title || "" }); setRenameValue(c.title || ""); }}
-                  >
-                    <Pencil className="size-3.5" /> Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => removeConversation(c.session_id)}
-                  >
-                    <Trash2 className="size-3.5" /> Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ))}
-        </div>
 
-        {/* Page navigation — matches PageSidebar items */}
-        <div className="border-t border-[var(--sidebar-border)] p-3">
-          <div className="grid grid-cols-1 gap-0.5">
-            {[
-              { id: "dashboard", label: "Dashboard", icon: <BarChart3 className="size-4" /> },
-              { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" /> },
-              { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
-              { id: "domains", label: "Domains", icon: <Layers className="size-4" /> },
-              { id: "users", label: "Users", icon: <Users className="size-4" /> },
-              { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" /> },
-              { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" /> },
-              { id: "settings", label: "Settings", icon: <LifeBuoy className="size-4" /> },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => onNavigate?.(item.id)}
-                className="mb-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[var(--sidebar-text)] transition text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-              >
-                {item.icon}
-                {item.label}
-              </button>
+          {/* Quick Search */}
+          <div className="px-3 py-1">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-2.5 text-left text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-active-bg)]"
+            >
+              <Search className="size-3 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">Search conversations...</span>
+              <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1 py-0.2 text-[9px] font-medium text-[var(--sidebar-text-muted)] sm:inline">
+                Ctrl K
+              </kbd>
+            </button>
+          </div>
+
+          {/* Conversation history */}
+          <div className="mt-1 flex-1 overflow-y-auto px-2">
+            <div className="flex items-center justify-between px-2 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-text-muted)]">
+                Recent conversations
+              </span>
+              {(conversations ?? []).length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (!window.confirm("Delete ALL conversations? This cannot be undone.")) return;
+                    try {
+                      await clearConversations();
+                      setConversations([]);
+                      newChat();
+                    } catch { /* ignore */ }
+                  }}
+                  title="Clear all conversations"
+                  className="rounded p-1 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              )}
+            </div>
+            {filteredConversations.map((c) => (
+              <div key={c.session_id} className="group relative mb-1">
+                <button
+                  onClick={() => openConversation(c.session_id)}
+                  className={[
+                    "w-full rounded-lg px-2.5 py-2 pr-7 text-left transition",
+                    selectedConversation === c.session_id
+                      ? "bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
+                      : "hover:bg-[var(--sidebar-hover)]",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center gap-2">
+                    {c.is_pinned && <Pin className="size-3 shrink-0 rotate-45 text-blue-600 dark:text-blue-400" />}
+                    <MessageSquare
+                      className={[
+                        "size-3.5 shrink-0",
+                        selectedConversation === c.session_id ? "text-blue-600" : "text-muted-foreground",
+                      ].join(" ")}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
+                      {c.title || c.session_id.slice(0, 18)}
+                    </span>
+                  </div>
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      aria-label="Conversation menu"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-1.5 top-1.5 rounded-md p-1 text-[var(--sidebar-text-muted)] opacity-0 transition focus:opacity-100 hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:opacity-100"
+                    >
+                      <MoreHorizontal className="size-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={2} collisionPadding={8} avoidCollisions side="bottom">
+                    <DropdownMenuItem
+                      onClick={() => pinConversation(c.session_id, !c.is_pinned).then(refreshConversations)}
+                    >
+                      <Pin className="size-3.5" /> {c.is_pinned ? "Unpin" : "Pin"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => { setRenameTarget({ id: c.session_id, title: c.title || "" }); setRenameValue(c.title || ""); }}
+                    >
+                      <Pencil className="size-3.5" /> Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => removeConversation(c.session_id)}
+                    >
+                      <Trash2 className="size-3.5" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Profile + sign out — bottom, matches PageSidebar */}
-        <div className="border-t border-[var(--sidebar-border)] px-4 py-4">
+        {/* Profile + sign out — bottom, identical format to PageSidebar */}
+        <div className="border-t border-[var(--sidebar-border)] py-4 px-4 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-full bg-[var(--sidebar-active-bg)] text-sm font-semibold text-[var(--sidebar-active-text)]">
+            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
               {(userName?.charAt(0) ?? "A").toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-[var(--sidebar-text)]">{userName ?? "User"}</div>
-              <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--sidebar-text-muted)]">
-                <span className="size-1.5 rounded-full bg-emerald-500" />
-                online
-              </div>
+              <div className="truncate text-xs font-semibold text-slate-100">{userName ?? "User"}</div>
+              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", (role === "admin" ? "bg-sky-500/20 text-sky-300" : role === "agent" ? "bg-cyan-500/20 text-cyan-300" : role === "knowledge" ? "bg-teal-500/20 text-teal-300" : "bg-slate-500/20 text-slate-300")].join(" ")}>
+                {pretty}
+              </span>
             </div>
             <button
               onClick={() => onLogout?.()}
               title="Sign out"
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--sidebar-border)] px-2.5 py-2 text-[10px] font-medium text-[var(--sidebar-text)] transition hover:border-red-400/40 hover:bg-red-50 hover:text-red-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-300"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-600 px-2.5 py-2 text-[10px] font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
             >
               <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

@@ -716,7 +716,7 @@ export default function Tickets({
                 </div>
               ) : (
                 <>
-                  <div className="max-h-[420px] overflow-y-auto overflow-x-hidden rounded-xl border border-slate-100 pr-1 dark:border-slate-800">
+                  <div className="max-h-[420px] overflow-y-auto overflow-x-hidden rounded-xl border border-[var(--border)] pr-1">
                     <table className="w-full table-fixed text-xs">
                       <colgroup>
                         <col className="w-[11%]" />
@@ -888,7 +888,7 @@ export default function Tickets({
               {/* ==========================================================
                   TICKET DETAIL — persistent right panel (split-pane)
               ========================================================== */}
-              <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border bg-white dark:border-slate-800 dark:bg-slate-900 xl:block">
+              <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-sm xl:block">
                 {!selected ? (
                   <div className="flex h-64 flex-col items-center justify-center gap-3 p-8 text-center">
                     <div className="grid size-12 place-items-center rounded-2xl bg-muted">
