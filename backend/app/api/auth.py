@@ -199,6 +199,11 @@ def get_my_settings(user: str = Depends(get_current_user)) -> dict:
             except Exception:
                 prefs = {}
         if isinstance(prefs, dict):
+            # v0.22.4 — flatten the legacy nested {"settings": {...}} written by
+            # the old unwrapped-PUT bug, then merge (inner values win).
+            nested = prefs.pop("settings", None)
+            if isinstance(nested, dict):
+                prefs.update(nested)
             out.update(prefs)  # prefs blob wins over ORM defaults
         return out
     finally:
@@ -220,6 +225,10 @@ def update_my_settings(payload: dict, user: str = Depends(get_current_user)) -> 
 
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="payload must be a JSON object")
+    # v0.22.4 — the UI (putUserSettings) wraps prefs as {settings: {...}}. Without
+    # unwrapping, the whole envelope nested under prefs["settings"] and the
+    # top-level darkMode (stale) kept winning on GET merge.
+    payload = payload.get("settings") if isinstance(payload.get("settings"), dict) else payload
     s = SessionLocal()
     try:
         row = s.get(UserSettings, user)
