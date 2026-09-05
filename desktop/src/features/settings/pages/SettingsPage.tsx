@@ -38,16 +38,16 @@ function ToggleRow({ checked, onChange, title, description }: {
   checked: boolean; onChange: (value: boolean) => void; title: string; description?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 px-5 py-5">
-      <div className="min-w-0 pr-2">
-        <p className="text-sm font-semibold text-slate-900 dark:text-white">{title}</p>
-        {description && <p className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{description}</p>}
+    <div className="flex items-center justify-between gap-6 px-6 py-3.5">
+      <div className="min-w-0 pr-4">
+        <p className="text-xs font-semibold text-slate-900 dark:text-white">{title}</p>
+        {description && <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{description}</p>}
       </div>
       <div className="shrink-0">
       <button type="button" onClick={() => onChange(!checked)} aria-pressed={checked}
-        className={`relative flex h-6 w-11 items-center rounded-full transition-colors ${
-          checked ? "bg-sky-600" : "bg-slate-300 dark:bg-slate-700"}`}>
-        <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
+        className={`relative flex h-5.5 w-10 items-center rounded-full transition-colors ${
+          checked ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`}>
+        <span className={`size-4.5 rounded-full bg-white shadow-xs transition-transform ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
       </button>
       </div>
     </div>
@@ -58,13 +58,13 @@ function SelectRow({ label, description, value, onChange, options, width = "w-52
   label: string; description: string; value: string; onChange: (v: string) => void; options: string[]; width?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 px-5 py-4">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-900 dark:text-white">{label}</p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p>
+    <div className="flex items-center justify-between gap-6 px-6 py-3.5">
+      <div className="min-w-0 pr-4">
+        <p className="text-xs font-semibold text-slate-900 dark:text-white">{label}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className={`${width} rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white`}>
+        className={`${width} h-9 rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-blue-500`}>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </div>
@@ -75,17 +75,17 @@ function SectionCard({ icon, iconTone, title, description, children }: {
   icon: React.ReactNode; iconTone: string; title: string; description: string; children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconTone}`}>{icon}</div>
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+      <div className="border-b border-[var(--border)] px-6 py-4.5 bg-muted/20">
+        <div className="flex items-center gap-3.5">
+          <div className={`flex size-9 items-center justify-center rounded-xl ${iconTone}`}>{icon}</div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h2>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p>
+            <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
           </div>
         </div>
       </div>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">{children}</div>
+      <div className="divide-y divide-[var(--border)]">{children}</div>
     </section>
   );
 }
@@ -270,7 +270,7 @@ export default function Settings({ role }: { role?: string }) {
               )}
               {saveError && <span className="max-w-[200px] truncate text-[11px] text-red-600" title={saveError}>{saveError}</span>}
               <button type="button" onClick={saveSettings} disabled={saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-sky-700 px-4 py-2.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-sky-600 disabled:opacity-50">
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
                 <Save className="size-3.5" />
                 {saving ? "Saving…" : "Save changes"}
               </button>
@@ -286,14 +286,14 @@ export default function Settings({ role }: { role?: string }) {
             <SectionCard icon={<Globe className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
               iconTone="bg-sky-50 dark:bg-sky-950/40"
               title="General" description="Basic application settings and preferences.">
-              <div className="flex items-center justify-between gap-6 px-5 py-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">Application name</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Name displayed throughout the application</p>
+              <div className="flex items-center justify-between gap-6 px-6 py-3.5">
+                <div className="min-w-0 pr-4">
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Application name</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Name displayed throughout the application</p>
                 </div>
                 <div className="w-52">
                   <input type="text" value={appName} onChange={(e) => setAppName(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                    className="h-9 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-blue-500" />
                 </div>
               </div>
               <SelectRow label="Language" description="Language used by the application"
@@ -313,26 +313,26 @@ export default function Settings({ role }: { role?: string }) {
             <SectionCard icon={<Monitor className="h-5 w-5 text-violet-600 dark:text-violet-400" />}
               iconTone="bg-violet-50 dark:bg-violet-950/40"
               title="Appearance" description="Customize how the application looks.">
-              <div className="px-5 py-4">
-                <div className="flex items-center justify-between gap-6">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">Theme</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Light, dark, or follow your system setting</p>
+              <div>
+                <div className="flex items-center justify-between gap-6 px-6 py-3.5">
+                  <div className="min-w-0 pr-4">
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white">Theme mode</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Choose between light and dark interface</p>
                   </div>
-                  <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="flex rounded-xl border border-[var(--border)] bg-muted/40 p-1">
                     {(["light", "dark"] as const).map((option) => (
                       <button key={option} type="button"
                         onClick={() => setDarkMode(option === "dark")}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
+                        className={`rounded-lg px-3.5 py-1.5 text-xs font-medium capitalize transition ${
                           (option === "dark") === darkMode
-                            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white"
-                            : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}>
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground"}`}>
                         {option}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
                   <ToggleRow checked={compact} onChange={setCompact} title="Compact mode"
                     description="Reduce space between elements." />
                   <ToggleRow checked={animations} onChange={setAnimations} title="Animations"
