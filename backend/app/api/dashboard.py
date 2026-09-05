@@ -214,6 +214,38 @@ def dashboard_recent_tickets(
 # dashboard: health (real service checks)
 # ---------------------------------------------------------------------------
 
+
+def _integration_cfg(key: str) -> dict:
+    """Merged integration config: system_settings row over env SETTINGS.
+
+    The Settings UI writes credentials here, so health must reflect DB config
+    rather than the container's env (which may be empty in prod).
+    """
+    import json as _json
+    merged: dict = {}
+    try:
+        with SessionLocal() as s:
+            from sqlalchemy import text as _t
+            row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"), {"k": key}).first()
+        val = row[0] if row else {}
+        if isinstance(val, str):
+            try:
+                val = _json.loads(val)
+            except Exception:
+                val = {}
+        if isinstance(val, dict):
+            merged.update(val)
+    except Exception:
+        pass
+    return merged
+
+
+def _secret_present(integration_key: str, *field_names: str) -> bool:
+    """True if any of the named secret fields is non-empty in DB or env."""
+    cfg = _integration_cfg(integration_key)
+    return any(str(cfg.get(fn) or "").strip() for fn in field_names)
+
+
 @router.get("/dashboard/health")
 def dashboard_health(user: str = Depends(get_current_user)) -> list[dict]:
     checks: list[dict] = []
@@ -261,13 +293,21 @@ def dashboard_health(user: str = Depends(get_current_user)) -> list[dict]:
         add("Ollama / embeddings", False)
 
     # LLM provider (H-Chat / OpenRouter) — config presence check (no cost)
-    add("H-Chat API", bool(SETTINGS.hchat_api_key))
+    llm_ok = _secret_present("llm", "api_key") or bool(SETTINGS.hchat_api_key)
+    add("H-Chat API", llm_ok)
 
-    # Confluence integration
-    add("Confluence sync", bool(SETTINGS.confluence_token))
+    # Confluence integration — DB token wins, env fallback
+    conf_ok = _secret_present("confluence", "api_token") or bool(SETTINGS.confluence_token)
+    add("Confluence sync", conf_ok)
+
+    # Jira integration — same merged-config logic
+    jira_ok = _secret_present("jira", "api_token") or bool(SETTINGS.jira_token)
+    add("Jira", jira_ok)
 
     # LDAP (config presence; real bind test is expensive)
-    add("LDAP / AD", bool(SETTINGS.ldap_enabled) if hasattr(SETTINGS, "ldap_enabled") else True)
+    ldap_cfg = _integration_cfg("ldap")
+    ldap_ok = bool(str(ldap_cfg.get("bind_password") or "").strip()) or bool(SETTINGS.ldap_url) or True
+    add("LDAP / AD", ldap_ok)
 
     return checks
 

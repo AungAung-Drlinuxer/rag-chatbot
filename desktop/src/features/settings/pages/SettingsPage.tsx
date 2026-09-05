@@ -686,9 +686,10 @@ function IntegrationStatusCards() {
       getIntegrationSettings("confluence"),
       getIntegrationSettings("jira"),
       getIntegrationSettings("ldap"),
+      getIntegrationSettings("llm"),
     ]).then((vals) => {
       const map: Record<string, any> = {};
-      vals.forEach((v: any, i: number) => { map[["confluence", "jira", "ldap"][i]] = v?.settings ?? v; });
+      vals.forEach((v: any, i: number) => { map[["confluence", "jira", "ldap", "llm"][i]] = v?.settings ?? v; });
       setCfg(map);
     }).catch(() => {});
   }, []);
@@ -717,7 +718,9 @@ function IntegrationStatusCards() {
     { key: "ldap", name: "LDAP / Active Directory", desc: "User authentication and group synchronization.",
       detail: cfg.ldap?.host ? `Server: ${cfg.ldap.host}:${cfg.ldap.port ?? 389}` : "Server: 10.10.10.10" },
     { key: "h-chat", name: "H-Chat (LLM API)", desc: "External LLM provider for generating responses.",
-      detail: "Provider: OpenRouter" },
+      detail: cfg.llm?.model
+        ? `Model: ${cfg.llm.model}${cfg.llm.base_url ? ` · ${cfg.llm.base_url.replace(/^https?:\/\//, "")}` : ""}`
+        : "Provider: OpenRouter" },
     { key: "redis", name: "Redis (Cache & Queue)", desc: "Caching and asynchronous task queue.",
       detail: "Mode: Sentinel" },
   ];
