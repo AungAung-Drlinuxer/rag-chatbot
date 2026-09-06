@@ -67,6 +67,7 @@ type DomainCard = {
   description?: string;
   icon?: string;
   color?: string;
+  custom_icon?: string | null;
   pages: number;
   last_synced: string | null;
 };
@@ -172,6 +173,7 @@ function metaFor(domain?: string, card?: DomainCard) {
     icon: resolvedIcon,
     iconClass: resolvedIconClass,
     bgClass: resolvedBgClass,
+    customIcon: card?.custom_icon,
     label: card?.display_name || fallback.label,
     description: card?.description || fallback.description,
   };
@@ -622,16 +624,20 @@ export default function Knowledge({
 
                           <div
                             className={[
-                              "mb-3 grid size-10 place-items-center rounded-xl",
+                              "mb-3 grid size-10 place-items-center rounded-xl overflow-hidden",
                               meta.bgClass,
                             ].join(" ")}
                           >
-                            <Icon
-                              className={[
-                                "size-5",
-                                meta.iconClass,
-                              ].join(" ")}
-                            />
+                            {meta.customIcon ? (
+                              <img src={meta.customIcon} alt={meta.label} className="size-full object-contain p-1.5" />
+                            ) : (
+                              <Icon
+                                className={[
+                                  "size-5",
+                                  meta.iconClass,
+                                ].join(" ")}
+                              />
+                            )}
                           </div>
 
                           <div className="text-sm font-semibold">

@@ -180,6 +180,7 @@ def list_domains(user: str = Depends(require_cap("manage_domains"))) -> dict:
                     "jira_assignee": d.jira_assignee,
                     "icon": d.icon or "BookOpen",
                     "color": d.color or "blue",
+                    "custom_icon": d.custom_icon,
                     "is_active": d.is_active,
                     "created_at": d.created_at.isoformat() if d.created_at else None,
                     "updated_at": d.updated_at.isoformat() if d.updated_at else None,
@@ -210,6 +211,7 @@ def create_domain(req: DomainCreateRequest,
             jira_assignee=req.jira_assignee.strip() if req.jira_assignee else None,
             icon=req.icon.strip() if req.icon else "BookOpen",
             color=req.color.strip() if req.color else "blue",
+            custom_icon=req.custom_icon,
             is_active=req.is_active,
         )
         s.add(d)
@@ -246,6 +248,8 @@ def update_domain(domain_id: int,
             d.icon = req.icon.strip() if req.icon else "BookOpen"
         if req.color is not None:
             d.color = req.color.strip() if req.color else "blue"
+        if req.custom_icon is not None:
+            d.custom_icon = req.custom_icon if req.custom_icon.strip() else None
         if req.is_active is not None:
             d.is_active = req.is_active
 

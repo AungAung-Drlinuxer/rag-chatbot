@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Plus,
   Tag,
@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Upload,
   Database,
   Network,
   Lock,
@@ -128,9 +129,31 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
   const [keywordsText, setKeywordsText] = useState("");
   const [selectedIcon, setSelectedIcon] = useState("BookOpen");
   const [selectedColor, setSelectedColor] = useState("blue");
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCustomIconUpload = (file: File) => {
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      setError("Only PNG or JPG images are allowed for custom icon.");
+      return;
+    }
+    if (file.size > 1 * 1024 * 1024) {
+      setError("Custom icon size cannot exceed 1 MB.");
+      return;
+    }
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        setCustomIcon(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const startCreate = () => {
     setIsCreating(true);
@@ -142,6 +165,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
     setKeywordsText("");
     setSelectedIcon("BookOpen");
     setSelectedColor("blue");
+    setCustomIcon(null);
     setIsActive(true);
     setError(null);
   };
@@ -156,6 +180,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
     setKeywordsText(d.keywords.join(", "));
     setSelectedIcon(d.icon || "BookOpen");
     setSelectedColor(d.color || "blue");
+    setCustomIcon(d.custom_icon || null);
     setIsActive(d.is_active);
     setError(null);
   };
@@ -189,6 +214,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           jira_project: jiraProject.trim() || undefined,
           icon: selectedIcon,
           color: selectedColor,
+          custom_icon: customIcon || undefined,
           is_active: isActive,
         });
       } else if (editingDomain) {
@@ -199,6 +225,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           jira_project: jiraProject.trim() || undefined,
           icon: selectedIcon,
           color: selectedColor,
+          custom_icon: customIcon || "",
           is_active: isActive,
         });
       }
@@ -294,23 +321,67 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </div>
           </div>
 
-          {/* Icon and Color Picker with Live Preview */}
+          {/* Icon and Color Picker with Live Preview & Custom Icon Upload */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-[var(--border)] bg-white dark:bg-slate-900">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Card Icon
-              </label>
-              <select
-                value={selectedIcon}
-                onChange={(e) => setSelectedIcon(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-slate-900 dark:text-white outline-none"
-              >
-                {Object.entries(ICON_OPTIONS).map(([key, opt]) => (
-                  <option key={key} value={key}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Built-in Icon
+                </label>
+                <select
+                  disabled={!!customIcon}
+                  value={selectedIcon}
+                  onChange={(e) => setSelectedIcon(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-slate-900 dark:text-white outline-none disabled:opacity-50"
+                >
+                  {Object.entries(ICON_OPTIONS).map(([key, opt]) => (
+                    <option key={key} value={key}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Custom Icon Upload (PNG/JPG)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleCustomIconUpload(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition"
+                  >
+                    <Upload className="size-3.5" />
+                    {customIcon ? "Change Image" : "Upload Image"}
+                  </button>
+                  {customIcon && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomIcon(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Optional. Overrides the built-in icon with your custom logo.
+                </p>
+              </div>
             </div>
 
             <div>
@@ -337,8 +408,12 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 Knowledge Card Preview
               </label>
               <div className="p-3 rounded-xl border border-[var(--border)] bg-card shadow-xs">
-                <div className={`size-8 rounded-lg grid place-items-center mb-2 ${previewColorDef.bgClass}`}>
-                  <PreviewIconComp className={`size-4 ${previewColorDef.textClass}`} />
+                <div className={`size-8 rounded-lg grid place-items-center mb-2 overflow-hidden ${previewColorDef.bgClass}`}>
+                  {customIcon ? (
+                    <img src={customIcon} alt="Custom icon preview" className="size-full object-contain p-1" />
+                  ) : (
+                    <PreviewIconComp className={`size-4 ${previewColorDef.textClass}`} />
+                  )}
                 </div>
                 <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                   {displayName || "Domain Title"}
@@ -439,8 +514,12 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           return (
             <div key={d.id} className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition">
               <div className="space-y-2 min-w-0 flex items-start gap-4">
-                <div className={`size-10 rounded-xl grid place-items-center shrink-0 mt-0.5 ${colorDef.bgClass}`}>
-                  <IconComp className={`size-5 ${colorDef.textClass}`} />
+                <div className={`size-10 rounded-xl grid place-items-center shrink-0 mt-0.5 overflow-hidden ${colorDef.bgClass}`}>
+                  {d.custom_icon ? (
+                    <img src={d.custom_icon} alt={d.display_name} className="size-full object-contain p-1" />
+                  ) : (
+                    <IconComp className={`size-5 ${colorDef.textClass}`} />
+                  )}
                 </div>
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

@@ -72,6 +72,7 @@ class DomainCreateRequest(BaseModel):
     jira_assignee: str | None = Field(None, max_length=64)
     icon: str | None = Field("BookOpen", max_length=32)
     color: str | None = Field("blue", max_length=32)
+    custom_icon: str | None = None
     is_active: bool = True
 
 class DomainUpdateRequest(BaseModel):
@@ -82,4 +83,5 @@ class DomainUpdateRequest(BaseModel):
     jira_assignee: str | None = None
     icon: str | None = None
     color: str | None = None
+    custom_icon: str | None = None
     is_active: bool | None = None

@@ -11,6 +11,7 @@ export type ClassifierDomainItem = {
   jira_assignee: string | null;
   icon?: string | null;
   color?: string | null;
+  custom_icon?: string | null;
   is_active: boolean;
   created_at: string | null;
   updated_at: string | null;
@@ -31,6 +32,7 @@ export async function createClassifierDomain(data: {
   jira_assignee?: string;
   icon?: string;
   color?: string;
+  custom_icon?: string | null;
   is_active?: boolean;
 }): Promise<{ status: string; id: number; domain_key: string }> {
   const r = await apiFetch(`${BASE}/api/admin/domains`, {
@@ -55,6 +57,7 @@ export async function updateClassifierDomain(
     jira_assignee: string;
     icon: string;
     color: string;
+    custom_icon?: string | null;
     is_active: boolean;
   }>
 ): Promise<{ status: string; id: number; domain_key: string }> {
