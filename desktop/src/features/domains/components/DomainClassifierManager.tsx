@@ -253,7 +253,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
               {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
             </h5>
-            <span className="text-2xs text-slate-400">Changes apply immediately to classification engine & Knowledge Base</span>
+            <span className="text-[10px] text-muted-foreground">Changes apply immediately to classification engine & Knowledge Base</span>
           </div>
 
           {error && (
@@ -333,7 +333,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </div>
 
             <div>
-              <label className="block text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                 Knowledge Card Preview
               </label>
               <div className="p-3 rounded-xl border border-[var(--border)] bg-card shadow-xs">
@@ -362,7 +362,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 placeholder="e.g. ITHD (leave blank if unused)"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
-              <p className="text-2xs text-slate-400 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 Target Jira Project code for team escalation when the question cannot be answered from Confluence KB.
               </p>
             </div>
@@ -407,7 +407,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               placeholder="e.g. payroll, leave request, onboarding, tax deduction"
               className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
             />
-            <p className="text-2xs text-slate-400 mt-1">
+            <p className="text-[10px] text-muted-foreground mt-1">
               Any user prompt containing these phrases will score towards this domain.
             </p>
           </div>
@@ -445,20 +445,20 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-sm text-slate-900 dark:text-white">{d.display_name}</span>
-                    <span className="px-2 py-0.5 rounded-full text-2xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {d.domain_key}
                     </span>
                     {d.is_active ? (
-                      <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 dark:text-emerald-400">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-2xs text-slate-400">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
                         <XCircle className="w-3 h-3" /> Inactive
                       </span>
                     )}
                     {d.jira_project && (
-                      <span className="px-1.5 py-0.5 rounded text-2xs bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
                         Jira: {d.jira_project}
                       </span>
                     )}
@@ -473,7 +473,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                     {d.keywords.map((kw, i) => (
                       <span
                         key={i}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
                       >
                         <Tag className="w-2.5 h-2.5 opacity-40" />
                         {kw}
