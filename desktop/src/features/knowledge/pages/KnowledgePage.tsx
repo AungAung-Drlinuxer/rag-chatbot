@@ -608,95 +608,115 @@ export default function Knowledge({
           <div className="mx-auto max-w-[1400px] space-y-5 p-5 lg:p-8">
 
             {/* =================================================
-                BROWSE KNOWLEDGE HERO
+                SEARCH HERO
             ================================================= */}
-            <section className="rounded-2xl border border-[var(--border)] bg-card p-6 shadow-xs">
-              <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
-                Browse Knowledge
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Explore articles and documentation from your connected sources.
-              </p>
+            <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-blue-50/50 via-card to-indigo-50/30 px-5 py-6 shadow-sm dark:from-blue-950/20 dark:via-card dark:to-indigo-950/20 lg:px-8">
 
-              <form
-                onSubmit={handleSearch}
-                className="relative mt-4 max-w-3xl"
-              >
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <div className="mx-auto max-w-4xl text-center">
+                <h2 className="text-xl font-semibold tracking-tight text-blue-800 dark:text-blue-300 lg:text-2xl">
+                  Find answers in your knowledge base
+                </h2>
 
-                <input
-                  value={query}
-                  onChange={(e) =>
-                    setQuery(e.target.value)
-                  }
-                  placeholder="Search knowledge articles..."
-                  className="h-10 w-full rounded-xl border border-[var(--border)] bg-background pl-10 pr-20 text-xs outline-none transition focus:border-blue-500 dark:bg-slate-950"
-                />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Search across all domains or filter by category
+                </p>
 
-                <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  Ctrl + K
-                </kbd>
-              </form>
+                <form
+                  onSubmit={handleSearch}
+                  className="relative mx-auto mt-5 max-w-3xl"
+                >
+                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {chips.map((domain) => {
-                  const active =
-                    domain === chip;
+                  <input
+                    value={query}
+                    onChange={(e) =>
+                      setQuery(e.target.value)
+                    }
+                    placeholder="Search for solutions, guidelines, errors, procedures..."
+                    className="h-12 w-full rounded-xl border bg-white pl-11 pr-24 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:bg-slate-950"
+                  />
 
-                  const label =
-                    domain === "all"
-                      ? "All Domains"
-                      : metaFor(domain).label;
+                  <Button
+                    type="submit"
+                    disabled={
+                      busy || !query.trim()
+                    }
+                    className="absolute right-1.5 top-1.5 h-9 rounded-lg px-5"
+                  >
+                    {busy ? (
+                      <RefreshCw className="mr-2 size-3.5 animate-spin" />
+                    ) : (
+                      <Search className="mr-2 size-3.5" />
+                    )}
+                    Search
+                  </Button>
+                </form>
 
-                  return (
-                    <button
-                      key={domain}
-                      type="button"
-                      onClick={() => {
-                        setChip(domain);
-                        setPage(1);
-                      }}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
-                        active
-                          ? "border-blue-600 bg-blue-600 text-white shadow-xs"
-                          : "border-[var(--border)] bg-background text-slate-600 hover:border-blue-300 hover:bg-blue-50 dark:bg-slate-900 dark:text-slate-300",
-                      ].join(" ")}
-                    >
-                      {domain !== "all" &&
-                        (() => {
-                          const Icon =
-                            metaFor(domain).icon;
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {chips.map((domain) => {
+                    const active =
+                      domain === chip;
 
-                          return (
-                            <Icon className="size-3.5" />
-                          );
-                        })()}
+                    const label =
+                      domain === "all"
+                        ? "All Domains"
+                        : metaFor(domain).label;
 
-                      {label}
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={domain}
+                        type="button"
+                        onClick={() => {
+                          setChip(domain);
+                          setPage(1);
+                        }}
+                        className={[
+                          "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                          active
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 dark:bg-slate-900 dark:text-slate-300",
+                        ].join(" ")}
+                      >
+                        {domain !== "all" &&
+                          (() => {
+                            const Icon =
+                              metaFor(domain).icon;
+
+                            return (
+                              <Icon className="size-3.5" />
+                            );
+                          })()}
+
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </section>
 
             {/* =================================================
                 BROWSE BY DOMAIN
             ================================================= */}
-            <section className="space-y-4">
+            <section>
+              <SectionTitle
+                title="Browse by domain"
+                description="Explore knowledge by technical domain"
+              />
+
               {!domains ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
                   {Array.from({
-                    length: 4,
+                    length: 8,
                   }).map((_, i) => (
                     <Skeleton
                       key={i}
-                      className="h-32 rounded-2xl"
+                      className="h-40 rounded-2xl"
                     />
                   ))}
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
                   {domains.map((domain, index) => {
                     const meta = metaFor(
                       domain.domain,
@@ -726,39 +746,51 @@ export default function Knowledge({
                         }}
                         className="text-left"
                       >
-                        <Card className="group h-full min-h-[128px] rounded-2xl p-5 transition hover:-translate-y-0.5 hover:shadow-md">
+                        <Card className="h-full min-h-[154px] rounded-2xl p-4 transition hover:-translate-y-0.5 hover:shadow-md">
 
                           <div
                             className={[
-                              "mb-4 grid size-12 place-items-center rounded-2xl overflow-hidden",
+                              "mb-3 grid size-10 place-items-center rounded-xl overflow-hidden",
                               meta.bgClass,
                             ].join(" ")}
                           >
                             {meta.customIcon ? (
-                              <img src={meta.customIcon} alt={meta.label} className="size-full object-contain p-2" />
+                              <img src={meta.customIcon} alt={meta.label} className="size-full object-contain p-1.5" />
                             ) : (
                               <Icon
                                 className={[
-                                  "size-6",
+                                  "size-5",
                                   meta.iconClass,
                                 ].join(" ")}
                               />
                             )}
                           </div>
 
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                              {meta.label}
-                            </div>
-
-                            <span className="text-muted-foreground opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-100">
-                              →
-                            </span>
+                          <div className="text-sm font-semibold">
+                            {meta.label}
                           </div>
 
-                          <div className="mt-0.5 text-xs text-muted-foreground">
-                            {domain.pages}{" "}
-                            {domain.pages === 1 ? "article" : "articles"}
+                          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                            {meta.description}
+                          </p>
+
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                            <span className="text-[11px] font-semibold whitespace-nowrap">
+                              {domain.pages}{" "}
+                              <span className="font-normal text-muted-foreground">
+                                {domain.pages === 1
+                                  ? "page"
+                                  : "pages"}
+                              </span>
+                            </span>
+
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              · {domain.last_synced
+                                ? `Synced ${relTime(
+                                    domain.last_synced
+                                  )}`
+                                : "Not synced yet"}
+                            </span>
                           </div>
                         </Card>
                       </motion.button>
@@ -1537,6 +1569,26 @@ export default function Knowledge({
 /* ==============================================================
    SECTION TITLE
 ============================================================== */
+
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="mb-3">
+      <h2 className="text-sm font-semibold tracking-tight">
+        {title}
+      </h2>
+
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
 
 /* ==============================================================
    SYNC METRIC
