@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { MessageSquareText } from "lucide-react";
+import { useFloatingChat } from "@/components/FloatingChat";
 
 /**
  * Floating "Need help?" assistant prompt.
  * Bottom-right card that appears on non-chat pages, dismissible,
- * and opens the AI chat on click.
+ * and opens the floating AI chat popup on click.
  */
-export function NeedHelpCard({ onOpen }: { onOpen: () => void }) {
+export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
+  const { setOpen } = useFloatingChat();
   const [dismissed, setDismissed] = useState(() => {
     // Session-scoped dismissal (memory only; project bans localStorage)
     return (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed === true;
@@ -64,7 +66,10 @@ export function NeedHelpCard({ onOpen }: { onOpen: () => void }) {
 
       <button
         type="button"
-        onClick={onOpen}
+        onClick={() => {
+          setOpen(true);
+          onOpen?.();
+        }}
         className="mt-3.5 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-[#0B1526] shadow-md transition hover:bg-blue-50 active:scale-[0.98]"
       >
         <MessageSquareText className="size-4" />

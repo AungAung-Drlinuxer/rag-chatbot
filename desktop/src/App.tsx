@@ -10,6 +10,7 @@ import { useToast, ToastHost } from "@/shared/useToast";
 import PageSidebar from "@/components/PageSidebar";
 import CommandPalette from "@/components/CommandPalette";
 import { NeedHelpCard } from "@/components/NeedHelpCard";
+import { FloatingChatProvider, FloatingChatPopup } from "@/components/FloatingChat";
 import { useHashNav } from "@/app/router";
 import { useSidebarCollapsed } from "@/app/useSidebar";
 import { applyStoredTheme, applyUserPrefs } from "@/app/theme";
@@ -113,9 +114,8 @@ export default function App() {
           collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
         <div className={active === "chat" ? "min-w-0 flex-1 overflow-hidden" : "min-w-0 flex-1 overflow-y-auto"}>{children}</div>
       </div>
-      {active !== "chat" && (
-        <NeedHelpCard onOpen={() => setNav("chat")} />
-      )}
+      <NeedHelpCard onOpen={() => setNav("chat")} />
+      <FloatingChatPopup />
       {authed && (
         <CommandPalette
           open={paletteOpen}
@@ -139,7 +139,9 @@ export default function App() {
     );
   }
 
-  switch (nav) {
+  return (
+    <FloatingChatProvider>
+      {(() => { switch (nav) {
     case "chat":
       return shell("chat", <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />);
     case "dashboard":
@@ -174,5 +176,7 @@ export default function App() {
           <ToastHost toast={toast.toast} />
         </>
       );
-  }
+      } })()}
+    </FloatingChatProvider>
+  );
 }
