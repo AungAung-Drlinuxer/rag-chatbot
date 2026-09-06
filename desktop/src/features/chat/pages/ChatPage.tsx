@@ -2,6 +2,10 @@ import {
   AlertTriangle,
   Trash2,
   ArrowUp,
+  ChevronDown,
+  MessagesSquare,
+  MessageSquare,
+  Pin,
   Bot,
   CheckCircle2,
   Clock3,
@@ -39,6 +43,7 @@ import {
   uploadAttachment,
   submitFeedback as pushFeedback,
 } from "@/features/chat/api";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import {
   type Message,
@@ -55,7 +60,10 @@ import {
 import {
   listConversations,
   getConversationMessages,
+  deleteConversation,
+  clearConversations,
   renameConversation,
+  pinConversation,
 } from "@/features/conversations/api";
 import { createTicketApi } from "@/features/tickets/api";
 import { assignableUsers } from "@/features/users/api";
@@ -117,6 +125,7 @@ export default function Chat({
   approvalRef.current = approval;
   const [showSources] = useState(true);
   const [mobileHistory, setMobileHistory] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const sessionRef = useRef<string>(crypto.randomUUID());
   const historyRef = useRef<{ role: string; content: string }[]>([]);
@@ -125,6 +134,15 @@ export default function Chat({
   /* ----------------------------------------------------------
       LOAD CONVERSATIONS
   ---------------------------------------------------------- */
+
+  async function removeConversation(id: string) {
+    if (!window.confirm("Delete this conversation?")) return;
+    try {
+      await deleteConversation(id);
+      if (selectedConversation === id) newChat();
+      refreshConversations();
+    } catch { /* ignore */ }
+  }
 
   function refreshConversations() {
     listConversations()
@@ -435,13 +453,96 @@ export default function Chat({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={newChat}
-              title="Start a new conversation"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-blue-700"
-            >
-              <Sparkles className="size-3.5" /> New chat
-            </button>
+            <div className="flex items-center gap-1.5">
+              <DropdownMenu open={historyOpen} onOpenChange={setHistoryOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Recent conversations"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-[11px] font-medium text-slate-600 transition hover:bg-muted dark:text-slate-300"
+                  >
+                    <MessagesSquare className="size-3.5" /> Recent
+                    <ChevronDown className="size-3 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={6} className="w-72 p-1.5">
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Recent conversations
+                    </span>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm("Delete ALL conversations? This cannot be undone.")) return;
+                        try { await clearConversations(); setConversations([]); newChat(); } catch { /* ignore */ }
+                      }}
+                      title="Clear all"
+                      className="rounded p-1 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto">
+                    {(conversations ?? []).length === 0 && (
+                      <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">
+                        No conversations yet
+                      </p>
+                    )}
+                    {(conversations ?? []).map((c) => (
+                      <div key={c.session_id} className="group relative">
+                        <button
+                          onClick={() => { openConversation(c.session_id); setHistoryOpen(false); }}
+                          className={[
+                            "w-full rounded-lg px-2.5 py-2 pr-14 text-left transition",
+                            selectedConversation === c.session_id
+                              ? "bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
+                              : "hover:bg-muted",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-center gap-2">
+                            {c.is_pinned && <Pin className="size-3 shrink-0 rotate-45 text-blue-600 dark:text-blue-400" />}
+                            <MessageSquare className={["size-3.5 shrink-0", selectedConversation === c.session_id ? "text-blue-600" : "text-muted-foreground"].join(" ")} />
+                            <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
+                              {c.title || c.session_id.slice(0, 18)}
+                            </span>
+                          </div>
+                        </button>
+                        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                          <button
+                            title={c.is_pinned ? "Unpin" : "Pin"}
+                            onClick={(e) => { e.stopPropagation(); pinConversation(c.session_id, !c.is_pinned).then(refreshConversations); }}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            <Pin className="size-3" />
+                          </button>
+                          <button
+                            title="Rename"
+                            onClick={(e) => { e.stopPropagation(); const t = window.prompt("Rename conversation", c.title || ""); if (t && t.trim()) renameConversation(c.session_id, t.trim()).then(refreshConversations); }}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                          <button
+                            title="Delete"
+                            onClick={(e) => { e.stopPropagation(); removeConversation(c.session_id); }}
+                            className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <button
+                onClick={newChat}
+                title="Start a new conversation"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-blue-700"
+              >
+                <Sparkles className="size-3.5" /> New chat
+              </button>
+            </div>
             <div className="hidden items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-[10px] sm:flex">
               <Shield className="size-3.5 text-emerald-600" />
               RBAC protected

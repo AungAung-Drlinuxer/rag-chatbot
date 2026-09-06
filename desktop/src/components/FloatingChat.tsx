@@ -177,22 +177,23 @@ export function FloatingChatPopup() {
           setIsTyping(false);
           setStage(undefined);
         },
-      }).catch(() => {
+      }).catch((err: any) => {
         // Auto-retry up to 2 attempts, then surface a manual Retry button
         if (attempt < 2) {
           setStage("Reconnecting");
           setTimeout(() => runQuestion(question, { replaceBotId: botId, attempt: attempt + 1 }), 1200);
           return;
         }
+        const detail = String(err?.message || "");
+        const msg = /expired|401/i.test(detail)
+          ? "⚠️ Session expired — please reload the page to sign in again."
+          : /403/i.test(detail)
+            ? "⚠️ Access denied for this question (RBAC)."
+            : "⚠️ Connection error — the assistant could not be reached.";
         setMessages((p) =>
           p.map((m) =>
             m.id === botId
-              ? {
-                  ...m,
-                  failed: true,
-                  retryQuestion: question,
-                  content: "⚠️ Connection error — the assistant could not be reached.",
-                }
+              ? { ...m, failed: true, retryQuestion: question, content: msg }
               : m,
           ),
         );
