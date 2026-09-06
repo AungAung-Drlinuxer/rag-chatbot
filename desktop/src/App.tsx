@@ -114,7 +114,7 @@ export default function App() {
           collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
         <div className={active === "chat" ? "min-w-0 flex-1 overflow-hidden" : "min-w-0 flex-1 overflow-y-auto"}>{children}</div>
       </div>
-      <NeedHelpCard onOpen={() => setNav("chat")} />
+      <NeedHelpCard />
       <FloatingChatPopup />
       {authed && (
         <CommandPalette

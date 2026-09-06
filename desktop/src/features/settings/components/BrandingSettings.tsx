@@ -20,6 +20,7 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
   const [appName, setAppName] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [nameDirty, setNameDirty] = useState(false);
 
   if (!loaded) {
     setLoaded(true);
@@ -53,6 +54,31 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function saveName() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await apiFetch(`${BASE}/api/admin/branding/app-name`, {
+        method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ appName: appName ?? "" }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j?.detail || `Save failed (HTTP ${r.status})`);
+      }
+      const b = await fetchBranding();
+      setBranding(b);
+      setAppName(b.appName);
+      setNameDirty(false);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2500);
+      onChanged?.(b);
+    } catch (e: any) {
+      setErr(e?.message || "Save failed");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -154,12 +180,24 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
             Custom application title displayed beside the logo on the login page and header.
           </p>
         </div>
-        <input
-          value={appName ?? ""}
-          onChange={(e) => setAppName(e.target.value)}
-          placeholder="IT Help Chatbot"
-          className="h-10 w-full sm:w-64 rounded-xl border border-[var(--border)] bg-background px-3 text-xs outline-none focus:border-blue-500 transition"
-        />
+        <div className="flex w-full sm:w-auto items-center gap-2">
+          <input
+            value={appName ?? ""}
+            onChange={(e) => { setAppName(e.target.value); setNameDirty(true); }}
+            placeholder="IT Help Chatbot"
+            className="h-10 w-full sm:w-64 rounded-xl border border-[var(--border)] bg-background px-3 text-xs outline-none focus:border-blue-500 transition"
+          />
+          <button
+            type="button"
+            onClick={saveName}
+            disabled={busy || !nameDirty}
+            title="Save brand name"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white shadow-xs transition hover:bg-blue-700 disabled:opacity-40"
+          >
+            {busy ? <ImageIcon className="size-3.5 animate-pulse" /> : <Check className="size-3.5" />}
+            Save name
+          </button>
+        </div>
       </div>
 
       {err && (
@@ -169,7 +207,7 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
       )}
       {saved && (
         <p className="flex items-center gap-1.5 text-[10px] text-emerald-600">
-          <Check className="size-3.5" /> Logo updated — visible on the login page immediately
+          <Check className="size-3.5" /> Branding updated — visible on the login page immediately
         </p>
       )}
     </div>

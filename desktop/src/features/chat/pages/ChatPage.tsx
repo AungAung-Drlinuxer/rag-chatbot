@@ -443,15 +443,6 @@ export default function Chat({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("ith:restore-assistant-btn"));
-              }}
-              title="Show floating assistant button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[11px] font-medium text-slate-700 dark:text-slate-300 transition hover:bg-muted shadow-xs"
-            >
-              <Bot className="size-3.5 text-blue-600 dark:text-blue-400" /> Assistant Button
-            </button>
-            <button
               onClick={newChat}
               title="Start a new conversation"
               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-blue-700 shadow-xs"

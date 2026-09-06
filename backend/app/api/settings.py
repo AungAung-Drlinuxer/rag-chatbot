@@ -435,6 +435,42 @@ async def put_branding_logo(
     return {"ok": True, "bytes": len(data), "mime": mime, "appName": cur.get("appName")}
 
 
+@router.put("/admin/branding/app-name")
+def put_branding_app_name(
+    body: dict,
+    user: str = Depends(get_current_user),
+) -> dict:
+    """ADMIN — set the brand name (optional) shown beside the logo.
+
+    Body: {"appName": "My IT Help" | null}
+    Empty string clears the override (falls back to "IT Help Chatbot").
+    """
+    _require_admin(user)
+    name = body.get("appName")
+    name = str(name).strip() if name is not None else None
+    import json as _json
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
+                        {"k": BRANDING_KEY}).first()
+        cur = row[0] if row else {}
+        if isinstance(cur, str):
+            try: cur = _json.loads(cur)
+            except Exception: cur = {}
+        cur = cur or {}
+        if name:
+            cur["appName"] = name[:60]  # cap length
+        else:
+            cur.pop("appName", None)
+        s.execute(_t(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
+            "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
+        ), {"k": BRANDING_KEY, "v": _json.dumps(cur)})
+        s.commit()
+    audit("branding.appname.update", user, detail=f"appName={name or '(reset)'}")
+    return {"ok": True, "appName": cur.get("appName")}
+
+
 @router.delete("/admin/branding/logo")
 def delete_branding_logo(user: str = Depends(get_current_user)) -> dict:
     """ADMIN — reset to the default built-in ITH mark."""

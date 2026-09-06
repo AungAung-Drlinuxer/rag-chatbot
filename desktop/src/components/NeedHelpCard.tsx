@@ -8,7 +8,7 @@ import { useFloatingChat } from "@/components/FloatingChat";
  * content; now a single minimal button. Popup opens on click; conversation
  * persists via FloatingChatProvider (App-level).
  */
-export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
+export function NeedHelpCard() {
   const { setOpen, open } = useFloatingChat();
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -37,7 +37,6 @@ export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
       title="AI Assistant"
       onClick={() => {
         setOpen(true);
-        onOpen?.();
       }}
       className={[
         "group fixed bottom-5 right-5 z-40 grid size-14 place-items-center rounded-full",
