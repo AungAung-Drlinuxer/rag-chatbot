@@ -91,7 +91,7 @@ def rename_domain(
         s.execute(
             _sqltext(
                 "UPDATE langchain_pg_embedding "
-                "SET cmetadata = jsonb_set(cmetadata, '{domain}', to_jsonb(CAST(:new AS text))) "
+                "SET cmetadata = jsonb_set(cmetadata::jsonb, '{domain}', to_jsonb(CAST(:new AS text))) "
                 "WHERE cmetadata->>'domain' = :old"
             ),
             {"old": old_key, "new": new_key},
