@@ -1,5 +1,36 @@
+# Environment variables & local secrets
+.env
+.env.*
+*.env
+*.local
+infra/k8s/openbao/.init-credentials.json
 infra/k8s/_source/
 
-# Python bytecode
+# Dependencies & Build artifacts
+node_modules/
+dist/
+build/
+releases/
+desktop/dist/
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Python virtualenv & caches
+.venv/
+backend/.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS / Editor temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local testing/verification scripts & scratch files
+desktop/scripts/verify_*.mjs
