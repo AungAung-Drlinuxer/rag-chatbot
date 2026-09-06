@@ -49,10 +49,40 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  side = "center",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  side?: "center" | "right"
 }) {
+  if (side === "right") {
+    return (
+      <DialogPortal data-slot="dialog-portal">
+        <DialogOverlay />
+        <DialogPrimitive.Content
+          data-slot="dialog-content"
+          className={cn(
+            "fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col gap-4 overflow-y-auto border-l bg-background p-6 shadow-2xl duration-300 outline-none",
+            "sm:max-w-md",
+            "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
+            className
+          )}
+          {...props}
+        >
+          {children}
+          {showCloseButton && (
+            <DialogPrimitive.Close
+              data-slot="dialog-close"
+              className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            >
+              <XIcon />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    )
+  }
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -96,6 +126,7 @@ function DialogFooter({
   ...props
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
+  children?: React.ReactNode
 }) {
   return (
     <div

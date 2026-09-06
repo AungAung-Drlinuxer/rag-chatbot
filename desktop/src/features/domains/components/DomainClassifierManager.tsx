@@ -25,6 +25,10 @@ import {
   Key,
 } from "lucide-react";
 import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
+import {
   ClassifierDomainItem,
   createClassifierDomain,
   updateClassifierDomain,
@@ -287,16 +291,18 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
         )}
       </div>
 
-      {/* Form (Create / Edit) */}
-      {(isCreating || editingDomain) && (
-        <form onSubmit={handleSave} className="p-6 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-indigo-200 dark:border-indigo-900/50 m-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+      {/* Form (Create / Edit) — right-side slide-over */}
+      <Dialog open={!!(isCreating || editingDomain)} onOpenChange={(o) => { if (!o) cancelForm(); }}>
+        <DialogContent side="right" className="gap-0 p-0">
+        <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
+          <div className="border-b border-[var(--border)] px-6 py-4 pr-12">
+            <h5 className="text-sm font-semibold text-slate-900 dark:text-white">
               {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
             </h5>
-            <span className="text-[10px] text-muted-foreground">Changes apply immediately to classification engine & Knowledge Base</span>
+            <p className="mt-0.5 text-xs text-muted-foreground">Changes apply immediately to the classification engine & Knowledge Base</p>
           </div>
 
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {error && (
             <div className="flex items-center gap-2 p-2.5 text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -304,7 +310,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Domain Key (Unique Identifier)
@@ -346,7 +352,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           </div>
 
           {/* Icon and Color Picker with Live Preview & Custom Icon Upload */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-[var(--border)] bg-white dark:bg-slate-900">
+          <div className="grid grid-cols-1 gap-4 rounded-xl border border-[var(--border)] bg-background p-4">
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -449,7 +455,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Jira Project Key (Escalation target project)
@@ -511,7 +517,9 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-[var(--border)] px-6 py-4">
             <button
               type="button"
               onClick={cancelForm}
@@ -522,13 +530,14 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
             >
               {loading ? "Saving..." : "Save Domain"}
             </button>
           </div>
         </form>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Domain Cards List */}
       <div className="divide-y divide-slate-100 dark:divide-slate-800/60">

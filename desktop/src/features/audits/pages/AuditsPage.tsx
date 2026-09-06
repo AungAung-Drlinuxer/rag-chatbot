@@ -203,7 +203,7 @@ export default function AuditsPage() {
           description="Newest first · stored in the assistant database (audit_log)."
           icon={<ScrollText className="size-4" />}
         >
-          <div className="max-h-[560px] overflow-y-auto pr-1">
+          <div className="max-h-[560px] overflow-auto pr-1">
             <table className="w-full table-fixed text-[11px]">
               <colgroup>
                 <col className="w-[15%]" /><col className="w-[13%]" /><col className="w-[14%]" />

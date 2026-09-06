@@ -287,7 +287,7 @@ export default function Users() {
           badge={`${totalUsers} users`}
           description="Manage system users, roles, and access."
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => loadUsers(true)} disabled={refreshing}
                 className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
                 <RefreshCw className={["size-3.5", refreshing ? "animate-spin" : ""].join(" ")} />
@@ -355,7 +355,7 @@ export default function Users() {
                 </div>
               </div>
 
-              <div className="max-h-[520px] overflow-y-auto">
+              <div className="max-h-[520px] overflow-auto">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_0_#e2e8f0] dark:bg-slate-900 dark:shadow-[0_1px_0_#1e293b]">
                     <tr className="border-b text-left dark:border-slate-800">

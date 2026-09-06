@@ -200,7 +200,7 @@ export default function ConversationHistoryPage() {
             icon={<MessagesSquare className="size-4" />}
             bodyClassName=""
           >
-            <div className="max-h-[540px] overflow-y-auto scroll-pb-2 pr-1">
+            <div className="max-h-[540px] overflow-auto scroll-pb-2 pr-1">
               <table className="w-full table-fixed">
                 <colgroup>
                   <col className="w-[26%]" /><col className="w-[44%]" />

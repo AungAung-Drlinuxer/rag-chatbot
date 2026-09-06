@@ -716,7 +716,7 @@ export default function Tickets({
                 </div>
               ) : (
                 <>
-                  <div className="max-h-[420px] overflow-y-auto overflow-x-hidden rounded-xl border border-[var(--border)] pr-1">
+                  <div className="max-h-[420px] overflow-auto rounded-xl border border-[var(--border)] pr-1">
                     <table className="w-full table-fixed text-xs">
                       <colgroup>
                         <col className="w-[11%]" />

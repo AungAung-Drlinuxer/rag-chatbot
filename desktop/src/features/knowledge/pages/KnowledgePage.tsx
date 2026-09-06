@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { motion } from "framer-motion";
 import {
   Activity,
   BookOpen,
@@ -623,25 +622,27 @@ export default function Knowledge({
 
                 <form
                   onSubmit={handleSearch}
-                  className="relative mx-auto mt-5 max-w-3xl"
+                  className="mx-auto mt-5 flex max-w-3xl flex-col gap-2 sm:relative sm:mt-5 sm:flex-row sm:items-center"
                 >
-                  <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <div className="relative sm:flex-1">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
-                  <input
-                    value={query}
-                    onChange={(e) =>
-                      setQuery(e.target.value)
-                    }
-                    placeholder="Search for solutions, guidelines, errors, procedures..."
-                    className="h-12 w-full rounded-xl border bg-white pl-11 pr-24 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:bg-slate-950"
-                  />
+                    <input
+                      value={query}
+                      onChange={(e) =>
+                        setQuery(e.target.value)
+                      }
+                      placeholder="Search solutions, errors, procedures..."
+                      className="h-11 w-full rounded-xl border bg-white pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:bg-slate-950 sm:h-12"
+                    />
+                  </div>
 
                   <Button
                     type="submit"
                     disabled={
                       busy || !query.trim()
                     }
-                    className="absolute right-1.5 top-1.5 h-9 rounded-lg px-5"
+                    className="h-11 w-full rounded-xl sm:absolute sm:right-1.5 sm:top-1/2 sm:h-9 sm:w-auto sm:-translate-y-1/2 sm:px-5"
                   >
                     {busy ? (
                       <RefreshCw className="mr-2 size-3.5 animate-spin" />
@@ -652,7 +653,7 @@ export default function Knowledge({
                   </Button>
                 </form>
 
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <div className="mt-4 flex flex-wrap justify-start gap-2 sm:justify-center">
                   {chips.map((domain) => {
                     const active =
                       domain === chip;
@@ -693,111 +694,6 @@ export default function Knowledge({
                   })}
                 </div>
               </div>
-            </section>
-
-            {/* =================================================
-                BROWSE BY DOMAIN
-            ================================================= */}
-            <section>
-              <SectionTitle
-                title="Browse by domain"
-                description="Explore knowledge by technical domain"
-              />
-
-              {!domains ? (
-                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
-                  {Array.from({
-                    length: 8,
-                  }).map((_, i) => (
-                    <Skeleton
-                      key={i}
-                      className="h-40 rounded-2xl"
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
-                  {domains.map((domain, index) => {
-                    const meta = metaFor(
-                      domain.domain,
-                      domain
-                    );
-
-                    const Icon = meta.icon;
-
-                    return (
-                      <motion.button
-                        key={domain.domain}
-                        type="button"
-                        initial={{
-                          opacity: 0,
-                          y: 8,
-                        }}
-                        animate={{
-                          opacity: 1,
-                          y: 0,
-                        }}
-                        transition={{
-                          delay: index * 0.03,
-                        }}
-                        onClick={() => {
-                          setChip(domain.domain);
-                          setManageOpen(true);
-                        }}
-                        className="text-left"
-                      >
-                        <Card className="h-full min-h-[154px] rounded-2xl p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-
-                          <div
-                            className={[
-                              "mb-3 grid size-10 place-items-center rounded-xl overflow-hidden",
-                              meta.bgClass,
-                            ].join(" ")}
-                          >
-                            {meta.customIcon ? (
-                              <img src={meta.customIcon} alt={meta.label} className="size-full object-contain p-1.5" />
-                            ) : (
-                              <Icon
-                                className={[
-                                  "size-5",
-                                  meta.iconClass,
-                                ].join(" ")}
-                              />
-                            )}
-                          </div>
-
-                          <div className="text-sm font-semibold">
-                            {meta.label}
-                          </div>
-
-                          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
-                            {meta.description}
-                          </p>
-
-                          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                            <span className="text-[11px] font-semibold whitespace-nowrap">
-                              {domain.pages}{" "}
-                              <span className="font-normal text-muted-foreground">
-                                {domain.pages === 1
-                                  ? "page"
-                                  : "pages"}
-                              </span>
-                            </span>
-
-                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                              · {domain.last_synced
-                                ? `Synced ${relTime(
-                                    domain.last_synced
-                                  )}`
-                                : "Not synced yet"}
-                            </span>
-                          </div>
-                        </Card>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              )}
             </section>
 
             {/* =================================================
@@ -1569,26 +1465,6 @@ export default function Knowledge({
 /* ==============================================================
    SECTION TITLE
 ============================================================== */
-
-function SectionTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-sm font-semibold tracking-tight">
-        {title}
-      </h2>
-
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
 
 /* ==============================================================
    SYNC METRIC
