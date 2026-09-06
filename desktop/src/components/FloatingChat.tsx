@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import { currentTime, type Message, type Source } from "@/features/chat/model";
 import { uploadAttachment } from "@/features/chat/api";
@@ -359,8 +360,8 @@ export function FloatingChatPopup() {
                   )
                 ) : (
                   <>
-                    <div className="prose prose-xs max-w-none [&_p]:my-1 [&_li]:my-0.5 [&_code]:text-[11px]">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    <div className="prose prose-xs max-w-none dark:prose-invert [&_p]:my-1.5 [&_li]:my-0.5 [&_code]:text-[11px] [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[11px] [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1.5 [&_th]:font-semibold [&_th]:text-slate-800 dark:[&_th]:border-slate-700 dark:[&_th]:bg-slate-800 dark:[&_th]:text-slate-200 [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1.5 dark:[&_td]:border-slate-800">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                     </div>
                     {m.failed && (
                       <button
@@ -432,10 +433,10 @@ export function FloatingChatPopup() {
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-[var(--border)] bg-white p-3 dark:bg-[#111827]">
+      <div className="shrink-0 border-t border-[var(--border)] bg-white p-2.5 dark:bg-[#111827]">
         <form
           onSubmit={(e) => { e.preventDefault(); send(); }}
-          className="flex items-end gap-2 rounded-2xl border border-[#E2E8F0] bg-white p-1.5 transition focus-within:border-blue-400 dark:border-slate-700 dark:bg-[#0B1220]"
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-1 transition focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900/60 dark:focus-within:bg-[#0B1220]"
         >
           <input
             ref={fileRef}
@@ -452,7 +453,7 @@ export function FloatingChatPopup() {
             type="button"
             aria-label="Attach file"
             onClick={() => fileRef.current?.click()}
-            className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-slate-200/60 hover:text-foreground dark:hover:bg-slate-800"
           >
             <Paperclip className="size-4" />
           </button>
@@ -461,13 +462,13 @@ export function FloatingChatPopup() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder="Ask an IT question..."
-            className="h-10 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            className="h-9 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
           />
           <button
             type="submit"
             aria-label="Send message"
             disabled={!input.trim() || isTyping}
-            className="grid size-10 shrink-0 place-items-center rounded-full bg-blue-600 text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-700 disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+            className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
           >
             <ArrowUp className="size-4" />
           </button>

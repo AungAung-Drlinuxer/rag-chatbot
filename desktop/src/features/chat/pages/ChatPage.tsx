@@ -562,12 +562,12 @@ export default function Chat({
                     ))}
                   </div>
                 )}
-                <div className="flex items-end rounded-[20px] border border-[#E2E8F0] bg-[var(--card)] p-2 shadow-sm transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 dark:border-slate-800 dark:bg-[#111827] dark:focus-within:ring-blue-950">
+                <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-[#111827]">
                 <button
                   type="button"
                   disabled={uploading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="mb-0.5 rounded-xl p-2.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-slate-100 hover:text-foreground disabled:opacity-50 dark:hover:bg-slate-800"
                   title="Attach file or image"
                 >
                   <Paperclip className="size-4" />
@@ -603,15 +603,15 @@ export default function Chat({
                   }}
                   rows={1}
                   placeholder="Ask an IT question..."
-                  className="max-h-32 min-h-[48px] flex-1 resize-none bg-transparent px-2 py-3 text-sm outline-none placeholder:text-muted-foreground"
+                  className="max-h-32 min-h-[42px] flex-1 resize-none bg-transparent px-2.5 py-2.5 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isTyping}
                   aria-label="Send message"
-                  className="mb-0 grid size-11 shrink-0 place-items-center rounded-full bg-blue-600 text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-70 disabled:shadow-none dark:disabled:bg-slate-700"
+                  className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
-                  <ArrowUp className="size-4.5" />
+                  <ArrowUp className="size-4" />
                 </button>
               </div>
             </form>

@@ -39,9 +39,9 @@ export function NeedHelpCard() {
         setOpen(true);
       }}
       className={[
-        "group fixed bottom-5 right-5 z-40 grid size-14 place-items-center rounded-full",
-        "bg-blue-600 text-white shadow-xl shadow-blue-600/40",
-        "transition-all duration-300 hover:scale-105 hover:bg-blue-700",
+        "group fixed bottom-5 right-5 z-40 grid size-10 place-items-center rounded-full",
+        "bg-blue-600 text-white shadow-md shadow-blue-600/30",
+        "transition-all duration-300 hover:scale-110 hover:bg-blue-700",
         visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
       ].join(" ")}
     >
@@ -60,15 +60,15 @@ export function NeedHelpCard() {
             setDismissed(true);
           }
         }}
-        className="absolute -right-1 -top-1 hidden size-5 place-items-center rounded-full border border-[var(--border)] bg-white text-slate-500 shadow-sm transition hover:text-red-500 group-hover:grid dark:border-slate-700 dark:bg-slate-800"
+        className="absolute -right-1 -top-1 hidden size-4 place-items-center rounded-full border border-[var(--border)] bg-white text-slate-500 shadow-xs transition hover:text-red-500 group-hover:grid dark:border-slate-700 dark:bg-slate-800"
       >
-        <X className="size-3" />
+        <X className="size-2.5" />
       </span>
 
-      <Bot className="size-7" strokeWidth={1.8} />
+      <Bot className="size-5" strokeWidth={2} />
 
       {/* pulse ring — subtle */}
-      <span aria-hidden className="absolute inset-0 -z-10 animate-ping rounded-full bg-blue-500/20 [animation-duration:3s]" />
+      <span aria-hidden className="absolute inset-0 -z-10 animate-ping rounded-full bg-blue-500/15 [animation-duration:3s]" />
     </button>
   );
 }
