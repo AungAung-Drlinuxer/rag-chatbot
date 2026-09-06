@@ -1,0 +1,71 @@
+# OpenBao HA (Raft) values — drlinuxer-prod RKE2
+# Namespace: openbao | StorageClass: truenas-nfs (RWX-capable default; iscsi for data)
+
+server:
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: truenas-iscsi
+
+  auditStorage:
+    enabled: true
+    size: 5Gi
+    storageClass: truenas-nfs
+
+  disruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+  # Spread across worker nodes; masters tolerate too (5 nodes total)
+  affinity: |
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values: [openbao]
+            topologyKey: kubernetes.io/hostname
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  config: |
+    ui = true
+    cluster_name = "drlinuxer-openbao"
+
+    listener "tcp" {
+      address         = "[::]:8200"
+      cluster_address = "[::]:8201"
+      tls_disable     = 1     # internal-only; TLS via ingress later
+    }
+
+    storage "raft" {
+      path = "/openbao/data"
+    }
+
+    service_registration "kubernetes" {}
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+  activeOpenbaoPodOnly: true
+
+csi:
+  enabled: true
+
+injector:
+  enabled: false   # PoC uses CSI only
