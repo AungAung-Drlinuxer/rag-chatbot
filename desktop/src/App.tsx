@@ -111,7 +111,7 @@ export default function App() {
         <PageSidebar active={active} onNavigate={setNav} userName={userName} role={role}
           displayRole={meDisplay} perms={perms} onLogout={onLogout}
           collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
+        <div className={active === "chat" ? "min-w-0 flex-1 overflow-hidden" : "min-w-0 flex-1 overflow-y-auto"}>{children}</div>
       </div>
       {active !== "chat" && (
         <NeedHelpCard onOpen={() => setNav("chat")} />
@@ -141,21 +141,7 @@ export default function App() {
 
   switch (nav) {
     case "chat":
-      return (
-        <>
-          <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />
-          {authed && (
-            <CommandPalette
-              open={paletteOpen}
-              onClose={() => setPaletteOpen(false)}
-              onNavigate={setNav}
-              onOpenConversation={(id) => { setNav("chat"); window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: id })); }}
-              enabled={perms}
-            />
-          )}
-          <ToastHost toast={toast.toast} />
-        </>
-      );
+      return shell("chat", <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />);
     case "dashboard":
       return shell("dashboard", <DashboardPage userName={userName} role={role} />);
     case "articles":

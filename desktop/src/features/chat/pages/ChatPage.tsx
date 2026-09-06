@@ -2,13 +2,7 @@ import {
   AlertTriangle,
   Trash2,
   ArrowUp,
-  Home,
-  BookOpen,
   MessagesSquare,
-  ScrollText,
-  Settings as SettingsIcon,
-  Ticket as TicketIcon,
-  Users as UsersIcon,
   Bot,
   CheckCircle2,
   Clock3,
@@ -18,6 +12,7 @@ import {
   MessageSquare,
   Paperclip,
   Plus,
+  Ticket as TicketIcon,
   Search,
   Shield,
   Sparkles,
@@ -33,7 +28,6 @@ import {
   Zap
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useBranding } from "@/app/useBranding";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -52,7 +46,6 @@ import {
   submitFeedback as pushFeedback,
 } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
-import { useNotifications, NotificationBell } from "@/components/NotificationBell";
 import {
   type Message,
   type Source,
@@ -81,12 +74,12 @@ import { assignableUsers } from "@/features/users/api";
 ============================================================ */
 
 export default function Chat({
-  userName,
+  userName: _userName,
   role,
-  displayRole,
-  perms,
-  onNavigate,
-  onLogout,
+  displayRole: _displayRole,
+  perms: _perms,
+  onNavigate: _onNavigate,
+  onLogout: _onLogout,
 }: {
   userName?: string;
   role?: string;
@@ -95,20 +88,7 @@ export default function Chat({
   onNavigate?: (nav: string) => void;
   onLogout?: () => void;
 }) {
-  const [denied, setDenied] = useState<string | null>(null);
-  const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Domain Manager" } as Record<string, string>)[role || "user"] || "User";
 
-  const navItems: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
-    { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
-    { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
-    { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base & domains" },
-    { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
-    { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
-    { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review conversation history" },
-    { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
-    { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
-  ];
-  const branding = useBranding();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [conversations, setConversations] = useState<Conv[]>([]);
@@ -120,8 +100,6 @@ export default function Chat({
   const [renameValue, setRenameValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<{ id: string; filename: string; mime: string }[]>([]);
   // B-6 — notification bell data (admin/agent)
-  const canManage = role === "admin" || role === "agent";
-  const notices = useNotifications(role || "user", !!canManage);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isTyping, setIsTyping] = useState(false);
@@ -450,215 +428,133 @@ export default function Chat({
   ---------------------------------------------------------- */
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex h-[calc(100vh-0px)] min-h-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       {mobileHistory && (
         <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMobileHistory(false)} />
       )}
 
-      {/* ================= HISTORY SIDEBAR ================= */}
+      {/* v0.22 — Conversation history panel (inner left panel under MASTER PageSidebar;
+          page navigation/brand/profile now live in the global PageSidebar) */}
+      {mobileHistory && (
+        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMobileHistory(false)} />
+      )}
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-50 flex w-[250px] flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-text)] transition-transform lg:static lg:z-auto lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--card)] transition-transform lg:static lg:z-auto lg:translate-x-0",
           mobileHistory ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        {/* Brand — matches PageSidebar (B-6: notification bell for admin/agent) */}
-        <div className="flex h-16 items-center gap-3 border-b border-[var(--sidebar-border)] px-5">
-          {branding.logo ? (
-            <img src={branding.logo} alt="Company logo" className="size-9 shrink-0 rounded-xl object-contain" />
-          ) : (
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
-          )}
-          <div className="min-w-0">
-            <div className="text-sm font-semibold">{branding.appName || "IT Help Chatbot"}</div>
-            <div className="text-[10px] text-muted-foreground">Enterprise Assistant</div>
+        {/* History header */}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
+          <div className="flex items-center gap-2">
+            <MessagesSquare className="size-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-semibold">Conversations</span>
           </div>
-          {(role === "admin" || role === "agent") && (
-            <div className="ml-auto mr-1">
-              <NotificationBell notices={notices} onOpen={(n) => onNavigate?.(n)} />
-            </div>
-          )}
+          <button
+            onClick={newChat}
+            title="New conversation"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700"
+          >
+            <Plus className="size-3.5" /> New
+          </button>
         </div>
 
-        {/* Primary Page Navigation — Identical structure & order as PageSidebar */}
-        <nav className="border-b border-[var(--sidebar-border)] px-3 py-3">
-          {navItems.map((item) => {
-            const locked = item.cap ? perms && perms[item.cap] === false : false;
-            const isChatActive = item.id === "chat";
-            return (
-              <div key={item.id}>
-                <button
-                  onClick={() => {
-                    if (locked) {
-                      setDenied(denied === item.id ? null : item.id);
-                      return;
-                    }
-                    setDenied(null);
-                    if (!isChatActive) {
-                      onNavigate?.(item.id);
-                    }
-                  }}
-                  title={locked ? `No permission: ${item.capLabel}` : undefined}
-                  className={[
-                    "mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-medium transition",
-                    isChatActive && !locked
-                      ? "bg-sky-500/15 text-sky-400 font-semibold shadow-xs"
-                      : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
-                    locked ? "opacity-60" : "",
-                  ].join(" ")}
-                >
-                  {item.icon}
-                  <span className="flex-1">{item.label}</span>
-                  {locked && (
-                    <svg viewBox="0 0 24 24" className="size-3.5 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                  )}
-                </button>
-                {locked && denied === item.id && (
-                  <div className="mb-2 mx-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] leading-4 text-amber-200">
-                    Access restricted — your role ({pretty}) does not have permission:
-                    {" "}<b>{item.capLabel}</b>. Contact your administrator.
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </nav>
-
-        {/* Chat Actions & Recent Conversations Section */}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="p-3 pb-1">
-            <button
-              onClick={newChat}
-              className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              <Plus className="size-3.5" />
-              New conversation
-            </button>
-          </div>
-
-          {/* Quick Search */}
-          <div className="px-3 py-1">
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-2.5 text-left text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-active-bg)]"
-            >
-              <Search className="size-3 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">Search conversations...</span>
-              <kbd className="hidden shrink-0 rounded border border-[var(--sidebar-border)] bg-[var(--sidebar-hover)] px-1 py-0.2 text-[9px] font-medium text-[var(--sidebar-text-muted)] sm:inline">
-                Ctrl K
-              </kbd>
-            </button>
-          </div>
-
-          {/* Conversation history */}
-          <div className="mt-1 flex-1 overflow-y-auto px-2">
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-text-muted)]">
-                Recent conversations
-              </span>
-              {(conversations ?? []).length > 0 && (
-                <button
-                  onClick={async () => {
-                    if (!window.confirm("Delete ALL conversations? This cannot be undone.")) return;
-                    try {
-                      await clearConversations();
-                      setConversations([]);
-                      newChat();
-                    } catch { /* ignore */ }
-                  }}
-                  title="Clear all conversations"
-                  className="rounded p-1 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              )}
-            </div>
-            {filteredConversations.map((c) => (
-              <div key={c.session_id} className="group relative mb-1">
-                <button
-                  onClick={() => openConversation(c.session_id)}
-                  className={[
-                    "w-full rounded-lg px-2.5 py-2 pr-7 text-left transition",
-                    selectedConversation === c.session_id
-                      ? "bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
-                      : "hover:bg-[var(--sidebar-hover)]",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center gap-2">
-                    {c.is_pinned && <Pin className="size-3 shrink-0 rotate-45 text-blue-600 dark:text-blue-400" />}
-                    <MessageSquare
-                      className={[
-                        "size-3.5 shrink-0",
-                        selectedConversation === c.session_id ? "text-blue-600" : "text-muted-foreground",
-                      ].join(" ")}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
-                      {c.title || c.session_id.slice(0, 18)}
-                    </span>
-                  </div>
-                </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      aria-label="Conversation menu"
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-1.5 top-1.5 rounded-md p-1 text-[var(--sidebar-text-muted)] opacity-0 transition focus:opacity-100 hover:bg-[var(--sidebar-active-bg)] hover:text-[var(--sidebar-active-text)] group-hover:opacity-100"
-                    >
-                      <MoreHorizontal className="size-3" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={2} collisionPadding={8} avoidCollisions side="bottom">
-                    <DropdownMenuItem
-                      onClick={() => pinConversation(c.session_id, !c.is_pinned).then(refreshConversations)}
-                    >
-                      <Pin className="size-3.5" /> {c.is_pinned ? "Unpin" : "Pin"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => { setRenameTarget({ id: c.session_id, title: c.title || "" }); setRenameValue(c.title || ""); }}
-                    >
-                      <Pencil className="size-3.5" /> Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => removeConversation(c.session_id)}
-                    >
-                      <Trash2 className="size-3.5" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
+        {/* Search */}
+        <div className="border-b border-[var(--border)] px-3 py-2.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search conversations..."
+              className="h-9 w-full rounded-lg border border-[var(--border)] bg-background pl-9 pr-3 text-xs outline-none transition focus:border-blue-500"
+            />
           </div>
         </div>
 
-        {/* Profile + sign out — bottom, identical format to PageSidebar */}
-        <div className="border-t border-[var(--sidebar-border)] py-4 px-4 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-              {(userName?.charAt(0) ?? "A").toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-slate-100">{userName ?? "User"}</div>
-              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", (role === "admin" ? "bg-sky-500/20 text-sky-300" : role === "agent" ? "bg-cyan-500/20 text-cyan-300" : role === "knowledge" ? "bg-teal-500/20 text-teal-300" : "bg-slate-500/20 text-slate-300")].join(" ")}>
-                {pretty}
-              </span>
-            </div>
-            <button
-              onClick={() => onLogout?.()}
-              title="Sign out"
-              className="flex items-center gap-1.5 rounded-lg border border-slate-600 px-2.5 py-2 text-[10px] font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
-            >
-              <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <path d="M16 17l5-5-5-5" />
-                <path d="M21 12H9" />
-              </svg>
-              Sign out
-            </button>
+        {/* Conversation list */}
+        <div className="flex-1 overflow-y-auto px-2 py-2">
+          <div className="mb-1 flex items-center justify-between px-2 pt-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Recent conversations
+            </span>
+            {(conversations ?? []).length > 0 && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm("Delete ALL conversations? This cannot be undone.")) return;
+                  try {
+                    await clearConversations();
+                    setConversations([]);
+                    newChat();
+                  } catch { /* ignore */ }
+                }}
+                title="Clear all conversations"
+                className="rounded p-1 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+              >
+                <Trash2 className="size-3" />
+              </button>
+            )}
           </div>
+          {filteredConversations.map((c) => (
+            <div key={c.session_id} className="group relative mb-1">
+              <button
+                onClick={() => openConversation(c.session_id)}
+                className={[
+                  "w-full rounded-lg px-2.5 py-2 pr-7 text-left transition",
+                  selectedConversation === c.session_id
+                    ? "bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
+                    : "hover:bg-muted",
+                ].join(" ")}
+              >
+                <div className="flex items-center gap-2">
+                  {c.is_pinned && <Pin className="size-3 shrink-0 rotate-45 text-blue-600 dark:text-blue-400" />}
+                  <MessageSquare
+                    className={[
+                      "size-3.5 shrink-0",
+                      selectedConversation === c.session_id ? "text-blue-600" : "text-muted-foreground",
+                    ].join(" ")}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
+                    {c.title || c.session_id.slice(0, 18)}
+                  </span>
+                </div>
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Conversation menu"
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition focus:opacity-100 hover:bg-muted group-hover:opacity-100"
+                  >
+                    <MoreHorizontal className="size-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={2} collisionPadding={8} side="bottom">
+                  <DropdownMenuItem
+                    onClick={() => pinConversation(c.session_id, !c.is_pinned).then(refreshConversations)}
+                  >
+                    <Pin className="size-3.5" /> {c.is_pinned ? "Unpin" : "Pin"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => { setRenameTarget({ id: c.session_id, title: c.title || "" }); setRenameValue(c.title || ""); }}
+                  >
+                    <Pencil className="size-3.5" /> Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => removeConversation(c.session_id)}
+                  >
+                    <Trash2 className="size-3.5" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ))}
+          {(conversations ?? []).length === 0 && (
+            <p className="px-3 py-6 text-center text-[10px] text-muted-foreground">
+              No conversations yet — start chatting to see history here.
+            </p>
+          )}
         </div>
       </aside>
 
