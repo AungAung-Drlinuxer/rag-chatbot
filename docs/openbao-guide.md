@@ -446,6 +446,64 @@ infra/k8s/openbao/
 
 ---
 
+## 14. Backend integration (live in drlinuxer-prod)
+
+The backend at `D:\ragchatbot\backend\app\secrets\openbao.py` authenticates
+against OpenBao at startup using the pod's ServiceAccount JWT
+(`/var/run/secrets/kubernetes.io/serviceaccount/token`). On success it
+reads `secret/data/it-help-chatbot/backend` and constructs a
+`Settings(**overrides)` that overrides the env-var-based values.
+
+**Loading order (highest priority first):**
+
+1. OpenBao KV (read once at process start, 2h token TTL)
+2. Environment variables (k8s `Secret` `backend-secrets` mounted as env)
+3. Hardcoded defaults in `app/config.py`
+
+If OpenBao is unreachable, misconfigured, the role is not authorized, or
+any other failure happens, the resolver returns `None` and the settings
+fall back to the env-var layer. No retry storm: a single startup-time
+attempt, then the env-var values are used for the process lifetime.
+
+Verified live on drlinuxer-prod:
+
+```
+$ kubectl -n it-help-chatbot exec backend-pod -- python -c '...'
+openbao_keys_count: 15
+keys: ['confluence_base_url', 'confluence_email', 'confluence_space_keys',
+       'confluence_token', 'database_url', 'h_chat_api_key', 'jira_base_url',
+       'jira_email', 'jira_project', 'jira_request_types', 'jira_service_desk_id',
+       'jira_token', 'jwt_secret', 'ldap_bind_password', 'redis_password']
+$ curl https://chat.drlinuxer.com/api/auth/login ...   # 200 OK
+$ curl /api/articles-domains ...                       # 8 domains, all live data
+```
+
+Fallback test (with OpenBao URL pointed at a bad host):
+
+```
+$ OPENBAO_URL=http://nonexistent-host:9999
+$ python -c '... load() ...'
+result: None
+openbao: k8s auth login failed: [Errno -3] Temporary failure in name resolution
+```
+
+Both deployments (`backend` and `celery-worker`) are bound to
+`serviceAccountName: it-help-chatbot-backend` so the SA token is mounted
+at the standard path.
+
+**Knobs (env vars, optional):**
+
+| Var | Default |
+|---|---|
+| `OPENBAO_URL` | `http://openbao.openbao.svc.cluster.local:8200` |
+| `OPENBAO_KV_PATH` | `secret/data/it-help-chatbot/backend` |
+| `OPENBAO_K8S_ROLE` | `it-help-chatbot` |
+
+To disable OpenBao entirely in a specific environment, set
+`OPENBAO_URL` to an empty string (the resolver will short-circuit).
+
+---
+
 ## References
 
 - OpenBao Helm + HA Raft: https://openbao.org/docs/platform/k8s/helm/examples/ha-with-raft/
