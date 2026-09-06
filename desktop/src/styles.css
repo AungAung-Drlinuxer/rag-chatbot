@@ -37,35 +37,35 @@
   --fs-3xl: 24px;   /* display/KPI */
   --dur-fast: 150ms;  /* B-8 unified interactive timing */
   --dur-slow: 200ms;  /* B-8 overlays / panels */
---radius-xs: 6px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+--radius-xs: 6px;   /* spec §33: small */
+  --radius-sm: 8px;   /* spec §33: inputs/buttons */
+  --radius-md: 10px;  /* spec §33: cards (10–12) */
+  --radius-lg: 12px;  /* spec §33: cards/dialogs */
+  --radius-xl: 14px;  /* spec §33: max card radius — no 20–30px */
 }
 
 :root {
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
   /* v0.21.52 — Refined light theme (deeper indigo + warmer card) */
-  --background: #F8FAFC;        /* subtle blue-gray app background */
-  --foreground: #0B1220;
+  --background: #F7F9FC;        /* spec §7: very light neutral blue-gray */
+  --foreground: #0F172A;        /* spec §7: text */
   --card: #FFFFFF;              /* card / surface (pure white) */
-  --card-foreground: #0B1220;
-  --popover: #FFFFFF; --popover-foreground: #0B1220;
-  --primary: #4F46E5;           /* indigo-600 — active accent */
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF; --popover-foreground: #0F172A;
+  --primary: #2563EB;           /* spec §7: primary blue-600 */
   --primary-foreground: #FFFFFF;
   --secondary: #EEF2FF;         /* indigo-50 */
   --secondary-foreground: #3730A3;
   --muted: #F1F5F9;
   --muted-foreground: #64748B;
-  --accent: #E0E7FF;            /* indigo-100 — active row highlight */
-  --accent-foreground: #4F46E5;
+  --accent: #DBEAFE;            /* blue-100 — active row highlight */
+  --accent-foreground: #1D4ED8; /* spec §7: primary hover */
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
   --border: #E2E8F0;            /* slate-200 */
   --input: #E2E8F0;
-  --ring: #4F46E5;
+  --ring: #2563EB;
   /* v0.21.65 — Sidebar vs main panel: two-tone. Sidebar = navy #0A1628,
      main content = soft blue-gray. Professional separation without borders. */
   --sidebar-bg: #0A1628;        /* deep ocean navy sidebar */
@@ -89,25 +89,25 @@
 }
 
 [data-theme="dark"] {
-  /* v0.21.21 — Premium enterprise color system */
-  --background: #070B14;        /* main app background (deepest) */
+  /* v0.22 — MASTER spec §27: dark mode first-class (#0B1220 bg, #111827 surface, #263449 border) */
+  --background: #0B1220;        /* spec dark background */
   --foreground: #E5E7EB;
-  --card: #0F172A;              /* card / surface */
+  --card: #111827;              /* spec dark surface */
   --card-foreground: #E5E7EB;
-  --popover: #0F172A; --popover-foreground: #E5E7EB;
-  --primary: #818CF8;            /* indigo-400 — active accent */
-  --primary-foreground: #0B1020;
+  --popover: #111827; --popover-foreground: #E5E7EB;
+  --primary: #60A5FA;            /* blue-400 — readable accent on dark */
+  --primary-foreground: #0B1220;
   --secondary: #1E293B;
   --secondary-foreground: #CBD5E1;
   --muted: #1E293B;
   --muted-foreground: #94A3B8;
-  --accent: rgba(129, 140, 248, 0.18);
-  --accent-foreground: #A5B4FC;
+  --accent: rgba(96, 165, 250, 0.16);
+  --accent-foreground: #93C5FD;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #1E293B;             /* default border — slightly lighter */
-  --input: #1E293B;
-  --ring: #818CF8;
+  --border: #263449;             /* spec dark border */
+  --input: #263449;
+  --ring: #60A5FA;
   /* v0.21.65 — sidebar deeper than main panel (two-tone depth) */
   --sidebar-bg: #050912;         /* deeper than --background #070B14 */
   --sidebar-border: #0F1D33;
@@ -465,18 +465,18 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 /* Remove old .context (replaced by .left-panel) */
 .context { display: none; }
 
-/* ===== v0.8.0 — typography + palette polish ===== */
+/* ===== v0.8.0 — typography + palette polish (v0.22: aligned to MASTER spec §7) ===== */
 :root {
   --font: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
-  --bg: #f7f8fa;
-  --background: #f7f8fa;
-  --foreground: #0a0e1a;
+  --bg: #F7F9FC;
+  --background: #F7F9FC;
+  --foreground: #0F172A;
   --card: #ffffff;
-  --card-foreground: #0a0e1a;
+  --card-foreground: #0F172A;
   --popover: #ffffff;
-  --popover-foreground: #0a0e1a;
-  --primary: #4f46e5;
+  --popover-foreground: #0F172A;
+  --primary: #2563EB;
   --primary-foreground: #ffffff;
   --secondary: #f3f4f6;
   --secondary-foreground: #1f2937;
@@ -502,28 +502,28 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   --danger: #dc2626;
 }
 [data-theme="dark"] {
-  --bg: #0a0e1a;
-  --background: #0a0e1a;
-  --foreground: #e4e6eb;
-  --card: #131826;
-  --card-foreground: #e4e6eb;
-  --popover: #1c2233;
-  --popover-foreground: #e4e6eb;
-  --primary: #818cf8;
-  --primary-foreground: #0a0e1a;
-  --secondary: #1c2233;
-  --secondary-foreground: #cbd5e1;
-  --muted: #1c2233;
-  --muted-foreground: #94a3b8;
-  --accent: rgba(129, 140, 248, .14);
-  --accent-foreground: #c7d2fe;
-  --accent-soft: rgba(129, 140, 248, .14);
-  --accent-2: #a5b4fc;
+  --bg: #0B1220;
+  --background: #0B1220;
+  --foreground: #E5E7EB;
+  --card: #111827;
+  --card-foreground: #E5E7EB;
+  --popover: #172033;
+  --popover-foreground: #E5E7EB;
+  --primary: #60A5FA;
+  --primary-foreground: #0B1220;
+  --secondary: #1E293B;
+  --secondary-foreground: #CBD5E1;
+  --muted: #1E293B;
+  --muted-foreground: #94A3B8;
+  --accent: rgba(96, 165, 250, .14);
+  --accent-foreground: #93C5FD;
+  --accent-soft: rgba(96, 165, 250, .14);
+  --accent-2: #60A5FA;
   --destructive: #f87171;
-  --destructive-foreground: #0a0e1a;
-  --border: #252b3d;
+  --destructive-foreground: #0B1220;
+  --border: #263449;
   --input: #2d3447;
-  --ring: #818cf8;
+  --ring: #60A5FA;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.3);
   --shadow-md: 0 2px 4px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.4);
   --shadow-lg: 0 4px 6px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.5);

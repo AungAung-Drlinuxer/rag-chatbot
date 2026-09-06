@@ -25,7 +25,7 @@ export function NeedHelpCard({ onOpen }: { onOpen: () => void }) {
       role="complementary"
       aria-label="Need help assistant prompt"
       className={[
-        "fixed bottom-5 right-5 z-40 w-[240px] rounded-2xl border border-[var(--border)]",
+        "fixed bottom-5 right-5 z-40 w-[240px] rounded-xl border border-[var(--border)]",
         "bg-[#0B1526] p-4 shadow-2xl transition-all duration-500",
         visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
       ].join(" ")}
