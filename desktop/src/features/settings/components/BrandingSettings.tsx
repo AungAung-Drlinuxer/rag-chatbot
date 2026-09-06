@@ -19,13 +19,14 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
   const [saved, setSaved] = useState(false);
   const [appName, setAppName] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   if (!loaded) {
     setLoaded(true);
     fetchBranding().then((b) => { setBranding(b); setAppName(b.appName); }).catch(() => {});
   }
 
-  async function upload(file: File) {
+  async function doUpload(file: File) {
     setBusy(true); setErr(null); setSaved(false);
     try {
       if (!["image/png", "image/jpeg"].includes(file.type)) {
@@ -53,6 +54,13 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
     }
+  }
+
+  function confirmUpload() {
+    if (!pendingFile) return;
+    const f = pendingFile;
+    setPendingFile(null);
+    doUpload(f);
   }
 
   async function reset() {
@@ -102,9 +110,39 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
             )}
           </div>
           <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) { setPendingFile(f); } }} />
         </div>
       </div>
+
+      {/* Logo upload confirmation (v0.22 — user asked for explicit confirm) */}
+      {pendingFile && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Confirm logo upload">
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                <ImageIcon className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Replace logo?</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  <span className="break-all font-medium text-slate-700 dark:text-slate-200">{pendingFile.name}</span>{" "}
+                  ({(pendingFile.size / 1024).toFixed(0)} KB) will replace the current logo on the login page and sidebar across the whole application.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingFile(null)}
+                className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-muted dark:text-slate-300">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmUpload} disabled={busy}
+                className="rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50">
+                {busy ? "Uploading…" : "Yes, replace logo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Optional app-name override for the brand row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">

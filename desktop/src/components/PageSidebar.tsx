@@ -84,7 +84,6 @@ export default function PageSidebar({
           )}
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-100">{branding.appName || "IT Help Chatbot"}</div>
-            <div className="text-[10px] text-slate-400">Enterprise Assistant</div>
           </div>
           {canManage && (
             <div className="ml-auto mr-2">

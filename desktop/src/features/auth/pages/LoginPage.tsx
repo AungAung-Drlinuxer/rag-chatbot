@@ -82,10 +82,6 @@ export default function Login({
                 <div className="text-sm font-bold tracking-tight">
                   {branding.appName || "IT Help Chatbot"}
                 </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Enterprise Assistant
-                </div>
               </div>
             </div>
 
