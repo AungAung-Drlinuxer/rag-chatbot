@@ -108,7 +108,7 @@ export function FloatingChatPopup() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [stage, setStage] = useState<string | undefined>();
-  const [sessionRef] = useState(() => `fc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [sessionRef] = useState(() => crypto.randomUUID());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);

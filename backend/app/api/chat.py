@@ -24,6 +24,8 @@ from app.rag.gate import DECISION_CAUTION, caution_message
 from app.integrations.contacts import get_contact
 from app.integrations.jira import escalate as jira_escalate
 from app.llm.client import stream_answer
+import logging
+logger = logging.getLogger("chat")
 
 router = APIRouter()
 
@@ -37,7 +39,11 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
     Events: meta (domain/confidence/decision/hits) → token* → done.
     """
-    session_id = req.session_id or str(uuid.uuid4())
+    raw_sid = req.session_id or str(uuid.uuid4())
+    try:
+        session_id = str(uuid.UUID(raw_sid))
+    except (ValueError, AttributeError):
+        session_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, raw_sid))
 
     def gen():
         t0 = time.time()

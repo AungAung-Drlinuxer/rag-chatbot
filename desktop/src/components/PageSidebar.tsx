@@ -1,12 +1,24 @@
 /** Shared nav sidebar for non-chat pages (extracted verbatim from App.tsx).
  * Capability-aware nav (v0.21.57): locked items stay visible; clicking shows WHY. */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useBranding } from "@/app/useBranding";
 import {
-  BookOpen, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
-  Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
+  BookOpen, ChevronDown, ChevronRight, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
+  Pin, Pencil, Trash2, MoreHorizontal, ScrollText, Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
+import {
+  listConversations,
+  deleteConversation,
+  renameConversation,
+  pinConversation,
+} from "@/features/conversations/api";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /* ============================================================
    PageSidebar — shared nav for non-chat pages (v0.13.0)
@@ -36,6 +48,21 @@ export default function PageSidebar({
   const branding = useBranding();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [denied, setDenied] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [conversations, setConversations] = useState<any[]>([]);
+
+  const loadHistory = () => {
+    listConversations()
+      .then((res: any) => setConversations(res?.conversations ?? []))
+      .catch(() => setConversations([]));
+  };
+
+  useEffect(() => {
+    loadHistory();
+    const handleRefresh = () => loadHistory();
+    window.addEventListener("ith:refresh-conversations", handleRefresh);
+    return () => window.removeEventListener("ith:refresh-conversations", handleRefresh);
+  }, []);
   // B-6 — admin/agent see HITL approvals + LDAP-gated accounts as notifications
   const canManage = role === "admin" || role === "agent";
   const notices = useNotifications(role || "user", !!canManage);
@@ -48,7 +75,7 @@ export default function PageSidebar({
     { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base & domains" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
     { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
-    { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review conversation history" },
+    { id: "history", label: "All History", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review organization conversation history" },
     { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
     { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
   ];
@@ -148,6 +175,97 @@ export default function PageSidebar({
             </div>
           );
         })}
+
+        {/* Recent Chat History in Sidebar */}
+        {!collapsed && (
+          <div className="mt-4 pt-3 border-t border-[var(--sidebar-border)]/60">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(!historyOpen)}
+              className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-semibold tracking-wider text-slate-400 hover:text-slate-200 transition"
+            >
+              <span className="flex items-center gap-1.5">
+                History
+                <span className="text-[10px] text-slate-500 font-normal">({conversations.length})</span>
+              </span>
+              {historyOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+            </button>
+
+            {historyOpen && (
+              <div className="mt-1 space-y-0.5 max-h-60 overflow-y-auto pr-1">
+                {conversations.length === 0 ? (
+                  <p className="px-2 py-2 text-[10px] text-slate-500 italic">No recent chats</p>
+                ) : (
+                  conversations.map((c) => (
+                    <div key={c.session_id} className="group relative flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onNavigate("chat");
+                          window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: c.session_id }));
+                          setMobileOpen(false);
+                        }}
+                        className="flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800/60 hover:text-white transition"
+                        title={c.title || "Untitled chat"}
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          {c.is_pinned && <Pin className="size-3 shrink-0 text-sky-400 rotate-45" />}
+                          <span className="truncate">{c.title || "Untitled chat"}</span>
+                        </span>
+                      </button>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 transition"
+                            title="Actions"
+                          >
+                            <MoreHorizontal className="size-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-36">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              pinConversation(c.session_id, !c.is_pinned).then(loadHistory);
+                            }}
+                            className="flex items-center gap-2 text-xs"
+                          >
+                            <Pin className="size-3.5" />
+                            {c.is_pinned ? "Unpin" : "Pin"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const newT = window.prompt("Rename chat:", c.title || "");
+                              if (newT && newT.trim()) {
+                                renameConversation(c.session_id, newT.trim()).then(loadHistory);
+                              }
+                            }}
+                            className="flex items-center gap-2 text-xs"
+                          >
+                            <Pencil className="size-3.5" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (window.confirm("Delete this conversation?")) {
+                                deleteConversation(c.session_id).then(loadHistory);
+                              }
+                            }}
+                            className="flex items-center gap-2 text-xs text-rose-500 focus:text-rose-500"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
       <div className={"border-t py-4 dark:border-slate-800 " + (collapsed ? "px-2" : "px-4")}>
         <div className={"flex items-center " + (collapsed ? "flex-col gap-2" : "gap-3")}>
