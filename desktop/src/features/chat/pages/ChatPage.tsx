@@ -142,6 +142,8 @@ export default function Chat({
     };
     window.addEventListener("ith:open-conversation", handleOpen);
     window.addEventListener("ith:new-chat", handleNew);
+
+    // If navigated with hash #/chat and was already on chat, treat as new chat trigger if event requested
     return () => {
       window.removeEventListener("ith:open-conversation", handleOpen);
       window.removeEventListener("ith:new-chat", handleNew);
@@ -333,7 +335,10 @@ export default function Chat({
     sessionRef.current = crypto.randomUUID();
     historyRef.current = [];
     setMobileHistory(false);
+    setStage("");
+    setIsTyping(false);
     window.dispatchEvent(new CustomEvent("ith:new-chat-started"));
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // Ctrl+N / Cmd+N — new chat shortcut
@@ -487,8 +492,8 @@ export default function Chat({
                     onEditQuery={(text) => { setInput(text); window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 60); }}
                   />
                 ))}
-        {/* Stage indicator during retrieval */}
-        {isTyping && stage && (
+        {/* Stage indicator during retrieval (only shown if bot hasn't started streaming answer text) */}
+        {isTyping && stage && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex items-center gap-3">
             <div className="grid size-9 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
               <Bot className="size-5" />
