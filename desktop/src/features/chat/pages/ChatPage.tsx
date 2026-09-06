@@ -235,10 +235,8 @@ export default function Chat({
     setIsTyping(true);
 
     const assistantId = crypto.randomUUID();
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantId, role: "assistant", content: "", timestamp: currentTime() },
-    ]);
+    // Do NOT add an empty message row initially so we don't render a duplicate "Generating answer" box
+    let hasCreatedAssistantMessage = false;
 
     try {
       const streamed = await runChatStream(
@@ -269,10 +267,19 @@ export default function Chat({
                   : m,
               ),
             ),
-          onToken: (token) =>
-            setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + token } : m)),
-            ),
+          onToken: (token) => {
+            if (!hasCreatedAssistantMessage) {
+              hasCreatedAssistantMessage = true;
+              setMessages((prev) => [
+                ...prev,
+                { id: assistantId, role: "assistant", content: token, timestamp: currentTime() },
+              ]);
+            } else {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + token } : m))
+              );
+            }
+          },
           onStage: (detail) => setStage(detail),
           onApprovalRequest: (data) => {
             setStage("");
@@ -301,13 +308,19 @@ export default function Chat({
       refreshConversations();
       window.dispatchEvent(new CustomEvent("ith:refresh-conversations"));
     } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
+      setMessages((prev) => {
+        if (!hasCreatedAssistantMessage) {
+          return [
+            ...prev,
+            { id: assistantId, role: "assistant", content: "⚠️ Connection error — please try again.", timestamp: currentTime() }
+          ];
+        }
+        return prev.map((m) =>
           m.id === assistantId
             ? { ...m, content: m.content || "⚠️ Connection error — please try again." }
             : m,
-        ),
-      );
+        );
+      });
     } finally {
       setIsTyping(false);
       setStage("");
@@ -997,13 +1010,6 @@ function MessageBubble({
             <div className="md text-xs leading-relaxed [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:border [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-slate-700 dark:[&_th]:bg-slate-800/80 dark:[&_th]:text-slate-200 [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-slate-800 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/60 [&_td]:px-4 [&_td]:py-2.5 [&_td]:text-xs [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-slate-50/50 dark:[&_tbody_tr:hover]:bg-slate-800/40">
               {message.content ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-              ) : busy ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                  <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:120ms]" />
-                  <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:240ms]" />
-                  <span className="ml-1">Generating answer…</span>
-                </div>
               ) : (
                 <div className="flex flex-col gap-2 text-muted-foreground">
                   <div className="font-medium text-rose-600">No answer received from the AI provider.</div>
