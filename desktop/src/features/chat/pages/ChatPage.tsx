@@ -972,16 +972,16 @@ function MessageBubble({
       <div className={["min-w-0", isUser ? "max-w-[80%]" : "max-w-[88%]"].join(" ")}>
         <div
           className={[
-            "rounded-2xl px-4 py-3 text-xs leading-6",
+            "rounded-2xl px-5 py-4 text-xs leading-relaxed",
             isUser
               ? "rounded-br-md bg-blue-600 text-white"
-              : "rounded-bl-md border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-sm",
+              : "rounded-tl-none border border-slate-200 bg-white text-slate-800 shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100",
           ].join(" ")}
         >
           {isUser ? (
             <div className="whitespace-pre-wrap">{message.content || "..."}</div>
           ) : (
-            <div className="md text-[11px] leading-6 [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[10px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-[11px] [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-1.5 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:overflow-hidden [&_table]:rounded-lg [&_table]:text-[11px] [&_th]:border [&_th]:border-[var(--border)] [&_th]:bg-[var(--muted)] [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2.5 [&_td]:py-1.5 [&_tbody_tr:nth-child(even)]:bg-[color:var(--muted)]">
+            <div className="md text-xs leading-relaxed [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:border [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-slate-700 dark:[&_th]:bg-slate-800/80 dark:[&_th]:text-slate-200 [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-slate-800 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/60 [&_td]:px-4 [&_td]:py-2.5 [&_td]:text-xs [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-slate-50/50 dark:[&_tbody_tr:hover]:bg-slate-800/40">
               {message.content ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
               ) : busy ? (
@@ -1032,16 +1032,16 @@ function MessageBubble({
             </span>
           )}
           {!isUser && message.content && !busy && (
-            <span className="flex items-center gap-1 opacity-0 transition group-hover/msg:opacity-100">
+            <span className="flex items-center gap-1">
               <button type="button" title="Copy answer" onClick={() => copyText(message.content)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
                 {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
                 {copied ? "Copied" : "Copy"}
               </button>
               <button type="button" title="Share answer" onClick={() => shareText(message.content)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
                 {shared ? <Check className="size-3 text-emerald-500" /> : <Share2 className="size-3" />}
-                {shared ? "Copied" : "Share"}
+                {shared ? "Shared" : "Share"}
               </button>
             </span>
           )}
@@ -1068,16 +1068,16 @@ function MessageBubble({
         </div>
 
         {!isUser && message.content && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               onClick={() => onHelpful()}
               disabled={busy}
               title={message.serverId ? "Record feedback" : "Answer not saved yet"}
               className={[
-                "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-medium transition",
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition",
                 message.feedback === 1
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "hover:bg-muted",
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
               ].join(" ")}
             >
               <CheckCircle2 className="size-3.5 text-emerald-500" />
@@ -1088,20 +1088,20 @@ function MessageBubble({
               disabled={busy}
               title={message.serverId ? "Record feedback" : "Answer not saved yet"}
               className={[
-                "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-medium transition",
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition",
                 message.feedback === -1
-                  ? "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300"
-                  : "hover:bg-muted",
+                  ? "border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
               ].join(" ")}
             >
-              <AlertTriangle className="size-3.5 text-orange-500" />
+              <AlertTriangle className="size-3.5 text-amber-500" />
               Not helpful{message.feedback === -1 ? " ✓" : ""}
             </button>
             <button
               onClick={onOpenTicketForm}
-              className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-[10px] font-medium text-orange-700 hover:bg-orange-100 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300"
+              className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3.5 py-1.5 text-[11px] font-medium text-orange-700 transition hover:bg-orange-100 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
             >
-              <Ticket className="size-3.5" />
+              <Ticket className="size-3.5 text-orange-600 dark:text-orange-400" />
               Create ticket
             </button>
           </div>
