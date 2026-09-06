@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { MessageSquareText } from "lucide-react";
+import { Bot, X } from "lucide-react";
 import { useFloatingChat } from "@/components/FloatingChat";
 
 /**
- * Floating "Need help?" assistant prompt.
- * Bottom-right card that appears on non-chat pages, dismissible,
- * and opens the floating AI chat popup on click.
+ * Floating chat FAB — compact round button (56px), bot icon only.
+ * v0.22 redesign per user feedback: the previous large card covered page
+ * content; now a single minimal button. Popup opens on click; conversation
+ * persists via FloatingChatProvider (App-level).
  */
 export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
-  const { setOpen } = useFloatingChat();
+  const { setOpen, open } = useFloatingChat();
   const [dismissed, setDismissed] = useState(() => {
     // Session-scoped dismissal (memory only; project bans localStorage)
     return (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed === true;
@@ -16,65 +17,55 @@ export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 1200);
+    const t = setTimeout(() => setVisible(true), 800);
     return () => clearTimeout(t);
   }, []);
 
-  if (dismissed) return null;
+  // Hidden while the popup itself is open (popup has its own close/minimize)
+  if (dismissed || open) return null;
 
   return (
-    <div
-      role="complementary"
-      aria-label="Need help assistant prompt"
+    <button
+      type="button"
+      aria-label="Open AI assistant chat"
+      title="AI Assistant"
+      onClick={() => {
+        setOpen(true);
+        onOpen?.();
+      }}
       className={[
-        "fixed bottom-5 right-5 z-40 w-[240px] rounded-xl border border-[var(--border)]",
-        "bg-[#0B1526] p-4 shadow-2xl transition-all duration-500",
+        "group fixed bottom-5 right-5 z-40 grid size-14 place-items-center rounded-full",
+        "bg-blue-600 text-white shadow-xl shadow-blue-600/40",
+        "transition-all duration-300 hover:scale-105 hover:bg-blue-700",
         visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
       ].join(" ")}
     >
-      <button
-        type="button"
-        aria-label="Dismiss"
-        onClick={() => {
+      {/* dismiss — small, only on hover, top-right */}
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label="Dismiss assistant button"
+        onClick={(e) => {
+          e.stopPropagation();
           (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed = true;
           setDismissed(true);
         }}
-        className="absolute right-2.5 top-2.5 rounded-md p-1 text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
-      >
-        <svg viewBox="0 0 20 20" fill="none" className="size-3.5" stroke="currentColor" strokeWidth="2">
-          <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-        </svg>
-      </button>
-
-      <div className="flex items-start gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/30">
-          {/* Bot icon */}
-          <svg viewBox="0 0 24 24" fill="none" className="size-6 text-white" stroke="currentColor" strokeWidth="1.8">
-            <rect x="4" y="8" width="16" height="12" rx="3" />
-            <path d="M12 8V5m0 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" strokeLinecap="round" />
-            <circle cx="9" cy="13.5" r="1" fill="currentColor" stroke="none" />
-            <circle cx="15" cy="13.5" r="1" fill="currentColor" stroke="none" />
-            <path d="M9.5 17h5" strokeLinecap="round" />
-          </svg>
-        </div>
-
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">Need help?</div>
-          <div className="mt-0.5 text-xs text-slate-400">Ask our AI assistant</div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          onOpen?.();
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+            (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed = true;
+            setDismissed(true);
+          }
         }}
-        className="mt-3.5 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-[#0B1526] shadow-md transition hover:bg-blue-50 active:scale-[0.98]"
+        className="absolute -right-1 -top-1 hidden size-5 place-items-center rounded-full border border-[var(--border)] bg-white text-slate-500 shadow-sm transition hover:text-red-500 group-hover:grid dark:border-slate-700 dark:bg-slate-800"
       >
-        <MessageSquareText className="size-4" />
-        Open Chat
-      </button>
-    </div>
+        <X className="size-3" />
+      </span>
+
+      <Bot className="size-7" strokeWidth={1.8} />
+
+      {/* pulse ring — subtle */}
+      <span aria-hidden className="absolute inset-0 -z-10 animate-ping rounded-full bg-blue-500/20 [animation-duration:3s]" />
+    </button>
   );
 }

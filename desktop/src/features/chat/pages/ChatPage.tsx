@@ -2,16 +2,13 @@ import {
   AlertTriangle,
   Trash2,
   ArrowUp,
-  MessagesSquare,
   Bot,
   CheckCircle2,
   Clock3,
   History,
   Link2,
   Menu,
-  MessageSquare,
   Paperclip,
-  Plus,
   Ticket as TicketIcon,
   Search,
   Shield,
@@ -20,14 +17,11 @@ import {
   User,
   MessageSquareText,
   Check,
-  Pin,
   Pencil,
-  MoreHorizontal,
   Copy,
   Share2,
   Zap
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -61,10 +55,7 @@ import {
 import {
   listConversations,
   getConversationMessages,
-  deleteConversation,
-  clearConversations,
   renameConversation,
-  pinConversation,
 } from "@/features/conversations/api";
 import { createTicketApi } from "@/features/tickets/api";
 import { assignableUsers } from "@/features/users/api";
@@ -205,18 +196,6 @@ export default function Chat({
     }
   }
 
-  async function removeConversation(id: string) {
-    if (!window.confirm("Delete this conversation?")) return;
-    try {
-      await deleteConversation(id);
-      setConversations((prev) => (prev ?? []).filter((x) => x.session_id !== id));
-      if (selectedConversation === id) {
-        newChat();
-      }
-    } catch {
-      // ignore — item stays
-    }
-  }
 
   /* ----------------------------------------------------------
       SEND (streaming)
@@ -433,131 +412,6 @@ export default function Chat({
         <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMobileHistory(false)} />
       )}
 
-      {/* v0.22 — Conversation history panel (inner left panel under MASTER PageSidebar;
-          page navigation/brand/profile now live in the global PageSidebar) */}
-      {mobileHistory && (
-        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMobileHistory(false)} />
-      )}
-      <aside
-        className={[
-          "fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--card)] transition-transform lg:static lg:z-auto lg:translate-x-0",
-          mobileHistory ? "translate-x-0" : "-translate-x-full",
-        ].join(" ")}
-      >
-        {/* History header */}
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
-          <div className="flex items-center gap-2">
-            <MessagesSquare className="size-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-sm font-semibold">Conversations</span>
-          </div>
-          <button
-            onClick={newChat}
-            title="New conversation"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700"
-          >
-            <Plus className="size-3.5" /> New
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="border-b border-[var(--border)] px-3 py-2.5">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search conversations..."
-              className="h-9 w-full rounded-lg border border-[var(--border)] bg-background pl-9 pr-3 text-xs outline-none transition focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Conversation list */}
-        <div className="flex-1 overflow-y-auto px-2 py-2">
-          <div className="mb-1 flex items-center justify-between px-2 pt-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Recent conversations
-            </span>
-            {(conversations ?? []).length > 0 && (
-              <button
-                onClick={async () => {
-                  if (!window.confirm("Delete ALL conversations? This cannot be undone.")) return;
-                  try {
-                    await clearConversations();
-                    setConversations([]);
-                    newChat();
-                  } catch { /* ignore */ }
-                }}
-                title="Clear all conversations"
-                className="rounded p-1 text-muted-foreground transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
-              >
-                <Trash2 className="size-3" />
-              </button>
-            )}
-          </div>
-          {filteredConversations.map((c) => (
-            <div key={c.session_id} className="group relative mb-1">
-              <button
-                onClick={() => openConversation(c.session_id)}
-                className={[
-                  "w-full rounded-lg px-2.5 py-2 pr-7 text-left transition",
-                  selectedConversation === c.session_id
-                    ? "bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "hover:bg-muted",
-                ].join(" ")}
-              >
-                <div className="flex items-center gap-2">
-                  {c.is_pinned && <Pin className="size-3 shrink-0 rotate-45 text-blue-600 dark:text-blue-400" />}
-                  <MessageSquare
-                    className={[
-                      "size-3.5 shrink-0",
-                      selectedConversation === c.session_id ? "text-blue-600" : "text-muted-foreground",
-                    ].join(" ")}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
-                    {c.title || c.session_id.slice(0, 18)}
-                  </span>
-                </div>
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    aria-label="Conversation menu"
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition focus:opacity-100 hover:bg-muted group-hover:opacity-100"
-                  >
-                    <MoreHorizontal className="size-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={2} collisionPadding={8} side="bottom">
-                  <DropdownMenuItem
-                    onClick={() => pinConversation(c.session_id, !c.is_pinned).then(refreshConversations)}
-                  >
-                    <Pin className="size-3.5" /> {c.is_pinned ? "Unpin" : "Pin"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => { setRenameTarget({ id: c.session_id, title: c.title || "" }); setRenameValue(c.title || ""); }}
-                  >
-                    <Pencil className="size-3.5" /> Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => removeConversation(c.session_id)}
-                  >
-                    <Trash2 className="size-3.5" /> Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ))}
-          {(conversations ?? []).length === 0 && (
-            <p className="px-3 py-6 text-center text-[10px] text-muted-foreground">
-              No conversations yet — start chatting to see history here.
-            </p>
-          )}
-        </div>
-      </aside>
-
       {/* ================= MAIN CHAT ================= */}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
@@ -581,6 +435,13 @@ export default function Chat({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={newChat}
+              title="Start a new conversation"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-blue-700"
+            >
+              <Sparkles className="size-3.5" /> New chat
+            </button>
             <div className="hidden items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-[10px] sm:flex">
               <Shield className="size-3.5 text-emerald-600" />
               RBAC protected
