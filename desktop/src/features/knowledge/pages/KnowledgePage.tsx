@@ -28,7 +28,16 @@ import {
   Sparkles,
 } from "lucide-react";
 import { PageShell, PageHeader } from "@/components/ui/page";
-import { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/DomainClassifierManager";
+import {
+  ICON_OPTIONS,
+  COLOR_OPTIONS,
+  DomainClassifierManager,
+} from "@/features/domains/components/DomainClassifierManager";
+import {
+  ClassifierDomainItem,
+  getClassifierDomains,
+} from "@/features/domains/api";
+import { Layers } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +67,8 @@ import {
 type Props = {
   role: string;
   userName?: string;
+  perms?: Record<string, boolean>;
+  initialTab?: "articles" | "domains";
   onToast: (msg: string, kind?: "ok" | "err") => void;
 };
 
@@ -212,9 +223,43 @@ function formatDate(iso?: string | null) {
 
 export default function Knowledge({
   role,
+  userName: _userName,
+  perms,
+  initialTab = "articles",
   onToast,
 }: Props) {
   const canManage = role === "admin" || role === "agent";
+  const canManageDomains =
+    role === "admin" ||
+    role === "domain_manager" ||
+    !!perms?.manage_domains ||
+    !!perms?.manage_users;
+
+  const [activeTab, setActiveTab] = useState<"articles" | "domains">(
+    initialTab === "domains" && canManageDomains ? "domains" : "articles"
+  );
+  const [classifierDomains, setClassifierDomains] = useState<ClassifierDomainItem[]>([]);
+  const [domainsLoading, setDomainsLoading] = useState(false);
+  const [domainsError, setDomainsError] = useState<string | null>(null);
+
+  const loadClassifierData = async () => {
+    try {
+      setDomainsLoading(true);
+      setDomainsError(null);
+      const res = await getClassifierDomains();
+      setClassifierDomains(res.domains || []);
+    } catch (err: any) {
+      setDomainsError(err?.message || "Failed to load domain configuration");
+    } finally {
+      setDomainsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canManageDomains) {
+      loadClassifierData();
+    }
+  }, [canManageDomains]);
 
   const [domains, setDomains] =
     useState<DomainCard[] | null>(null);
@@ -422,12 +467,49 @@ export default function Knowledge({
     return (
     <PageShell>
       <PageHeader
-      icon={<BookOpen className="size-5" />}
-      badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : role === "knowledge" ? "Knowledge Manager" : "User"}
-        title="Knowledge Base"
-        description="Search and manage your IT knowledge base"
+        icon={activeTab === "domains" ? <Layers className="size-5" /> : <BookOpen className="size-5" />}
+        badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : role === "knowledge" ? "Knowledge Manager" : "User"}
+        title={activeTab === "domains" ? "Domain & Routing Manager" : "Knowledge Base"}
+        description={
+          activeTab === "domains"
+            ? "Manage classification domains, dynamic keywords, custom icons, and Jira escalation targets"
+            : "Search and manage your IT knowledge base articles and synchronization"
+        }
         actions={<>
-          <div
+          {canManageDomains && (
+            <div className="flex rounded-xl border border-[var(--border)] bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab("articles")}
+                className={[
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                  activeTab === "articles"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                <BookOpen className="size-3.5" />
+                Knowledge Base
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("domains")}
+                className={[
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                  activeTab === "domains"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                <Layers className="size-3.5" />
+                Manage Domains
+              </button>
+            </div>
+          )}
+
+          {activeTab === "articles" && (
+            <>
+              <div
                 className={[
                   "hidden items-center gap-2 rounded-xl border px-3 py-2 md:flex",
                   status?.healthy
@@ -476,8 +558,52 @@ export default function Knowledge({
                 />
                 Sync now
               </Button>
+            </>
+          )}
         </>}
       />
+
+      {activeTab === "domains" ? (
+        <main className="mx-auto max-w-[1400px] p-5 lg:p-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40 text-xs">
+              <h5 className="font-semibold text-sky-900 dark:text-sky-300 flex items-center gap-1.5 mb-1.5">
+                <span>📖</span> 1. Confluence Knowledge Base (Answer Retrieval)
+              </h5>
+              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                Based on keyword matching in user queries, the assistant automatically retrieves and references relevant <strong>Confluence KB Articles</strong> within this domain to formulate answers.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs">
+              <h5 className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-1.5">
+                <span>🎫</span> 2. Jira Ticket Routing (Escalation Target)
+              </h5>
+              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                When a query cannot be resolved automatically and the user requests escalation, tickets are routed to the assigned <strong>Jira Project Key (e.g. ITHD)</strong> for human IT follow-up.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-card text-card-foreground rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+            {domainsError && (
+              <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-sm border-b border-rose-200 dark:border-rose-900">
+                {domainsError}
+              </div>
+            )}
+
+            {domainsLoading && classifierDomains.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 text-sm">Loading domains configuration...</div>
+            ) : (
+              <DomainClassifierManager
+                domains={classifierDomains}
+                onRefresh={loadClassifierData}
+                canManage={canManageDomains}
+              />
+            )}
+          </div>
+        </main>
+      ) : (
 
           <div className="mx-auto max-w-[1400px] space-y-5 p-5 lg:p-8">
 
@@ -1252,7 +1378,9 @@ export default function Knowledge({
               )}
             </div>
           </div>
-              {/* ==========================================================
+          )}
+
+      {/* ==========================================================
           EDIT DIALOG
       ========================================================== */}
       <Dialog

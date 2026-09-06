@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useBranding } from "@/app/useBranding";
 import {
-  BookOpen, Home, Layers, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
+  BookOpen, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen, ScrollText,
   Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
@@ -45,9 +45,8 @@ export default function PageSidebar({
   const items: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
     { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
     { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
-    { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base" },
+    { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base & domains" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
-    { id: "domains", label: "Domains", icon: <Layers className="size-4" />, cap: "manage_domains", capLabel: "Manage routing domains & classifier rules" },
     { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
     { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review conversation history" },
     { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },

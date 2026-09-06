@@ -24,7 +24,7 @@ import ChatPage from "@/features/chat/pages/ChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import KnowledgePage from "@/features/knowledge/pages/KnowledgePage";
 import TicketsPage from "@/features/tickets/pages/TicketsPage";
-import DomainsPage from "@/features/domains/pages/DomainsPage";
+// import DomainsPage from "@/features/domains/pages/DomainsPage"; // retired: merged into KnowledgePage tabs
 import UsersPage from "@/features/users/pages/UsersPage";
 import ConversationHistoryPage from "@/features/conversations/pages/ConversationHistoryPage";
 import AuditsPage from "@/features/audits/pages/AuditsPage";
@@ -155,11 +155,11 @@ export default function App() {
     case "dashboard":
       return shell("dashboard", <DashboardPage userName={userName} role={role} />);
     case "articles":
-      return shell("articles", <KnowledgePage role={role} userName={userName} onToast={toast.push} />);
+      return shell("articles", <KnowledgePage role={role} userName={userName} perms={perms} onToast={toast.push} />);
     case "tickets":
       return shell("tickets", <TicketsPage role={role} userName={userName} onToast={toast.push} />);
     case "domains":
-      return shell("domains", <DomainsPage role={role} perms={perms} />);
+      return shell("articles", <KnowledgePage role={role} userName={userName} perms={perms} initialTab="domains" onToast={toast.push} />);
     case "users":
       return shell("users", <UsersPage />);
     case "history":
