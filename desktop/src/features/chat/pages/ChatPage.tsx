@@ -48,7 +48,6 @@ import {
   latestSources,
 } from "@/features/chat/model";
 import {
-  TypingIndicator,
   EmptyChat,
   Row,
 } from "@/features/chat/components/chat-parts";
@@ -479,7 +478,21 @@ export default function Chat({
                     onEditQuery={(text) => { setInput(text); window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 60); }}
                   />
                 ))}
-                {isTyping && <TypingIndicator stage={stage} />}
+        {isTyping && (
+          <div className="flex items-center gap-3">
+            <div className="grid size-9 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
+              <Bot className="size-5" />
+            </div>
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500 shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+              <span className="flex gap-1">
+                <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:0ms]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:150ms]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:300ms]" />
+              </span>
+              <span className="ml-1 text-[11px] font-medium">{stage || "Generating answer…"}</span>
+            </div>
+          </div>
+        )}
                 {chatNote && (
                   <div className="mx-auto w-fit rounded-full border bg-white px-3 py-1.5 text-[10px] font-medium shadow-sm dark:border-slate-700 dark:bg-slate-900">
                     {chatNote}
@@ -536,38 +549,38 @@ export default function Chat({
         )}
 
         {/* Composer */}
-        <div className="border-t border-[var(--border)] bg-[var(--topbar-bg)]">
-          <div className="mx-auto max-w-[1000px] px-4 py-4 lg:px-8">
+        <div className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-[#070B14]">
+          <div className="mx-auto max-w-[900px] px-4 py-3 lg:px-8">
             <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <Sparkles className="size-3 text-blue-500" />
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <Sparkles className="size-3.5 text-blue-500" />
                 Answers are grounded in your internal knowledge base.
               </div>
             </div>
 
             <form onSubmit={sendMessage} className="relative">
               {pendingFiles.length > 0 && (
-                  <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
-                    {pendingFiles.map((f) => (
-                      <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-[10px]">
-                        {f.mime.startsWith("image/") ? "🖼️" : "📄"} {f.filename}
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-red-500"
-                          onClick={() => setPendingFiles((p) => p.filter((x) => x.id !== f.id))}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-[#111827]">
+                <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
+                  {pendingFiles.map((f) => (
+                    <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-[10px]">
+                      {f.mime.startsWith("image/") ? "🖼️" : "📄"} {f.filename}
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-red-500"
+                        onClick={() => setPendingFiles((p) => p.filter((x) => x.id !== f.id))}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 shadow-xs transition-all focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600 dark:border-slate-700 dark:bg-slate-900">
                 <button
                   type="button"
                   disabled={uploading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-xl p-2.5 text-muted-foreground transition hover:bg-slate-100 hover:text-foreground disabled:opacity-50 dark:hover:bg-slate-800"
+                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                   title="Attach file or image"
                 >
                   <Paperclip className="size-4" />
@@ -603,20 +616,20 @@ export default function Chat({
                   }}
                   rows={1}
                   placeholder="Ask an IT question..."
-                  className="max-h-32 min-h-[42px] flex-1 resize-none bg-transparent px-2.5 py-2.5 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="max-h-32 min-h-[28px] flex-1 resize-none bg-transparent py-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isTyping}
                   aria-label="Send message"
-                  className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                  className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
                   <ArrowUp className="size-4" />
                 </button>
               </div>
             </form>
 
-            <div className="mt-2 text-center text-[10px] text-muted-foreground">
+            <div className="mt-2 text-center text-[10px] text-slate-400">
               AI-generated answers may require verification. Sensitive information is protected by RBAC.
             </div>
           </div>
@@ -964,8 +977,8 @@ function MessageBubble({
   return (
     <div className={["group/msg flex gap-3", isUser ? "justify-end" : "justify-start"].join(" ")}>
       {!isUser && (
-        <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm">
-          <Bot className="size-4" />
+        <div className="grid size-9 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
+          <Bot className="size-5" />
         </div>
       )}
 
