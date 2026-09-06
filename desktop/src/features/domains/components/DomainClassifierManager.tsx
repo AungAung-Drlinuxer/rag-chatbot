@@ -268,11 +268,13 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
   return (
     <div className="space-y-4">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-center justify-between px-6 py-4">
         <div>
-          <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Configured Routing Domains</h4>
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+            {isCreating ? "Add New Domain" : editingDomain ? `Edit Domain: ${editingDomain.display_name}` : "Domain List"}
+          </h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time keyword triggers, domain classifier thresholds, custom icons/colors, and Jira escalation project mapping.
+            Create and configure domains for knowledge articles — keywords, custom icons, and Jira escalation mapping.
           </p>
         </div>
         {canManage && !isCreating && !editingDomain && (
@@ -289,13 +291,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
 
       {/* Form (Create / Edit) */}
       {(isCreating || editingDomain) && (
-        <form onSubmit={handleSave} className="p-6 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-indigo-200 dark:border-indigo-900/50 m-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-              {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
-            </h5>
-            <span className="text-[10px] text-muted-foreground">Changes apply immediately to classification engine & Knowledge Base</span>
-          </div>
+        <form onSubmit={handleSave} className="p-5 rounded-xl border border-[var(--border)] bg-muted/20 space-y-4">
+          <h5 className="text-sm font-semibold text-slate-900 dark:text-white">Domain Information</h5>
 
           {error && (
             <div className="flex items-center gap-2 p-2.5 text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900">
@@ -428,22 +425,22 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </div>
 
             <div>
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                Knowledge Card Preview
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Preview
               </label>
-              <div className="p-3 rounded-xl border border-[var(--border)] bg-card shadow-xs">
-                <div className={`size-8 rounded-lg grid place-items-center mb-2 overflow-hidden ${previewColorDef.bgClass}`}>
+              <div className="rounded-xl border border-[var(--border)] bg-card shadow-xs p-4 flex flex-col items-center text-center">
+                <div className={`size-14 rounded-2xl grid place-items-center mb-3 overflow-hidden ${previewColorDef.bgClass}`}>
                   {customIcon ? (
-                    <img src={customIcon} alt="Custom icon preview" className="size-full object-contain p-1" />
+                    <img src={customIcon} alt="Custom icon preview" className="size-full object-contain p-2" />
                   ) : (
-                    <PreviewIconComp className={`size-4 ${previewColorDef.textClass}`} />
+                    <PreviewIconComp className={`size-7 ${previewColorDef.textClass}`} />
                   )}
                 </div>
-                <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-                  {displayName || "Domain Title"}
+                <div className="text-sm font-semibold text-slate-900 dark:text-white truncate max-w-full">
+                  {displayName || "Database"}
                 </div>
-                <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
-                  {description || "Domain description preview..."}
+                <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">
+                  This is a preview of how the domain will look.
                 </p>
               </div>
             </div>
