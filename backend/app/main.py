@@ -64,3 +64,5 @@ app.include_router(dashboard_router)
 app.include_router(tickets_router)
 app.include_router(users_router)
 app.include_router(settings_router)
+from app.api.domain_rename import router as domain_rename_router
+app.include_router(domain_rename_router)

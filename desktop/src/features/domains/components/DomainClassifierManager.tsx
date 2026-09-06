@@ -29,6 +29,7 @@ import {
   createClassifierDomain,
   updateClassifierDomain,
   deleteClassifierDomain,
+  renameClassifierDomain,
 } from "@/features/domains/api";
 
 interface Props {
@@ -218,6 +219,19 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           is_active: isActive,
         });
       } else if (editingDomain) {
+        // Rename first if the key changed (atomic cascade), then update the rest.
+        if (domainKey.trim().toLowerCase() !== editingDomain.domain_key) {
+          if (
+            !confirm(
+              `Rename domain key "${editingDomain.domain_key}" → "${domainKey.trim().toLowerCase()}"?\n\n` +
+                "This migrates all KB pages and stored vector metadata in one transaction and cannot be undone."
+            )
+          ) {
+            setLoading(false);
+            return;
+          }
+          await renameClassifierDomain(editingDomain.id, domainKey.trim().toLowerCase());
+        }
         await updateClassifierDomain(editingDomain.id, {
           display_name: displayName.trim(),
           description: description.trim() || undefined,
@@ -292,18 +306,28 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Domain Key (Unique Identifier)
+                {!isCreating && domainKey !== (editingDomain?.domain_key || "") && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                    <AlertCircle className="size-3" /> Rename — cascades to KB & vectors
+                  </span>
+                )}
               </label>
               <input
                 type="text"
-                disabled={!isCreating}
                 value={domainKey}
-                onChange={(e) => setDomainKey(e.target.value)}
+                onChange={(e) => setDomainKey(e.target.value.toLowerCase())}
                 placeholder="e.g. help_desk, inventory, hr"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-50"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
                 required
               />
+              {!isCreating && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Editing the key renames it across the classifier engine, KB pages, and stored vector metadata in one atomic transaction.
+                  Confluence space-bound keys cannot be renamed here.
+                </p>
+              )}
             </div>
 
             <div>

@@ -73,6 +73,22 @@ export async function updateClassifierDomain(
   return r.json();
 }
 
+export async function renameClassifierDomain(
+  id: number,
+  new_domain_key: string
+): Promise<{ status: string; id: number; old_domain_key: string; domain_key: string; kb_pages_migrated: number }> {
+  const r = await apiFetch(`${BASE}/api/admin/domains/${id}/rename`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ new_domain_key }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.detail || `failed to rename domain (HTTP ${r.status})`);
+  }
+  return r.json();
+}
+
 export async function deleteClassifierDomain(id: number): Promise<{ status: string; action: string }> {
   const r = await apiFetch(`${BASE}/api/admin/domains/${id}`, {
     method: "DELETE",
