@@ -253,6 +253,8 @@ class ClassifierDomain(Base):
     keywords: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
     jira_project: Mapped[str | None] = mapped_column(String(32))
     jira_assignee: Mapped[str | None] = mapped_column(String(64))
+    icon: Mapped[str | None] = mapped_column(String(32), default="BookOpen", server_default="BookOpen")
+    color: Mapped[str | None] = mapped_column(String(32), default="blue", server_default="blue")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

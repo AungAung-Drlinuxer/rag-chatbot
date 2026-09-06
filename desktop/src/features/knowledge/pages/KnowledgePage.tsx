@@ -28,6 +28,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { PageShell, PageHeader } from "@/components/ui/page";
+import { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/DomainClassifierManager";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,8 @@ type DomainCard = {
   domain: string;
   display_name?: string;
   description?: string;
+  icon?: string;
+  color?: string;
   pages: number;
   last_synced: string | null;
 };
@@ -155,10 +158,20 @@ const DOMAIN_META: Record<
 
 function metaFor(domain?: string, card?: DomainCard) {
   const fallback = DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
+
+  // 1. Resolve dynamic icon if provided in card
+  const dynamicIconComp = card?.icon && ICON_OPTIONS[card.icon]?.icon;
+  const resolvedIcon = dynamicIconComp || fallback.icon;
+
+  // 2. Resolve dynamic color if provided in card
+  const dynamicColorDef = card?.color && COLOR_OPTIONS[card.color];
+  const resolvedIconClass = dynamicColorDef ? dynamicColorDef.textClass : fallback.iconClass;
+  const resolvedBgClass = dynamicColorDef ? dynamicColorDef.bgClass : fallback.bgClass;
+
   return {
-    icon: fallback.icon,
-    iconClass: fallback.iconClass,
-    bgClass: fallback.bgClass,
+    icon: resolvedIcon,
+    iconClass: resolvedIconClass,
+    bgClass: resolvedBgClass,
     label: card?.display_name || fallback.label,
     description: card?.description || fallback.description,
   };

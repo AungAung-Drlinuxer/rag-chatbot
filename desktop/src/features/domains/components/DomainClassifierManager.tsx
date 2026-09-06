@@ -1,5 +1,28 @@
 import React, { useState } from "react";
-import { Plus, Tag, Trash2, Edit2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import {
+  Plus,
+  Tag,
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Database,
+  Network,
+  Lock,
+  Monitor,
+  Cloud,
+  Server,
+  BookOpen,
+  Headphones,
+  Boxes,
+  Mail,
+  Shield,
+  Layers,
+  Wrench,
+  Cpu,
+  Key,
+} from "lucide-react";
 import {
   ClassifierDomainItem,
   createClassifierDomain,
@@ -13,6 +36,86 @@ interface Props {
   canManage: boolean;
 }
 
+export const ICON_OPTIONS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+  Database: { label: "Database", icon: Database },
+  Network: { label: "Network", icon: Network },
+  Lock: { label: "Security / Lock", icon: Lock },
+  Monitor: { label: "Server / Monitor", icon: Monitor },
+  Cloud: { label: "Cloud / K8s", icon: Cloud },
+  Server: { label: "Storage / Server", icon: Server },
+  Headphones: { label: "Help Desk", icon: Headphones },
+  Boxes: { label: "Inventory / Assets", icon: Boxes },
+  Mail: { label: "Email", icon: Mail },
+  Shield: { label: "Shield / Security", icon: Shield },
+  Layers: { label: "Layers / Apps", icon: Layers },
+  Wrench: { label: "Wrench / Maintenance", icon: Wrench },
+  Cpu: { label: "CPU / Hardware", icon: Cpu },
+  Key: { label: "Key / Identity", icon: Key },
+  BookOpen: { label: "General / Book", icon: BookOpen },
+};
+
+export const COLOR_OPTIONS: Record<
+  string,
+  { label: string; textClass: string; bgClass: string; borderClass: string; swatchBg: string }
+> = {
+  blue: {
+    label: "Blue",
+    textClass: "text-blue-600 dark:text-blue-400",
+    bgClass: "bg-blue-50 dark:bg-blue-950/40",
+    borderClass: "border-blue-200 dark:border-blue-900/50",
+    swatchBg: "bg-blue-500",
+  },
+  emerald: {
+    label: "Emerald",
+    textClass: "text-emerald-600 dark:text-emerald-400",
+    bgClass: "bg-emerald-50 dark:bg-emerald-950/40",
+    borderClass: "border-emerald-200 dark:border-emerald-900/50",
+    swatchBg: "bg-emerald-500",
+  },
+  amber: {
+    label: "Amber",
+    textClass: "text-amber-600 dark:text-amber-400",
+    bgClass: "bg-amber-50 dark:bg-amber-950/40",
+    borderClass: "border-amber-200 dark:border-amber-900/50",
+    swatchBg: "bg-amber-500",
+  },
+  violet: {
+    label: "Violet",
+    textClass: "text-violet-600 dark:text-violet-400",
+    bgClass: "bg-violet-50 dark:bg-violet-950/40",
+    borderClass: "border-violet-200 dark:border-violet-900/50",
+    swatchBg: "bg-violet-500",
+  },
+  sky: {
+    label: "Sky",
+    textClass: "text-sky-600 dark:text-sky-400",
+    bgClass: "bg-sky-50 dark:bg-sky-950/40",
+    borderClass: "border-sky-200 dark:border-sky-900/50",
+    swatchBg: "bg-sky-500",
+  },
+  orange: {
+    label: "Orange",
+    textClass: "text-orange-600 dark:text-orange-400",
+    bgClass: "bg-orange-50 dark:bg-orange-950/40",
+    borderClass: "border-orange-200 dark:border-orange-900/50",
+    swatchBg: "bg-orange-500",
+  },
+  rose: {
+    label: "Rose",
+    textClass: "text-rose-600 dark:text-rose-400",
+    bgClass: "bg-rose-50 dark:bg-rose-950/40",
+    borderClass: "border-rose-200 dark:border-rose-900/50",
+    swatchBg: "bg-rose-500",
+  },
+  slate: {
+    label: "Slate",
+    textClass: "text-slate-600 dark:text-slate-400",
+    bgClass: "bg-slate-100 dark:bg-slate-900",
+    borderClass: "border-slate-200 dark:border-slate-800",
+    swatchBg: "bg-slate-500",
+  },
+};
+
 export function DomainClassifierManager({ domains, onRefresh, canManage }: Props) {
   const [editingDomain, setEditingDomain] = useState<ClassifierDomainItem | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -23,6 +126,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
   const [description, setDescription] = useState("");
   const [jiraProject, setJiraProject] = useState("");
   const [keywordsText, setKeywordsText] = useState("");
+  const [selectedIcon, setSelectedIcon] = useState("BookOpen");
+  const [selectedColor, setSelectedColor] = useState("blue");
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +140,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
     setDescription("");
     setJiraProject("");
     setKeywordsText("");
+    setSelectedIcon("BookOpen");
+    setSelectedColor("blue");
     setIsActive(true);
     setError(null);
   };
@@ -47,6 +154,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
     setDescription(d.description || "");
     setJiraProject(d.jira_project || "");
     setKeywordsText(d.keywords.join(", "));
+    setSelectedIcon(d.icon || "BookOpen");
+    setSelectedColor(d.color || "blue");
     setIsActive(d.is_active);
     setError(null);
   };
@@ -78,6 +187,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           description: description.trim() || undefined,
           keywords: kwList,
           jira_project: jiraProject.trim() || undefined,
+          icon: selectedIcon,
+          color: selectedColor,
           is_active: isActive,
         });
       } else if (editingDomain) {
@@ -86,6 +197,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           description: description.trim() || undefined,
           keywords: kwList,
           jira_project: jiraProject.trim() || undefined,
+          icon: selectedIcon,
+          color: selectedColor,
           is_active: isActive,
         });
       }
@@ -99,7 +212,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
   };
 
   const handleDelete = async (d: ClassifierDomainItem) => {
-    if (!confirm(`Are you sure you want to delete or deactivate domain "${d.display_name}"?`)) return;
+    if (!confirm(`Are you sure you want to delete domain "${d.display_name}"?`)) return;
     try {
       await deleteClassifierDomain(d.id);
       onRefresh();
@@ -108,6 +221,9 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
     }
   };
 
+  const PreviewIconComp = ICON_OPTIONS[selectedIcon]?.icon || BookOpen;
+  const previewColorDef = COLOR_OPTIONS[selectedColor] || COLOR_OPTIONS.blue;
+
   return (
     <div className="space-y-4">
       {/* Header bar */}
@@ -115,7 +231,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
         <div>
           <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Configured Routing Domains</h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time keyword triggers, domain classifier thresholds, and Jira escalation project mapping.
+            Real-time keyword triggers, domain classifier thresholds, custom icons/colors, and Jira escalation project mapping.
           </p>
         </div>
         {canManage && !isCreating && !editingDomain && (
@@ -137,7 +253,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
               {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
             </h5>
-            <span className="text-2xs text-slate-400">Changes apply immediately to classification engine</span>
+            <span className="text-2xs text-slate-400">Changes apply immediately to classification engine & Knowledge Base</span>
           </div>
 
           {error && (
@@ -157,7 +273,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 disabled={!isCreating}
                 value={domainKey}
                 onChange={(e) => setDomainKey(e.target.value)}
-                placeholder="e.g. hr, sap, hardware"
+                placeholder="e.g. help_desk, inventory, hr"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white disabled:opacity-50"
                 required
               />
@@ -171,10 +287,66 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Human Resources & Benefits"
+                placeholder="e.g. Help Desk & End-User Support"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 required
               />
+            </div>
+          </div>
+
+          {/* Icon and Color Picker with Live Preview */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-[var(--border)] bg-white dark:bg-slate-900">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Card Icon
+              </label>
+              <select
+                value={selectedIcon}
+                onChange={(e) => setSelectedIcon(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-slate-900 dark:text-white outline-none"
+              >
+                {Object.entries(ICON_OPTIONS).map(([key, opt]) => (
+                  <option key={key} value={key}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Accent Theme Color
+              </label>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {Object.entries(COLOR_OPTIONS).map(([key, opt]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    title={opt.label}
+                    onClick={() => setSelectedColor(key)}
+                    className={`size-6 rounded-full ${opt.swatchBg} transition-transform ${
+                      selectedColor === key ? "ring-2 ring-offset-2 ring-indigo-500 scale-110" : "opacity-80 hover:opacity-100"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                Knowledge Card Preview
+              </label>
+              <div className="p-3 rounded-xl border border-[var(--border)] bg-card shadow-xs">
+                <div className={`size-8 rounded-lg grid place-items-center mb-2 ${previewColorDef.bgClass}`}>
+                  <PreviewIconComp className={`size-4 ${previewColorDef.textClass}`} />
+                </div>
+                <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                  {displayName || "Domain Title"}
+                </div>
+                <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                  {description || "Domain description preview..."}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -261,70 +433,79 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
 
       {/* Domain Cards List */}
       <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-        {domains.map((d) => (
-          <div key={d.id} className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition">
-            <div className="space-y-2 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm text-slate-900 dark:text-white">{d.display_name}</span>
-                <span className="px-2 py-0.5 rounded-full text-2xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  {d.domain_key}
-                </span>
-                {d.is_active ? (
-                  <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3 h-3" /> Active
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-2xs text-slate-400">
-                    <XCircle className="w-3 h-3" /> Inactive
-                  </span>
-                )}
-                {d.jira_project && (
-                  <span className="px-1.5 py-0.5 rounded text-2xs bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
-                    Jira: {d.jira_project}
-                  </span>
-                )}
+        {domains.map((d) => {
+          const IconComp = (d.icon && ICON_OPTIONS[d.icon]?.icon) || BookOpen;
+          const colorDef = (d.color && COLOR_OPTIONS[d.color]) || COLOR_OPTIONS.blue;
+          return (
+            <div key={d.id} className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition">
+              <div className="space-y-2 min-w-0 flex items-start gap-4">
+                <div className={`size-10 rounded-xl grid place-items-center shrink-0 mt-0.5 ${colorDef.bgClass}`}>
+                  <IconComp className={`size-5 ${colorDef.textClass}`} />
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-sm text-slate-900 dark:text-white">{d.display_name}</span>
+                    <span className="px-2 py-0.5 rounded-full text-2xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      {d.domain_key}
+                    </span>
+                    {d.is_active ? (
+                      <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3" /> Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-2xs text-slate-400">
+                        <XCircle className="w-3 h-3" /> Inactive
+                      </span>
+                    )}
+                    {d.jira_project && (
+                      <span className="px-1.5 py-0.5 rounded text-2xs bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
+                        Jira: {d.jira_project}
+                      </span>
+                    )}
+                  </div>
+
+                  {d.description && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{d.description}</p>
+                  )}
+
+                  {/* Keywords badge preview */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {d.keywords.map((kw, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                      >
+                        <Tag className="w-2.5 h-2.5 opacity-40" />
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {d.description && (
-                <p className="text-xs text-slate-500 dark:text-slate-400">{d.description}</p>
-              )}
-
-              {/* Keywords badge preview */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {d.keywords.map((kw, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+              {canManage && (
+                <div className="flex items-center gap-2 self-end sm:self-start shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(d)}
+                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition"
+                    title="Edit domain"
                   >
-                    <Tag className="w-2.5 h-2.5 opacity-40" />
-                    {kw}
-                  </span>
-                ))}
-              </div>
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(d)}
+                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition"
+                    title="Delete domain"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
-
-            {canManage && (
-              <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-center">
-                <button
-                  type="button"
-                  onClick={() => startEdit(d)}
-                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                  title="Edit Domain"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(d)}
-                  className="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                  title="Delete/Deactivate"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

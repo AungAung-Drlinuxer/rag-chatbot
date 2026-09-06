@@ -70,6 +70,8 @@ class DomainCreateRequest(BaseModel):
     keywords: list[str] = Field(default_factory=list, description="Keywords/phrases for classifier matching")
     jira_project: str | None = Field(None, max_length=32)
     jira_assignee: str | None = Field(None, max_length=64)
+    icon: str | None = Field("BookOpen", max_length=32)
+    color: str | None = Field("blue", max_length=32)
     is_active: bool = True
 
 class DomainUpdateRequest(BaseModel):
@@ -78,4 +80,6 @@ class DomainUpdateRequest(BaseModel):
     keywords: list[str] | None = None
     jira_project: str | None = None
     jira_assignee: str | None = None
+    icon: str | None = None
+    color: str | None = None
     is_active: bool | None = None

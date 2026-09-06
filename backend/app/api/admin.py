@@ -178,6 +178,8 @@ def list_domains(user: str = Depends(require_cap("manage_domains"))) -> dict:
                     "keywords": d.keywords,
                     "jira_project": d.jira_project,
                     "jira_assignee": d.jira_assignee,
+                    "icon": d.icon or "BookOpen",
+                    "color": d.color or "blue",
                     "is_active": d.is_active,
                     "created_at": d.created_at.isoformat() if d.created_at else None,
                     "updated_at": d.updated_at.isoformat() if d.updated_at else None,
@@ -206,6 +208,8 @@ def create_domain(req: DomainCreateRequest,
             keywords=cleaned_keywords,
             jira_project=req.jira_project.strip() if req.jira_project else None,
             jira_assignee=req.jira_assignee.strip() if req.jira_assignee else None,
+            icon=req.icon.strip() if req.icon else "BookOpen",
+            color=req.color.strip() if req.color else "blue",
             is_active=req.is_active,
         )
         s.add(d)
@@ -238,6 +242,10 @@ def update_domain(domain_id: int,
             d.jira_project = req.jira_project.strip() if req.jira_project else None
         if req.jira_assignee is not None:
             d.jira_assignee = req.jira_assignee.strip() if req.jira_assignee else None
+        if req.icon is not None:
+            d.icon = req.icon.strip() if req.icon else "BookOpen"
+        if req.color is not None:
+            d.color = req.color.strip() if req.color else "blue"
         if req.is_active is not None:
             d.is_active = req.is_active
 

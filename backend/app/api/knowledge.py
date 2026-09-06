@@ -120,6 +120,8 @@ def article_domains(user: str = Depends(get_current_user)) -> dict:
             d.domain_key: {
                 "display_name": d.display_name,
                 "description": d.description,
+                "icon": d.icon or "BookOpen",
+                "color": d.color or "blue",
             }
             for d in db_domains
         }
@@ -154,6 +156,8 @@ def article_domains(user: str = Depends(get_current_user)) -> dict:
             "domain": k,
             "display_name": m.get("display_name") or k.capitalize(),
             "description": m.get("description") or f"Guides and resources for {k}.",
+            "icon": m.get("icon") or "BookOpen",
+            "color": m.get("color") or "blue",
             "pages": c["pages"],
             "last_synced": c["last_synced"],
         })
