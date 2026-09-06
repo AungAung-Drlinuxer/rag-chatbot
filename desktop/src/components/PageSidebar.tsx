@@ -112,35 +112,38 @@ export default function PageSidebar({
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-100">{branding.appName || "IT Help Chatbot"}</div>
           </div>
-          <div className="ml-auto mr-1 flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("ith:restore-assistant-btn"));
-              }}
-              title="Show floating assistant button"
-              aria-label="Show floating assistant button"
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
-            >
-              <Bot className="size-4" />
-            </button>
-            {canManage && (
-              <NotificationBell notices={notices} onOpen={onNavigate} />
-            )}
-          </div>
-          {onToggleCollapsed && (
-            <button
-              type="button"
-              onClick={onToggleCollapsed}
-              title="Collapse sidebar (Ctrl+B)"
-              aria-label="Collapse sidebar"
-              className="ml-auto rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-            >
-              <PanelLeftClose className="size-4" />
-            </button>
-          )}
+  
         </div>
       )}
+
+      {/* v0.22 — action icons row below brand (bot restore / notifications / collapse) */}
+      <div className={"flex items-center justify-end gap-1 border-b border-[var(--sidebar-border)] px-4 py-2 " + (collapsed ? "justify-center px-2" : "")}>
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("ith:restore-assistant-btn"));
+          }}
+          title="Show floating assistant button"
+          aria-label="Show floating assistant button"
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+        >
+          <Bot className="size-4" />
+        </button>
+        {canManage && (
+          <NotificationBell notices={notices} onOpen={onNavigate} />
+        )}
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+          >
+            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          </button>
+        )}
+      </div>
 
       <nav className={"flex-1 py-4 " + (collapsed ? "px-2" : "px-3")}>
         {items.map((item) => {

@@ -328,6 +328,18 @@ export default function Chat({
     setMobileHistory(false);
   }
 
+  // Ctrl+N / Cmd+N — new chat shortcut
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        newChat();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   /* ----------------------------------------------------------
       ESCALATE → /api/escalate
   ---------------------------------------------------------- */
