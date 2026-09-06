@@ -168,7 +168,7 @@ const DOMAIN_META: Record<
   },
 };
 
-function metaFor(domain?: string, card?: DomainCard) {
+function metaForBase(domain?: string, card?: DomainCard) {
   const fallback = DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
 
   // 1. Resolve dynamic icon if provided in card
@@ -264,6 +264,17 @@ export default function Knowledge({
   const [domains, setDomains] =
     useState<DomainCard[] | null>(null);
 
+  // v0.22.x — key -> card lookup so metaFor(x) calls without an explicit card
+  // still pick up DB-driven display_name / icon / custom_icon.
+  const domainCardMap = useMemo(() => {
+    const map = new Map<string, DomainCard>();
+    (domains ?? []).forEach((card) => map.set(card.domain, card));
+    return map;
+  }, [domains]);
+
+  const metaFor = (domain?: string, card?: DomainCard) =>
+    metaForBase(domain, card ?? domainCardMap.get(domain ?? "general"));
+
   const [recent, setRecent] =
     useState<RecentItem[] | null>(null);
 
@@ -346,8 +357,10 @@ export default function Knowledge({
   }, [manageOpen, chip]);
 
   const chips = useMemo(() => {
-    const names = (domains ?? []).map(
-      (item) => item.domain
+    // v0.22.x — dedupe domain names (a domain could theoretically appear
+    // twice if kb_meta rows and the classifier list disagree).
+    const names = Array.from(
+      new Set((domains ?? []).map((item) => item.domain))
     );
 
     return [
