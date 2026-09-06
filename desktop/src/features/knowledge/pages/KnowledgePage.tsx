@@ -1,55 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
+  Check,
   Clock3,
-  Cloud,
-  Database,
   ExternalLink,
-  FilePlus2,
-  FileText,
-  Globe,
-  Lock,
-  Monitor,
-  Pencil,
+  Layers,
   Plus,
-  RefreshCcw,
   RefreshCw,
   Search,
-  Server,
-  Settings,
-  MoveHorizontal,
-  Trash2,
-  X,
   Sparkles,
+  Trash2,
 } from "lucide-react";
-import { PageShell, PageHeader } from "@/components/ui/page";
-import {
-  ICON_OPTIONS,
-  COLOR_OPTIONS,
-  DomainClassifierManager,
-} from "@/features/domains/components/DomainClassifierManager";
-import {
-  ClassifierDomainItem,
-  getClassifierDomains,
-} from "@/features/domains/api";
-import { Layers } from "lucide-react";
-
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 import {
   searchArticles,
@@ -59,13 +20,35 @@ import {
   triggerSync,
   articleDraft,
   listArticleDomains,
-  listRecentArticles,
   getSyncStatus,
   listArticles,
 } from "@/features/knowledge/api";
 
+import {
+  getClassifierDomains,
+  type ClassifierDomainItem,
+} from "@/features/domains/api";
+import {
+  COLOR_OPTIONS,
+  DomainClassifierManager,
+  ICON_OPTIONS,
+} from "@/features/domains/components/DomainClassifierManager";
+
+import { PageShell, PageHeader } from "@/components/ui/page";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
 type Props = {
-  role: string;
+  role?: string;
   userName?: string;
   perms?: Record<string, boolean>;
   initialTab?: "articles" | "domains";
@@ -99,145 +82,105 @@ type SyncStatus = {
   pages: number;
   last_run: {
     at: string;
-    inserted: number;
-    updated: number;
-    skipped: number;
+    duration_ms: number;
+    pages_created: number;
+    pages_updated: number;
   } | null;
   healthy: boolean;
   beat_interval_minutes: number;
 };
 
+/* ==============================================================
+   FALLBACK METADATA
+============================================================== */
+
 const DOMAIN_META: Record<
   string,
   {
-    icon: typeof Database;
     label: string;
     description: string;
+    icon: any;
     iconClass: string;
     bgClass: string;
   }
 > = {
   database: {
-    icon: Database,
     label: "Database",
-    description: "DB installation, performance, backup, connection issues.",
-    iconClass: "text-blue-600",
-    bgClass: "bg-blue-50 dark:bg-blue-950/30",
+    description: "PostgreSQL, Oracle, SQL, deadlocks, performance",
+    icon: BookOpen,
+    iconClass: "text-blue-600 dark:text-blue-400",
+    bgClass: "bg-blue-50 dark:bg-blue-950/40",
   },
   network: {
-    icon: Globe,
-    label: "Network",
-    description: "Network connectivity, DNS, VPN, firewall.",
-    iconClass: "text-emerald-600",
-    bgClass: "bg-emerald-50 dark:bg-emerald-950/30",
+    label: "Network & Connectivity",
+    description: "VPN, Wi-Fi, DNS, firewall, routing issues",
+    icon: BookOpen,
+    iconClass: "text-emerald-600 dark:text-emerald-400",
+    bgClass: "bg-emerald-50 dark:bg-emerald-950/40",
   },
   security: {
-    icon: Lock,
-    label: "Security",
-    description: "Access control, permissions, MFA, security policies.",
-    iconClass: "text-amber-600",
-    bgClass: "bg-amber-50 dark:bg-amber-950/30",
+    label: "Security & Identity",
+    description: "Passwords, MFA, permissions, access requests",
+    icon: BookOpen,
+    iconClass: "text-purple-600 dark:text-purple-400",
+    bgClass: "bg-purple-50 dark:bg-purple-950/40",
   },
   server: {
-    icon: Monitor,
-    label: "Server",
-    description: "Server OS, services, applications, patching, monitoring.",
-    iconClass: "text-violet-600",
-    bgClass: "bg-violet-50 dark:bg-violet-950/30",
+    label: "Server & Hardware",
+    description: "Linux, Windows, hardware, virtualization",
+    icon: BookOpen,
+    iconClass: "text-indigo-600 dark:text-indigo-400",
+    bgClass: "bg-indigo-50 dark:bg-indigo-950/40",
   },
   kubernetes: {
-    icon: Cloud,
-    label: "Kubernetes",
-    description: "K8s, containers, cluster operations.",
-    iconClass: "text-sky-600",
-    bgClass: "bg-sky-50 dark:bg-sky-950/30",
+    label: "Kubernetes & Cloud",
+    description: "Pods, deployments, clusters, cloud infrastructure",
+    icon: BookOpen,
+    iconClass: "text-sky-600 dark:text-sky-400",
+    bgClass: "bg-sky-50 dark:bg-sky-950/40",
   },
   storage: {
-    icon: Server,
-    label: "Storage",
-    description: "SAN/NAS, disks, backup targets.",
-    iconClass: "text-orange-600",
-    bgClass: "bg-orange-50 dark:bg-orange-950/30",
+    label: "Storage & Backups",
+    description: "NFS, SAN, disk space, backup & restore",
+    icon: BookOpen,
+    iconClass: "text-cyan-600 dark:text-cyan-400",
+    bgClass: "bg-cyan-50 dark:bg-cyan-950/40",
+  },
+  help_desk: {
+    label: "Help Desk & Support",
+    description: "General troubleshooting, desktop apps, user onboarding",
+    icon: BookOpen,
+    iconClass: "text-amber-600 dark:text-amber-400",
+    bgClass: "bg-amber-50 dark:bg-amber-950/40",
   },
   general: {
+    label: "General IT",
+    description: "All other IT questions, company policy, miscellaneous",
     icon: BookOpen,
-    label: "General",
-    description: "General IT guides and quick reference.",
-    iconClass: "text-slate-600",
-    bgClass: "bg-slate-100 dark:bg-slate-900",
+    iconClass: "text-slate-600 dark:text-slate-400",
+    bgClass: "bg-slate-100 dark:bg-slate-800",
   },
 };
 
-function metaForBase(domain?: string, card?: DomainCard) {
-  const fallback = DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
-
-  // 1. Resolve dynamic icon if provided in card
-  const dynamicIconComp = card?.icon && ICON_OPTIONS[card.icon]?.icon;
-  const resolvedIcon = dynamicIconComp || fallback.icon;
-
-  // 2. Resolve dynamic color if provided in card
-  const dynamicColorDef = card?.color && COLOR_OPTIONS[card.color];
-  const resolvedIconClass = dynamicColorDef ? dynamicColorDef.textClass : fallback.iconClass;
-  const resolvedBgClass = dynamicColorDef ? dynamicColorDef.bgClass : fallback.bgClass;
-
-  return {
-    icon: resolvedIcon,
-    iconClass: resolvedIconClass,
-    bgClass: resolvedBgClass,
-    customIcon: card?.custom_icon,
-    label: card?.display_name || fallback.label,
-    description: card?.description || fallback.description,
-  };
-}
-
-
 function relTime(iso?: string | null) {
-  if (!iso) return "—";
-
+  if (!iso) return "never";
   const d = new Date(iso).getTime();
-  const mins = Math.max(
-    0,
-    Math.round((Date.now() - d) / 60000)
-  );
-
+  const mins = Math.max(0, Math.round((Date.now() - d) / 60000));
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
-
   const hours = Math.round(mins / 60);
-
   if (hours < 24) return `${hours}h ago`;
-
   return `${Math.round(hours / 24)}d ago`;
-}
-
-function formatDate(iso?: string | null) {
-  if (!iso) return "—";
-
-  const d = new Date(iso);
-
-  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
 }
 
 export default function Knowledge({
   role,
-  userName: _userName,
-  perms,
-  initialTab = "articles",
   onToast,
 }: Props) {
   const canManage = role === "admin" || role === "agent";
-  const canManageDomains =
-    role === "admin" ||
-    role === "domain_manager" ||
-    !!perms?.manage_domains ||
-    !!perms?.manage_users;
+  const canManageDomains = role === "admin" || role === "domain_manager";
 
-  const [activeTab, setActiveTab] = useState<"articles" | "domains">(
-    initialTab === "domains" && canManageDomains ? "domains" : "articles"
-  );
+  // Classifier Domain State
   const [classifierDomains, setClassifierDomains] = useState<ClassifierDomainItem[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
   const [domainsError, setDomainsError] = useState<string | null>(null);
@@ -247,51 +190,64 @@ export default function Knowledge({
       setDomainsLoading(true);
       setDomainsError(null);
       const res = await getClassifierDomains();
-      setClassifierDomains(res.domains || []);
-    } catch (err: any) {
-      setDomainsError(err?.message || "Failed to load domain configuration");
+      setClassifierDomains(res.domains ?? []);
+    } catch (e: any) {
+      setDomainsError(e?.message || "Failed to load domain configuration");
     } finally {
       setDomainsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (canManageDomains) {
-      loadClassifierData();
-    }
-  }, [canManageDomains]);
+    loadClassifierData();
+  }, []);
 
-  const [domains, setDomains] =
-    useState<DomainCard[] | null>(null);
+  // Article / Knowledge Base State
+  const [domains, setDomains] = useState<DomainCard[] | null>(null);
 
-  // v0.22.x — key -> card lookup so metaFor(x) calls without an explicit card
-  // still pick up DB-driven display_name / icon / custom_icon.
   const domainCardMap = useMemo(() => {
-    const map = new Map<string, DomainCard>();
-    (domains ?? []).forEach((card) => map.set(card.domain, card));
+    const map = new Map<string, any>();
+    classifierDomains.forEach((d: any) => {
+      map.set(d.domain_key, {
+        domain: d.domain_key,
+        display_name: d.display_name,
+        description: d.description,
+        icon: d.icon || undefined,
+        color: d.color || undefined,
+        custom_icon: d.custom_icon || null,
+        pages: 0,
+        last_synced: null,
+      });
+    });
     return map;
-  }, [domains]);
+  }, [classifierDomains]);
 
-  const metaFor = (domain?: string, card?: DomainCard) =>
-    metaForBase(domain, card ?? domainCardMap.get(domain ?? "general"));
+  const metaFor = (domain?: string) => {
+    const card = domain ? domainCardMap.get(domain) : undefined;
+    const fallback = DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
+    const dynamicIconComp = card?.icon && ICON_OPTIONS[card.icon]?.icon;
+    const resolvedIcon = dynamicIconComp || fallback.icon;
+    const dynamicColorDef = card?.color && COLOR_OPTIONS[card.color];
+    const resolvedIconClass = dynamicColorDef ? dynamicColorDef.textClass : fallback.iconClass;
+    const resolvedBgClass = dynamicColorDef ? dynamicColorDef.bgClass : fallback.bgClass;
 
-  const [recent, setRecent] =
-    useState<RecentItem[] | null>(null);
+    return {
+      label: fallback.label,
+      description: fallback.description,
+      icon: resolvedIcon,
+      iconClass: resolvedIconClass,
+      bgClass: resolvedBgClass,
+      custom_icon: card?.custom_icon,
+    };
+  };
 
-  const [items, setItems] =
-    useState<ListItem[] | null>(null);
-
-  const [status, setStatus] =
-    useState<SyncStatus | null>(null);
+  const [items, setItems] = useState<ListItem[] | null>(null);
+  const [status, setStatus] = useState<SyncStatus | null>(null);
 
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState("all");
-
   const [busy, setBusy] = useState(false);
   const [listing, setListing] = useState(false);
-
-  const [manageOpen, setManageOpen] =
-    useState(canManage);
 
   const [edit, setEdit] = useState<{
     page_id: string;
@@ -303,90 +259,58 @@ export default function Knowledge({
   const [page, setPage] = useState(1);
 
   async function loadBrowse() {
-    const [domainResponse, recentResponse, syncResponse] =
-      await Promise.all([
-        listArticleDomains(),
-        listRecentArticles(8),
-        getSyncStatus(),
-      ]);
+    const [domainResponse, syncResponse] = await Promise.all([
+      listArticleDomains().catch(() => null),
+      getSyncStatus().catch(() => null),
+    ]);
 
-    setDomains(domainResponse.domains ?? []);
-    setRecent(recentResponse.articles ?? []);
-    setStatus(syncResponse);
+    if (domainResponse?.domains) setDomains(domainResponse.domains);
+    if (syncResponse) setStatus(syncResponse);
   }
 
   async function loadList(domain: string, q = "") {
     setListing(true);
-
     try {
-      const params = new URLSearchParams({
-        limit: "50",
-      });
-
-      if (domain !== "all") {
-        params.set("domain", domain);
-      }
-
       if (q.trim()) {
-        params.set("q", q.trim());
+        const res = await searchArticles(q, domain === "all" ? undefined : domain);
+        const articles = res.data?.articles ?? [];
+        setItems(
+          articles.map((article: any, index: number) => ({
+            page_id: `hit-${index}`,
+            title: article.title ?? "",
+            domain: article.domain ?? domain,
+            source_url: article.source_url ?? "",
+            updated_by: null,
+            last_synced: null,
+          }))
+        );
+      } else {
+        const queryStr = domain === "all" ? "" : `domain=${domain}`;
+        const res = await listArticles(queryStr);
+        setItems(res.articles ?? []);
       }
-
-      const response = await listArticles(params.toString());
-
-      setItems(response.articles ?? []);
+    } catch {
+      onToast("Failed to load article list", "err");
     } finally {
       setListing(false);
     }
   }
 
   useEffect(() => {
-    loadBrowse().catch(() => {
-      setDomains([]);
-      setRecent([]);
-      setStatus(null);
-    });
+    loadBrowse();
   }, []);
 
   useEffect(() => {
-    if (!manageOpen) return;
+    loadList(chip, query);
+  }, [chip]);
 
-    loadList(chip, "").catch(() => {
-      setItems([]);
-      setListing(false);
-    });
-  }, [manageOpen, chip]);
-
-  const chips = useMemo(() => {
-    // v0.22.x — dedupe domain names (a domain could theoretically appear
-    // twice if kb_meta rows and the classifier list disagree).
-    const names = Array.from(
-      new Set((domains ?? []).map((item) => item.domain))
-    );
-
-    return [
-      "all",
-      ...names.filter((name) => name !== "all"),
-    ];
-  }, [domains]);
-
-  async function handleSearch(
-    event: React.FormEvent
-  ) {
-    event.preventDefault();
-
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
     if (!query.trim()) return;
-
     setBusy(true);
-
     try {
-      const result = await searchArticles(
-        query.trim(),
-        chip === "all" ? undefined : chip
-      );
-
-      const articles =
-        result.data?.articles ?? [];
-
+      const res = await searchArticles(query.trim(), chip === "all" ? undefined : chip);
+      const articles = res.data?.articles ?? [];
       setItems(
         articles.map((article: any, index: number) => ({
           page_id: `hit-${index}`,
@@ -397,13 +321,8 @@ export default function Knowledge({
           last_synced: null,
         }))
       );
-
-      setManageOpen(true);
       setPage(1);
-
-      onToast(
-        `${articles.length} search results found`
-      );
+      onToast(`${articles.length} search results found`);
     } catch {
       onToast("Search failed", "err");
     } finally {
@@ -413,17 +332,11 @@ export default function Knowledge({
 
   async function handleSync() {
     setBusy(true);
-
     try {
       await triggerSync();
-
       onToast("Knowledge base synced");
-
       await loadBrowse();
-
-      if (manageOpen) {
-        await loadList(chip);
-      }
+      await loadList(chip);
     } catch {
       onToast("Sync failed", "err");
     } finally {
@@ -431,19 +344,11 @@ export default function Knowledge({
     }
   }
 
-  async function handleDelete(
-    pageId: string,
-    title: string
-  ) {
-    if (!confirm(`Delete "${title}"?`)) {
-      return;
-    }
-
+  async function handleDelete(pageId: string, title: string) {
+    if (!confirm(`Delete "${title}"?`)) return;
     try {
       await deleteArticle(pageId);
-
       onToast("Article deleted");
-
       await loadBrowse();
       await loadList(chip);
     } catch {
@@ -452,907 +357,393 @@ export default function Knowledge({
   }
 
   async function handleSaveEdit() {
-    if (!edit) return;
-
+    if (!edit || !edit.title.trim()) return;
     setBusy(true);
-
     try {
-      await updateArticle(edit.page_id, {
-        title: edit.title,
-        body: edit.body,
-        domain: edit.domain,
-        page_id: edit.page_id,
-      });
-
+      if (edit.page_id.startsWith("manual-")) {
+        await createArticle({
+          title: edit.title.trim(),
+          domain: edit.domain,
+          body: edit.body.trim(),
+        });
+        onToast("Article created");
+      } else {
+        await updateArticle(edit.page_id, {
+          title: edit.title.trim(),
+          domain: edit.domain,
+          body: edit.body.trim(),
+        });
+        onToast("Article updated");
+      }
       setEdit(null);
-
-      onToast("Article updated");
-
       await loadBrowse();
       await loadList(chip);
     } catch {
-      onToast("Update failed", "err");
+      onToast("Save failed", "err");
     } finally {
       setBusy(false);
     }
   }
 
-    return (
+  const chips = useMemo(() => {
+    const list = ["all"];
+    if (domains) {
+      domains.forEach((d) => {
+        if (!list.includes(d.domain)) list.push(d.domain);
+      });
+    }
+    classifierDomains.forEach((d: ClassifierDomainItem) => {
+      if (!list.includes(d.domain_key)) list.push(d.domain_key);
+    });
+    return list;
+  }, [domains, classifierDomains]);
+
+  return (
     <PageShell>
       <PageHeader
-        icon={activeTab === "domains" ? <Layers className="size-5" /> : <BookOpen className="size-5" />}
+        icon={<BookOpen className="size-5" />}
         badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : role === "knowledge" ? "Knowledge Manager" : "User"}
-        title={activeTab === "domains" ? "Domain & Routing Manager" : "Knowledge Base"}
-        description={
-          activeTab === "domains"
-            ? "Manage classification domains, dynamic keywords, custom icons, and Jira escalation targets"
-            : "Search and manage your IT knowledge base articles and synchronization"
-        }
-        actions={<>
-          {canManageDomains && (
-            <div className="flex rounded-xl border border-[var(--border)] bg-muted/40 p-1">
-              <button
-                type="button"
-                onClick={() => setActiveTab("articles")}
+        title="Knowledge & Domain Hub"
+        description="Unified management of AI classifier routing rules, Confluence KB articles, and synchronization"
+        actions={
+          <div className="flex items-center gap-3">
+            <div
+              className={[
+                "hidden items-center gap-2 rounded-xl border px-3 py-1.5 sm:flex text-xs",
+                status?.healthy
+                  ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
+                  : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
+              ].join(" ")}
+            >
+              <span
                 className={[
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                  activeTab === "articles"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
+                  "size-2 rounded-full",
+                  status?.healthy ? "bg-emerald-500" : "bg-amber-500",
                 ].join(" ")}
-              >
-                <BookOpen className="size-3.5" />
-                Knowledge Base
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("domains")}
-                className={[
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                  activeTab === "domains"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
-                ].join(" ")}
-              >
-                <Layers className="size-3.5" />
-                Manage Domains
-              </button>
-            </div>
-          )}
-
-          {activeTab === "articles" && (
-            <>
-              <div
-                className={[
-                  "hidden items-center gap-2 rounded-xl border px-3 py-2 md:flex",
-                  status?.healthy
-                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
-                    : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
-                ].join(" ")}
-              >
-                <span
-                  className={[
-                    "size-2 rounded-full",
-                    status?.healthy
-                      ? "bg-emerald-500"
-                      : "bg-amber-500",
-                  ].join(" ")}
-                />
-
-                <div>
-                  <div className="text-[11px] font-semibold">
-                    {status?.healthy
-                      ? "Knowledge synced"
-                      : "Sync pending"}
-                  </div>
-
-                  <div className="text-[10px] text-muted-foreground">
-                    {status?.last_run
-                      ? `Updated ${relTime(
-                          status.last_run.at
-                        )}`
-                      : "No sync"}
-                  </div>
-                </div>
+              />
+              <div>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {status?.healthy ? "KB Synced" : "Sync Pending"}
+                </span>
+                <span className="text-[10px] text-muted-foreground ml-1.5">
+                  {status?.last_run ? `(${relTime(status.last_run.at)})` : ""}
+                </span>
               </div>
+            </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                disabled={busy}
-                onClick={handleSync}
-              >
-                <RefreshCw
-                  className={[
-                    "mr-2 size-3.5",
-                    busy ? "animate-spin" : "",
-                  ].join(" ")}
-                />
-                Sync now
-              </Button>
-            </>
-          )}
-        </>}
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl h-9"
+              disabled={busy}
+              onClick={handleSync}
+            >
+              <RefreshCw className={["mr-1.5 size-3.5", busy ? "animate-spin" : ""].join(" ")} />
+              Sync now
+            </Button>
+          </div>
+        }
       />
 
-      {activeTab === "domains" ? (
-        <main className="mx-auto max-w-[1400px] p-5 lg:p-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40 text-xs">
-              <h5 className="font-semibold text-sky-900 dark:text-sky-300 flex items-center gap-1.5 mb-1.5">
-                <span>📖</span> 1. Confluence Knowledge Base (Answer Retrieval)
-              </h5>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                Based on keyword matching in user queries, the assistant automatically retrieves and references relevant <strong>Confluence KB Articles</strong> within this domain to formulate answers.
+      <main className="mx-auto max-w-[1560px] p-4 lg:p-6 space-y-5">
+        {/* ==============================================================
+            TOP SEARCH BAR & DOMAIN CHIPS
+        ============================================================== */}
+        <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-blue-50/40 via-card to-indigo-50/20 p-5 shadow-xs dark:from-blue-950/15 dark:via-card dark:to-indigo-950/15">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <Sparkles className="size-4 text-blue-600" />
+                Find Knowledge & Verify Domain Coverage
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Real-time search across internal knowledge documents and classifier routing domains.
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs">
-              <h5 className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-1.5">
-                <span>🎫</span> 2. Jira Ticket Routing (Escalation Target)
-              </h5>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                When a query cannot be resolved automatically and the user requests escalation, tickets are routed to the assigned <strong>Jira Project Key (e.g. ITHD)</strong> for human IT follow-up.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-card text-card-foreground rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
-            {domainsError && (
-              <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-sm border-b border-rose-200 dark:border-rose-900">
-                {domainsError}
+            <form onSubmit={handleSearch} className="flex items-center gap-2 w-full md:w-[420px]">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search solutions, errors, procedures..."
+                  className="h-10 w-full rounded-xl border border-[var(--border)] bg-white pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:bg-slate-900"
+                />
               </div>
-            )}
-
-            {domainsLoading && classifierDomains.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 text-sm">Loading domains configuration...</div>
-            ) : (
-              <DomainClassifierManager
-                domains={classifierDomains}
-                onRefresh={loadClassifierData}
-                canManage={canManageDomains}
-              />
-            )}
+              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl px-4 text-xs">
+                Search
+              </Button>
+            </form>
           </div>
-        </main>
-      ) : (
 
-          <div className="mx-auto max-w-[1400px] space-y-5 p-5 lg:p-8">
-
-            {/* =================================================
-                SEARCH HERO
-            ================================================= */}
-            <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-br from-blue-50/50 via-card to-indigo-50/30 px-5 py-6 shadow-sm dark:from-blue-950/20 dark:via-card dark:to-indigo-950/20 lg:px-8">
-
-              <div className="mx-auto max-w-4xl text-center">
-                <h2 className="text-xl font-semibold tracking-tight text-blue-800 dark:text-blue-300 lg:text-2xl">
-                  Find answers in your knowledge base
-                </h2>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Search across all domains or filter by category
-                </p>
-
-                <form
-                  onSubmit={handleSearch}
-                  className="mx-auto mt-5 flex max-w-3xl flex-col gap-2 sm:relative sm:mt-5 sm:flex-row sm:items-center"
+          <div className="mt-4 flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--border)]/60">
+            <span className="text-[11px] font-semibold text-slate-400 mr-1">Filter Domain:</span>
+            {chips.map((domain) => {
+              const active = domain === chip;
+              const label = domain === "all" ? "All Domains" : metaFor(domain).label;
+              return (
+                <button
+                  key={domain}
+                  type="button"
+                  onClick={() => {
+                    setChip(domain);
+                    setPage(1);
+                  }}
+                  className={[
+                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
+                    active
+                      ? "border-blue-600 bg-blue-600 text-white shadow-xs"
+                      : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+                  ].join(" ")}
                 >
-                  <div className="relative sm:flex-1">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-                    <input
-                      value={query}
-                      onChange={(e) =>
-                        setQuery(e.target.value)
-                      }
-                      placeholder="Search solutions, errors, procedures..."
-                      className="h-11 w-full rounded-xl border bg-white pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:bg-slate-950 sm:h-12"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={
-                      busy || !query.trim()
-                    }
-                    className="h-11 w-full rounded-xl sm:absolute sm:right-1.5 sm:top-1/2 sm:h-9 sm:w-auto sm:-translate-y-1/2 sm:px-5"
-                  >
-                    {busy ? (
-                      <RefreshCw className="mr-2 size-3.5 animate-spin" />
-                    ) : (
-                      <Search className="mr-2 size-3.5" />
-                    )}
-                    Search
-                  </Button>
-                </form>
-
-                <div className="mt-4 flex flex-wrap justify-start gap-2 sm:justify-center">
-                  {chips.map((domain) => {
-                    const active =
-                      domain === chip;
-
-                    const label =
-                      domain === "all"
-                        ? "All Domains"
-                        : metaFor(domain).label;
-
-                    return (
-                      <button
-                        key={domain}
-                        type="button"
-                        onClick={() => {
-                          setChip(domain);
-                          setPage(1);
-                        }}
-                        className={[
-                          "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                          active
-                            ? "border-blue-600 bg-blue-600 text-white"
-                            : "bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 dark:bg-slate-900 dark:text-slate-300",
-                        ].join(" ")}
-                      >
-                        {domain !== "all" &&
-                          (() => {
-                            const Icon =
-                              metaFor(domain).icon;
-
-                            return (
-                              <Icon className="size-3.5" />
-                            );
-                          })()}
-
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+        {/* ==============================================================
+            SPLIT TWO-COLUMN LAYOUT
+            Left Column: Domains & Classifier Router Panel (Settings / Edit)
+            Right Column: Knowledge Articles & Synchronizer
+        ============================================================== */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* ================= LEFT COLUMN: DOMAINS & ROUTING ================= */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Layers className="size-4 text-indigo-600 dark:text-indigo-400" />
+                  Domains & Routing Engine
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Classifier keywords, icons, and Jira project routing
+                </p>
               </div>
-            </section>
+              <Badge variant="outline" className="text-[10px] bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900">
+                {classifierDomains.length} Domains
+              </Badge>
+            </div>
 
-            {/* =================================================
-                LOWER GRID
-            ================================================= */}
-            <div className={["grid gap-5", canManage ? "" : "xl:grid-cols-[1.05fr_0.95fr]"].join(" ")}>
+            <div className="rounded-2xl border border-[var(--border)] bg-card shadow-xs overflow-hidden">
+              {domainsError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-xs border-b border-rose-200 dark:border-rose-900">
+                  {domainsError}
+                </div>
+              )}
 
-              {/* =================================================
-                  RECENTLY UPDATED  (v0.21.84 - hidden for managers; the
-                  Manage table shows the same list, rendering both was redundant)
-              ================================================= */}
-              <section className={canManage ? "hidden" : ""}>
-                <Card className="overflow-hidden rounded-2xl">
-
-                  <div className="flex items-center justify-between border-b px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/30">
-                        <Clock3 className="size-4" />
-                      </div>
-
-                      <div>
-                        <h2 className="text-sm font-semibold">
-                          Recently updated
-                        </h2>
-
-                        <p className="text-[11px] text-muted-foreground">
-                          Latest changes in the knowledge base
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setManageOpen(true)
-                      }
-                      className="text-xs font-medium text-blue-600 hover:underline"
-                    >
-                      View all
-                    </button>
-                  </div>
-
-                  {!recent ? (
-                    <div className="space-y-2 p-4">
-                      {Array.from({
-                        length: 6,
-                      }).map((_, i) => (
-                        <Skeleton
-                          key={i}
-                          className="h-12 rounded-xl"
-                        />
-                      ))}
-                    </div>
-                  ) : recent.length === 0 ? (
-                    <div className="p-10 text-center text-sm text-muted-foreground">
-                      No recently updated articles.
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {recent.map(
-                        (article, index) => {
-                          const meta = metaFor(
-                            article.domain
-                          );
-
-                          const Icon = meta.icon;
-
-                          const row = (
-                            <>
-                              <div
-                                className={[
-                                  "grid size-8 shrink-0 place-items-center rounded-lg",
-                                  meta.bgClass,
-                                ].join(" ")}
-                              >
-                                <Icon
-                                  className={[
-                                    "size-4",
-                                    meta.iconClass,
-                                  ].join(" ")}
-                                />
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-xs font-medium">
-                                  {article.title}
-                                </div>
-
-                                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                                  <span>
-                                    Updated by{" "}
-                                    {article.updated_by ??
-                                      "system"}
-                                  </span>
-
-                                  <span>•</span>
-
-                                  <span>
-                                    {relTime(
-                                      article.last_synced
-                                    )}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <Badge
-                                variant="outline"
-                                className="hidden text-[10px] capitalize sm:inline-flex"
-                              >
-                                {meta.label}
-                              </Badge>
-
-                              {article.source_url && (
-                                <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
-                              )}
-                            </>
-                          );
-
-                          return article.source_url ? (
-                            <a
-                              href={
-                                article.source_url
-                              }
-                              target="_blank"
-                              rel="noreferrer"
-                              key={`${article.title}-${index}`}
-                              className="flex items-center gap-3 px-5 py-3 transition hover:bg-slate-50 dark:hover:bg-slate-900"
-                            >
-                              {row}
-                            </a>
-                          ) : (
-                            <div
-                              key={`${article.title}-${index}`}
-                              className="flex items-center gap-3 px-5 py-3"
-                            >
-                              {row}
-                            </div>
-                          );
-                        }
-                      )}
-                    </div>
-                  )}
-                </Card>
-              </section>
-
-              {/* =================================================
-                  MANAGE / ADMIN
-              ================================================= */}
-              {canManage && (
-                <section>
-                  <Card className="overflow-hidden rounded-2xl">
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setManageOpen(!manageOpen)
-                      }
-                      className="flex w-full items-center justify-between border-b px-5 py-4 text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="grid size-9 place-items-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                          <Settings className="size-4" />
-                        </div>
-
-                        <div>
-                          <h2 className="text-sm font-semibold">
-                            Manage knowledge base
-                          </h2>
-
-                          <p className="text-[11px] text-muted-foreground">
-                            Manage articles and synchronization
-                          </p>
-                        </div>
-                      </div>
-
-                      <ChevronDown
-                        className={[
-                          "size-4 text-muted-foreground transition-transform",
-                          manageOpen
-                            ? "rotate-180"
-                            : "",
-                        ].join(" ")}
-                      />
-                    </button>
-
-                    {manageOpen && (
-                      <div className="p-5">
-
-                        {/* Admin toolbar */}
-                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={chip}
-                              onChange={(e) =>
-                                setChip(
-                                  e.target.value
-                                )
-                              }
-                              className="h-9 w-full min-w-0 rounded-lg border bg-background px-3 text-xs outline-none focus:border-blue-500 sm:w-auto"
-                            >
-                              <option value="all">
-                                All Domains
-                              </option>
-
-                              {chips
-                                .filter(
-                                  (x) =>
-                                    x !== "all"
-                                )
-                                .map((x) => (
-                                  <option
-                                    key={x}
-                                    value={x}
-                                  >
-                                    {metaFor(x).label}
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-
-                          <Button
-                            size="sm"
-                            className="h-9 rounded-lg"
-                            onClick={() =>
-                              setEdit({
-                                page_id: `manual-${Date.now()}`,
-                                title: "",
-                                domain: "general",
-                                body: "",
-                              })
-                            }
-                          >
-                            <Plus className="mr-2 size-3.5" />
-                            Add article
-                          </Button>
-                        </div>
-
-                        {/* Table */}
-                        <div className="overflow-hidden rounded-xl border">
-                          <p className="flex items-center gap-1.5 border-b bg-muted/30 px-3 py-2 text-[10px] text-muted-foreground md:hidden">
-                            <MoveHorizontal className="size-3.5 shrink-0" />
-                            Swipe table sideways to see all columns
-                          </p>
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[650px] text-xs">
-                              <thead className="bg-slate-50 dark:bg-slate-900">
-                                <tr className="text-left">
-                                  <th className="px-3 py-3 font-semibold">
-                                    Article
-                                  </th>
-
-                                  <th className="px-3 py-3 font-semibold">
-                                    Domain
-                                  </th>
-
-                                  <th className="px-3 py-3 font-semibold">
-                                    Updated
-                                  </th>
-
-                                  <th className="px-3 py-3 font-semibold">
-                                    Updated by
-                                  </th>
-
-                                  <th className="px-3 py-3 text-right font-semibold">
-                                    Actions
-                                  </th>
-                                </tr>
-                              </thead>
-
-                              <tbody>
-                                {listing ? (
-                                  <tr>
-                                    <td
-                                      colSpan={5}
-                                      className="p-4"
-                                    >
-                                      <Skeleton className="h-9 w-full" />
-                                    </td>
-                                  </tr>
-                                ) : !items ||
-                                  items.length === 0 ? (
-                                  <tr>
-                                    <td
-                                      colSpan={5}
-                                      className="p-8 text-center text-muted-foreground"
-                                    >
-                                      No articles found.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  items
-                                    .slice(
-                                      (page - 1) * 5,
-                                      page * 5
-                                    )
-                                    .map(
-                                      (article) => {
-                                        const meta =
-                                          metaFor(
-                                            article.domain
-                                          );
-
-                                        return (
-                                          <tr
-                                            key={
-                                              article.page_id
-                                            }
-                                            className="border-t transition hover:bg-slate-50 dark:hover:bg-slate-900/60"
-                                          >
-                                            <td className="max-w-[260px] truncate px-3 py-3 font-medium">
-                                              {
-                                                article.title
-                                              }
-                                            </td>
-
-                                            <td className="px-3 py-3">
-                                              <Badge
-                                                variant="outline"
-                                                className="text-[10px] capitalize"
-                                              >
-                                                {
-                                                  meta.label
-                                                }
-                                              </Badge>
-                                            </td>
-
-                                            <td className="px-3 py-3 text-muted-foreground">
-                                              {relTime(
-                                                article.last_synced
-                                              )}
-                                            </td>
-
-                                            <td className="px-3 py-3 text-muted-foreground">
-                                              {article.updated_by ??
-                                                "—"}
-                                            </td>
-
-                                            <td className="px-3 py-3">
-                                              <div className="flex justify-end gap-1">
-                                                {!article.page_id.startsWith(
-                                                  "hit-"
-                                                ) && (
-                                                  <>
-                                                    <button
-                                                      type="button"
-                                                      title="Edit"
-                                                      onClick={() =>
-                                                        setEdit(
-                                                          {
-                                                            page_id:
-                                                              article.page_id,
-                                                            title:
-                                                              article.title,
-                                                            domain:
-                                                              article.domain,
-                                                            body: "",
-                                                          }
-                                                        )
-                                                      }
-                                                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
-                                                    >
-                                                      <Pencil className="size-3.5" />
-                                                    </button>
-
-                                                    <button
-                                                      type="button"
-                                                      title="Delete"
-                                                      onClick={() =>
-                                                        handleDelete(
-                                                          article.page_id,
-                                                          article.title
-                                                        )
-                                                      }
-                                                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
-                                                    >
-                                                      <Trash2 className="size-3.5" />
-                                                    </button>
-                                                  </>
-                                                )}
-
-                                                {article.source_url && (
-                                                  <a
-                                                    href={
-                                                      article.source_url
-                                                    }
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
-                                                  >
-                                                    <ExternalLink className="size-3.5" />
-                                                  </a>
-                                                )}
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        );
-                                      }
-                                    )
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* Pagination */}
-                          <div className="flex items-center justify-between border-t px-3 py-2.5 text-[10px] text-muted-foreground">
-                            <span>
-                              Showing{" "}
-                              {items?.length
-                                ? Math.min(
-                                    (page - 1) * 5 +
-                                      1,
-                                    items.length
-                                  )
-                                : 0}
-                              {" "}
-                              to{" "}
-                              {Math.min(
-                                page * 5,
-                                items?.length ?? 0
-                              )}{" "}
-                              of{" "}
-                              {items?.length ?? 0}{" "}
-                              articles
-                            </span>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                disabled={
-                                  page === 1
-                                }
-                                onClick={() =>
-                                  setPage(
-                                    (p) =>
-                                      Math.max(
-                                        1,
-                                        p - 1
-                                      )
-                                  )
-                                }
-                                className="grid size-7 place-items-center rounded-md border disabled:opacity-40"
-                              >
-                                <ChevronLeft className="size-3.5" />
-                              </button>
-
-                              <span className="grid size-7 place-items-center rounded-md border border-blue-500 bg-blue-50 font-medium text-blue-600 dark:bg-blue-950/30">
-                                {page}
-                              </span>
-
-                              <button
-                                type="button"
-                                disabled={
-                                  !items ||
-                                  page * 5 >=
-                                    items.length
-                                }
-                                onClick={() =>
-                                  setPage(
-                                    (p) =>
-                                      p + 1
-                                  )
-                                }
-                                className="grid size-7 place-items-center rounded-md border disabled:opacity-40"
-                              >
-                                <ChevronRight className="size-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Sync health */}
-                        <div className="mt-6">
-                          <div className="mb-3 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Activity className="size-4 text-emerald-500" />
-
-                              <div>
-                                <div className="text-xs font-semibold">
-                                  Sync health
-                                </div>
-
-                                <div className="text-[10px] text-muted-foreground">
-                                  Confluence synchronization status
-                                </div>
-                              </div>
-                            </div>
-
-                            <Badge
-                              variant="outline"
-                              className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30"
-                            >
-                              <span className="mr-1 size-1.5 rounded-full bg-emerald-500" />
-                              {status?.healthy
-                                ? "Healthy"
-                                : "Pending"}
-                            </Badge>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-                            <SyncMetric
-                              label="Total pages"
-                              value={String(
-                                status?.pages ?? 0
-                              )}
-                              icon={
-                                <FileText className="size-3.5" />
-                              }
-                            />
-
-                            <SyncMetric
-                              label="Inserted"
-                              value={String(
-                                status?.last_run
-                                  ?.inserted ?? 0
-                              )}
-                              icon={
-                                <FilePlus2 className="size-3.5" />
-                              }
-                            />
-
-                            <SyncMetric
-                              label="Updated"
-                              value={String(
-                                status?.last_run
-                                  ?.updated ?? 0
-                              )}
-                              icon={
-                                <RefreshCcw className="size-3.5" />
-                              }
-                            />
-
-                            <SyncMetric
-                              label="Skipped"
-                              value={String(
-                                status?.last_run
-                                  ?.skipped ?? 0
-                              )}
-                              icon={
-                                <CheckCircle2 className="size-3.5" />
-                              }
-                            />
-
-                            <SyncMetric
-                              label="Next sync"
-                              value={`Every ${
-                                status?.beat_interval_minutes ??
-                                30
-                              } min`}
-                              icon={
-                                <Clock3 className="size-3.5" />
-                              }
-                            />
-                          </div>
-
-                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[10px] text-muted-foreground dark:bg-slate-900">
-                            <span>
-                              Source: Confluence
-                            </span>
-
-                            <span>
-                              Read-only API
-                            </span>
-
-                            <span>
-                              Incremental sync
-                            </span>
-
-                            <span>
-                              Last run:{" "}
-                              {status?.last_run
-                                ? formatDate(
-                                    status.last_run.at
-                                  )
-                                : "—"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-                </section>
+              {domainsLoading && classifierDomains.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">Loading domains configuration...</div>
+              ) : (
+                <DomainClassifierManager
+                  domains={classifierDomains}
+                  onRefresh={loadClassifierData}
+                  canManage={canManageDomains}
+                />
               )}
             </div>
           </div>
-          )}
+
+          {/* ================= RIGHT COLUMN: KNOWLEDGE BASE ARTICLES ================= */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <BookOpen className="size-4 text-blue-600 dark:text-blue-400" />
+                  Knowledge Base Articles
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Indexed documents retrieved for AI answers
+                </p>
+              </div>
+
+              {canManage && (
+                <Button
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-xs bg-blue-600 text-white hover:bg-blue-700"
+                  onClick={() =>
+                    setEdit({
+                      page_id: `manual-${Date.now()}`,
+                      title: "",
+                      domain: "general",
+                      body: "",
+                    })
+                  }
+                >
+                  <Plus className="mr-1.5 size-3.5" />
+                  Add Article
+                </Button>
+              )}
+            </div>
+
+            <Card className="rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[550px] text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
+                    <tr className="text-left text-slate-600 dark:text-slate-300">
+                      <th className="px-4 py-3 font-semibold">Article Title</th>
+                      <th className="px-3 py-3 font-semibold">Domain</th>
+                      <th className="px-3 py-3 font-semibold">Synced</th>
+                      <th className="px-3 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listing ? (
+                      <tr>
+                        <td colSpan={4} className="p-4">
+                          <Skeleton className="h-9 w-full rounded-lg" />
+                        </td>
+                      </tr>
+                    ) : !items || items.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                          No articles found in this filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      items.slice((page - 1) * 8, page * 8).map((article) => {
+                        const meta = metaFor(article.domain);
+                        return (
+                          <tr key={article.page_id} className="border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60">
+                            <td className="max-w-[240px] truncate px-4 py-3 font-medium text-slate-900 dark:text-white">
+                              {article.title}
+                            </td>
+                            <td className="px-3 py-3">
+                              <Badge variant="outline" className="text-[10px] capitalize bg-slate-50 dark:bg-slate-800">
+                                {meta.label}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-3 text-muted-foreground text-[11px]">
+                              {relTime(article.last_synced)}
+                            </td>
+                            <td className="px-3 py-3 text-right">
+                              <div className="flex justify-end gap-1.5 items-center">
+                                {article.source_url && (
+                                  <a
+                                    href={article.source_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-md p-1 text-slate-400 hover:text-blue-600 transition"
+                                    title="Open source URL"
+                                  >
+                                    <ExternalLink className="size-3.5" />
+                                  </a>
+                                )}
+                                {canManage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(article.page_id, article.title)}
+                                    className="rounded-md p-1 text-slate-400 hover:text-rose-600 transition"
+                                    title="Delete article"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination bar */}
+              {items && items.length > 8 && (
+                <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-2.5 bg-slate-50/50 dark:bg-slate-900/40 text-[11px] text-muted-foreground">
+                  <span>
+                    Showing {Math.min((page - 1) * 8 + 1, items.length)}–{Math.min(page * 8, items.length)} of {items.length}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      disabled={page <= 1}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-[11px]"
+                      disabled={page * 8 >= items.length}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Quick sync & integration summary footer */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="rounded-xl border border-[var(--border)] bg-card p-3.5 text-xs shadow-xs">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium mb-1">
+                  <Clock3 className="size-3.5 text-blue-600" />
+                  Automatic Background Sync
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Scheduled beat interval runs every {status?.beat_interval_minutes ?? 30} minutes via Celery worker.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border)] bg-card p-3.5 text-xs shadow-xs">
+                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium mb-1">
+                  <Check className="size-3.5 text-emerald-600" />
+                  RAG Vector Index Status
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  PGVector embeddings synced with LangGraph hybrid keyword + semantic retrieval.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
 
       {/* ==========================================================
-          EDIT DIALOG
+          ADD / EDIT ARTICLE DIALOG
       ========================================================== */}
       <Dialog
         open={!!edit}
         onOpenChange={(open) => {
-          if (!open) {
-            setEdit(null);
-          }
+          if (!open) setEdit(null);
         }}
       >
         <DialogContent className="max-w-xl rounded-2xl">
           <DialogHeader>
             <DialogTitle>
-              {edit?.page_id.startsWith("manual-")
-                ? "Add article"
-                : "Edit article"}
+              {edit?.page_id.startsWith("manual-") ? "Add Article" : "Edit Article"}
             </DialogTitle>
           </DialogHeader>
 
           {edit && (
             <div className="space-y-4 py-2">
               <div>
-                <label className="mb-1.5 block text-xs font-medium">
-                  Title
-                </label>
-
+                <label className="mb-1.5 block text-xs font-medium">Title</label>
                 <input
                   value={edit.title}
-                  onChange={(e) =>
-                    setEdit({
-                      ...edit,
-                      title: e.target.value,
-                    })
-                  }
+                  onChange={(e) => setEdit({ ...edit, title: e.target.value })}
                   placeholder="Article title"
-                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-blue-500"
+                  className="h-10 w-full rounded-xl border bg-background px-3 text-xs outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-medium">
-                  Domain
-                </label>
-
+                <label className="mb-1.5 block text-xs font-medium">Domain</label>
                 <select
                   value={edit.domain}
-                  onChange={(e) =>
-                    setEdit({
-                      ...edit,
-                      domain: e.target.value,
-                    })
-                  }
-                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-blue-500"
+                  onChange={(e) => setEdit({ ...edit, domain: e.target.value })}
+                  className="h-10 w-full rounded-xl border bg-background px-3 text-xs outline-none focus:border-blue-500"
                 >
                   {chips
-                    .filter(
-                      (x) => x !== "all"
-                    )
+                    .filter((x) => x !== "all")
                     .map((x) => (
                       <option key={x} value={x}>
                         {metaFor(x).label}
@@ -1363,150 +754,58 @@ export default function Knowledge({
 
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <label className="block text-xs font-medium">
-                    Body
-                  </label>
-                  <button
+                  <label className="block text-xs font-medium">Body / Content</label>
+                  <Button
                     type="button"
-                    disabled={busy || !edit.title.trim()}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] text-blue-600 px-2"
                     onClick={async () => {
-                      setBusy(true);
+                      if (!edit.title.trim()) {
+                        onToast("Please enter a title first", "err");
+                        return;
+                      }
                       try {
-                        const data = await articleDraft(edit.title, edit.domain);
-                        if (data.draft) {
-                          setEdit({ ...edit, body: data.draft });
+                        const draft = await articleDraft(edit.title, edit.domain);
+                        if (draft?.body) {
+                          setEdit({ ...edit, body: draft.body });
                           onToast("AI draft generated");
-                        } else {
-                          onToast(data.detail || "Draft failed", "err");
                         }
                       } catch {
-                        onToast("Draft failed", "err");
-                      } finally {
-                        setBusy(false);
+                        onToast("Failed to generate draft", "err");
                       }
                     }}
-                    className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium text-blue-600 transition hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-950/30"
                   >
-                    <Sparkles className="size-3" />
-                    AI assist
-                  </button>
+                    <Sparkles className="mr-1 size-3" />
+                    Auto-draft with AI
+                  </Button>
                 </div>
-
                 <textarea
-                  rows={8}
                   value={edit.body}
-                  onChange={(e) =>
-                    setEdit({
-                      ...edit,
-                      body: e.target.value,
-                    })
-                  }
-                  placeholder="Write article content in markdown..."
-                  className="w-full resize-none rounded-xl border bg-background px-3 py-3 text-sm outline-none focus:border-blue-500"
+                  onChange={(e) => setEdit({ ...edit, body: e.target.value })}
+                  placeholder="Article markdown or plain text content..."
+                  rows={8}
+                  className="w-full rounded-xl border bg-background p-3 text-xs outline-none focus:border-blue-500 font-mono"
                 />
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEdit(null)}
-            >
-              <X className="mr-2 size-4" />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setEdit(null)}>
               Cancel
             </Button>
-
             <Button
-              onClick={async () => {
-                if (!edit) return;
-
-                if (
-                  edit.page_id.startsWith(
-                    "manual-"
-                  )
-                ) {
-                  try {
-                    await createArticle({
-                      page_id:
-                        edit.page_id,
-                      title: edit.title,
-                      body: edit.body,
-                      domain:
-                        edit.domain,
-                      source_url: "",
-                    });
-
-                    setEdit(null);
-                    onToast("Article added");
-
-                    await loadBrowse();
-                    await loadList(chip);
-                  } catch {
-                    onToast(
-                      "Add failed",
-                      "err"
-                    );
-                  }
-
-                  return;
-                }
-
-                await handleSaveEdit();
-              }}
-              disabled={
-                busy ||
-                !edit?.title.trim()
-              }
+              onClick={handleSaveEdit}
+              disabled={busy || !edit?.title.trim()}
+              className="bg-blue-600 text-white hover:bg-blue-700"
             >
-              {busy && (
-                <RefreshCw className="mr-2 size-4 animate-spin" />
-              )}
-
-              {edit?.page_id.startsWith(
-                "manual-"
-              )
-                ? "Add article"
-                : "Save changes"}
+              {busy && <RefreshCw className="mr-2 size-3.5 animate-spin" />}
+              Save Article
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageShell>
-  );
-}
-
-/* ==============================================================
-   SIDEBAR ITEM
-============================================================== */
-
-/* ==============================================================
-   SECTION TITLE
-============================================================== */
-
-/* ==============================================================
-   SYNC METRIC
-============================================================== */
-
-function SyncMetric({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border bg-white p-3 dark:bg-slate-950">
-      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-
-      <div className="text-sm font-semibold">
-        {value}
-      </div>
-    </div>
   );
 }
