@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useBranding } from "@/app/useBranding";
 import {
-  BookOpen, ChevronDown, ChevronRight, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
+  BookOpen, Bot, ChevronDown, ChevronRight, Home, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
   Pin, Pencil, Trash2, MoreHorizontal, ScrollText, Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
@@ -112,11 +112,22 @@ export default function PageSidebar({
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-100">{branding.appName || "IT Help Chatbot"}</div>
           </div>
-          {canManage && (
-            <div className="ml-auto mr-2">
+          <div className="ml-auto mr-1 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("ith:restore-assistant-btn"));
+              }}
+              title="Show floating assistant button"
+              aria-label="Show floating assistant button"
+              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+            >
+              <Bot className="size-4" />
+            </button>
+            {canManage && (
               <NotificationBell notices={notices} onOpen={onNavigate} />
-            </div>
-          )}
+            )}
+          </div>
           {onToggleCollapsed && (
             <button
               type="button"

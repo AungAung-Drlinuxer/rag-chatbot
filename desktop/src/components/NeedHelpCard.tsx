@@ -10,11 +10,17 @@ import { useFloatingChat } from "@/components/FloatingChat";
  */
 export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
   const { setOpen, open } = useFloatingChat();
-  const [dismissed, setDismissed] = useState(() => {
-    // Session-scoped dismissal (memory only; project bans localStorage)
-    return (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed === true;
-  });
+  const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const handleRestore = () => {
+      setDismissed(false);
+      setVisible(true);
+    };
+    window.addEventListener("ith:restore-assistant-btn", handleRestore);
+    return () => window.removeEventListener("ith:restore-assistant-btn", handleRestore);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 800);
@@ -47,13 +53,11 @@ export function NeedHelpCard({ onOpen }: { onOpen?: () => void }) {
         aria-label="Dismiss assistant button"
         onClick={(e) => {
           e.stopPropagation();
-          (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed = true;
           setDismissed(true);
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
-            (window as unknown as { __needHelpDismissed?: boolean }).__needHelpDismissed = true;
             setDismissed(true);
           }
         }}
