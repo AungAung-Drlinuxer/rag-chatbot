@@ -137,8 +137,15 @@ export default function Chat({
       const id = e?.detail;
       if (id) openConversation(id);
     };
+    const handleNew = () => {
+      newChat();
+    };
     window.addEventListener("ith:open-conversation", handleOpen);
-    return () => window.removeEventListener("ith:open-conversation", handleOpen);
+    window.addEventListener("ith:new-chat", handleNew);
+    return () => {
+      window.removeEventListener("ith:open-conversation", handleOpen);
+      window.removeEventListener("ith:new-chat", handleNew);
+    };
   }, []);
 
   /* ----------------------------------------------------------
@@ -300,7 +307,7 @@ export default function Chat({
         { role: "assistant", content: streamed },
       ];
       refreshConversations();
-      window.dispatchEvent(new CustomEvent("ith:refresh-conversations"));
+      window.dispatchEvent(new CustomEvent("ith:refresh-conversations", { detail: sessionRef.current }));
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
@@ -326,6 +333,7 @@ export default function Chat({
     sessionRef.current = crypto.randomUUID();
     historyRef.current = [];
     setMobileHistory(false);
+    window.dispatchEvent(new CustomEvent("ith:new-chat-started"));
   }
 
   // Ctrl+N / Cmd+N — new chat shortcut

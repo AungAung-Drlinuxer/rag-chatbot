@@ -51,6 +51,8 @@ export default function PageSidebar({
   const [historyOpen, setHistoryOpen] = useState(true);
   const [conversations, setConversations] = useState<any[]>([]);
 
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+
   const loadHistory = () => {
     listConversations()
       .then((res: any) => setConversations(res?.conversations ?? []))
@@ -59,9 +61,25 @@ export default function PageSidebar({
 
   useEffect(() => {
     loadHistory();
-    const handleRefresh = () => loadHistory();
+    const handleRefresh = (e?: any) => {
+      loadHistory();
+      if (e?.detail) {
+        setActiveSessionId(e.detail);
+      }
+    };
+    const handleOpen = (e: any) => {
+      if (e?.detail) {
+        setActiveSessionId(e.detail);
+      }
+    };
     window.addEventListener("ith:refresh-conversations", handleRefresh);
-    return () => window.removeEventListener("ith:refresh-conversations", handleRefresh);
+    window.addEventListener("ith:open-conversation", handleOpen);
+    window.addEventListener("ith:new-chat-started", () => setActiveSessionId(""));
+    return () => {
+      window.removeEventListener("ith:refresh-conversations", handleRefresh);
+      window.removeEventListener("ith:open-conversation", handleOpen);
+      window.removeEventListener("ith:new-chat-started", () => setActiveSessionId(""));
+    };
   }, []);
   // B-6 — admin/agent see HITL approvals + LDAP-gated accounts as notifications
   const canManage = role === "admin" || role === "agent";
@@ -147,6 +165,9 @@ export default function PageSidebar({
                   }
                   setDenied(null);
                   onNavigate(item.id);
+                  if (item.id === "chat") {
+                    window.dispatchEvent(new CustomEvent("ith:new-chat"));
+                  }
                   setMobileOpen(false);
                 }}
                 title={locked ? `No permission: ${item.capLabel}` : collapsed ? item.label : undefined}
@@ -199,16 +220,24 @@ export default function PageSidebar({
                 {conversations.length === 0 ? (
                   <p className="px-2 py-2 text-[10px] text-slate-500 italic">No recent chats</p>
                 ) : (
-                  conversations.map((c) => (
+                  conversations.map((c) => {
+                    const isSelected = activeSessionId === c.session_id;
+                    return (
                     <div key={c.session_id} className="group relative flex items-center">
                       <button
                         type="button"
                         onClick={() => {
                           onNavigate("chat");
+                          setActiveSessionId(c.session_id);
                           window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: c.session_id }));
                           setMobileOpen(false);
                         }}
-                        className="flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800/60 hover:text-white transition"
+                        className={[
+                          "flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs transition",
+                          isSelected
+                            ? "bg-blue-600/20 text-blue-300 font-semibold border-l-2 border-blue-500 pl-1.5"
+                            : "text-slate-300 hover:bg-slate-800/60 hover:text-white",
+                        ].join(" ")}
                         title={c.title || "Untitled chat"}
                       >
                         <span className="flex items-center gap-1.5 truncate">
@@ -263,7 +292,8 @@ export default function PageSidebar({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
