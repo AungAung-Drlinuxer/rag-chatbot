@@ -419,9 +419,62 @@ export default function Dashboard({ role }: Props) {
                   title="Recent conversations"
                                   />
 
-                <div className="max-h-[360px] overflow-y-auto overflow-x-hidden">
+                <div className="max-h-[360px] overflow-y-auto">
 
-                  <table className="w-full table-fixed text-xs">
+                  {/* Mobile: stacked cards (md:hidden) */}
+                  <div className="divide-y md:hidden">
+                    {(liveConversations ?? []).length === 0 && (
+                      <p className="px-4 py-8 text-center text-[10px] text-muted-foreground">
+                        No conversations yet — data appears as users chat.
+                      </p>
+                    )}
+
+                    {(liveConversations ?? []).map((conversation) => (
+                      <div
+                        key={`${conversation.time}-${conversation.user}`}
+                        className="space-y-1.5 px-4 py-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <ResultBadge result={conversation.result} />
+                            <span className="truncate text-[11px] font-medium" title={conversation.user}>
+                              {conversation.user}
+                            </span>
+                          </span>
+                          <span
+                            className="shrink-0 text-[10px] text-muted-foreground"
+                            title={conversation.time}
+                          >
+                            {(() => {
+                              const d = conversation.time ? new Date(conversation.time.endsWith("Z") || conversation.time.includes("+") ? conversation.time : conversation.time + "Z") : null;
+                              return d && !Number.isNaN(d.getTime())
+                                ? d.toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
+                                : conversation.time;
+                            })()}
+                          </span>
+                        </div>
+
+                        <p className="truncate text-xs" title={conversation.question}>
+                          {conversation.question}
+                        </p>
+
+                        <button
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("ith:view-conversation", {
+                              detail: { user: conversation.user, question: conversation.question },
+                            }));
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                        >
+                          <Eye className="size-3.5" />
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table (hidden below md) */}
+                  <table className="hidden w-full table-fixed text-xs md:table">
 
                     <colgroup>
 

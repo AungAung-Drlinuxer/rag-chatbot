@@ -22,6 +22,7 @@ import {
   Search,
   Server,
   Settings,
+  MoveHorizontal,
   Trash2,
   X,
   Sparkles,
@@ -883,7 +884,7 @@ export default function Knowledge({
                       <div className="p-5">
 
                         {/* Admin toolbar */}
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2">
                             <select
                               value={chip}
@@ -892,7 +893,7 @@ export default function Knowledge({
                                   e.target.value
                                 )
                               }
-                              className="h-9 rounded-lg border bg-background px-3 text-xs outline-none focus:border-blue-500"
+                              className="h-9 w-full min-w-0 rounded-lg border bg-background px-3 text-xs outline-none focus:border-blue-500 sm:w-auto"
                             >
                               <option value="all">
                                 All Domains
@@ -933,6 +934,10 @@ export default function Knowledge({
 
                         {/* Table */}
                         <div className="overflow-hidden rounded-xl border">
+                          <p className="flex items-center gap-1.5 border-b bg-muted/30 px-3 py-2 text-[10px] text-muted-foreground md:hidden">
+                            <MoveHorizontal className="size-3.5 shrink-0" />
+                            Swipe table sideways to see all columns
+                          </p>
                           <div className="overflow-x-auto">
                             <table className="w-full min-w-[650px] text-xs">
                               <thead className="bg-slate-50 dark:bg-slate-900">
