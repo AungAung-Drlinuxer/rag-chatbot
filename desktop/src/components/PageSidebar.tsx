@@ -70,7 +70,7 @@ export default function PageSidebar({
   // v0.21.57 — nav items are capability-aware. Locked items stay visible (so the
   // user knows the feature exists) but clicking one shows WHY access is denied.
   const items: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
-    { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
+    { id: "chat", label: "+ New", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
     { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
     { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base & domains" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
@@ -84,22 +84,12 @@ export default function PageSidebar({
   const navBody = (
     <>
       {collapsed ? (
-        /* Rail mode: fixed top row = expand button only (Task-1: it was pushed
-           out of the h-16 row by the logo stack + bell — unreachable). */
-        <div className="flex h-auto flex-col items-center justify-center gap-2.5 border-b px-2 py-3 dark:border-slate-800">
-          {onToggleCollapsed && (
-            <button
-              type="button"
-              onClick={onToggleCollapsed}
-              title="Expand sidebar (Ctrl+B)"
-              aria-label="Expand sidebar"
-              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-            >
-              <PanelLeftOpen className="size-4.5" />
-            </button>
-          )}
-          {canManage && (
-            <NotificationBell notices={notices} collapsed onOpen={onNavigate} />
+        /* Rail mode: top brand avatar or expand button */
+        <div className="flex flex-col items-center justify-center gap-2 border-b py-3 dark:border-slate-800">
+          {branding.logo ? (
+            <img src={branding.logo} alt="Logo" className="size-8 rounded-lg object-contain" />
+          ) : (
+            <div className="grid size-8 place-items-center rounded-lg bg-blue-600 text-xs font-bold text-white">iTH</div>
           )}
         </div>
       ) : (
@@ -112,12 +102,11 @@ export default function PageSidebar({
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-100">{branding.appName || "IT Help Chatbot"}</div>
           </div>
-  
         </div>
       )}
 
-      {/* v0.22 — action icons row below brand (bot restore / notifications / collapse) */}
-      <div className={"flex items-center justify-end gap-1 border-b border-[var(--sidebar-border)] px-4 py-2 " + (collapsed ? "justify-center px-2" : "")}>
+      {/* Action icons row (bot restore / notifications / collapse) */}
+      <div className={"flex items-center gap-1 border-b border-[var(--sidebar-border)] py-2 " + (collapsed ? "flex-col justify-center px-1" : "justify-end px-4")}>
         <button
           type="button"
           onClick={() => {
@@ -130,7 +119,7 @@ export default function PageSidebar({
           <Bot className="size-4" />
         </button>
         {canManage && (
-          <NotificationBell notices={notices} onOpen={onNavigate} />
+          <NotificationBell notices={notices} collapsed={collapsed} onOpen={onNavigate} />
         )}
         {onToggleCollapsed && (
           <button

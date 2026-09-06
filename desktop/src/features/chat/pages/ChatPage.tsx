@@ -9,7 +9,6 @@ import {
   Link2,
   Menu,
   Paperclip,
-  Plus,
   Ticket as TicketIcon,
   Search,
   Shield,
@@ -455,19 +454,6 @@ export default function Chat({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={newChat}
-              title="Start a new conversation (Ctrl+N)"
-              className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-muted dark:text-slate-300"
-            >
-              <span className="grid size-5 place-items-center rounded-md bg-blue-600 text-white">
-                <Plus className="size-3.5" />
-              </span>
-              New
-              <kbd className="rounded border border-[var(--border)] bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Ctrl+N
-              </kbd>
-            </button>
             <div className="hidden items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-[10px] sm:flex">
               <Shield className="size-3.5 text-emerald-600" />
               RBAC protected
