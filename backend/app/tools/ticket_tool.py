@@ -37,7 +37,7 @@ _STATUS_WORDS = ("status", "progress", "update", "state")
 # never route into the HITL approval interrupt.
 _CREATE_WORDS = (
     "create", "open", "file", "raise", "submit", "log ",
-    "make a ticket", "new ticket", "escalate to",
+    "make a ticket", "new ticket", "escalate", "escalation",
 )
 _STATUS_QUERY_WORDS = (
     "status", "progress", "update", "state", "track",
@@ -59,13 +59,16 @@ def detect_ticket_status_intent(query: str) -> bool:
 
 
 def detect_ticket_create_intent(query: str) -> bool:
-    """True when the user asks to open/raise a NEW ticket (may need approval)."""
+    """True when the user asks to open/raise a NEW ticket or escalate."""
     q = query.lower()
-    if detect_ticket_status_intent(query) and not any(c in q for c in _CREATE_WORDS):
+    if detect_ticket_status_intent(query) and not any(c in q for c in ("create", "open", "file", "raise", "submit", "new ticket")):
         return False
+    # Explicit escalate intent
+    if "escalat" in q:
+        return True
     if any(c in q for c in _CREATE_WORDS) and "ticket" in q:
         return True
-    if any(c in q for c in _CREATE_WORDS) and any(w in q for w in ("issue", "problem", "escalat")):
+    if any(c in q for c in _CREATE_WORDS) and any(w in q for w in ("issue", "problem", "bug", "fault", "error", "incident")):
         return True
     return False
 
