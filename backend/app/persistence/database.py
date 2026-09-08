@@ -51,6 +51,18 @@ def init_db() -> None:
                 "UPDATE langchain_pg_embedding SET tsv = to_tsvector('english', document) "
                 "WHERE tsv IS NULL"
             ))
+            # HNSW pgvector index for fast cosine distance search
+            try:
+                conn.execute(text(
+                    "ALTER TABLE langchain_pg_embedding ALTER COLUMN embedding TYPE vector(768)"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS langchain_pg_embedding_hnsw_idx "
+                    "ON langchain_pg_embedding USING hnsw (embedding vector_cosine_ops) "
+                    "WITH (m = 16, ef_construction = 64)"
+                ))
+            except Exception as _hnsw_err:
+                logger.debug("HNSW index migration notice: %s", _hnsw_err)
     except Exception as exc:
         logger.warning(f"meta/FTS migration skipped ({type(exc).__name__}): {exc}")
 
