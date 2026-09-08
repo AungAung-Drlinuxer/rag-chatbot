@@ -95,6 +95,11 @@ def _cfg(key: str, default: str = "") -> str:
     return str(db) if db else default
 
 
+def get_active_model_name() -> str:
+    """Return the active LLM model name dynamically (from DB or config fallback)."""
+    return _cfg("model", SETTINGS.hchat_model) or "default"
+
+
 def _build_anthropic():
     from langchain_anthropic import ChatAnthropic
     from langchain_core.output_parsers import StrOutputParser

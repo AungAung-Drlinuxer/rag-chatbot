@@ -185,10 +185,12 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         context = result.context or build_context(result.docs, result.rewritten)
         answer_parts: list[str] = []
         last_usage: dict | None = None
+        from app.llm.client import get_active_model_name
+        active_llm_model = get_active_model_name()
         with start_span("chat.stream.llm") as span:
             span.set_attribute("rag.confidence", result.confidence)
             span.set_attribute("rag.decision", result.decision)
-            span.set_attribute("llm.model", SETTINGS.hchat_model or "minimax/minimax-m3:free")
+            span.set_attribute("llm.model", active_llm_model)
             for tok, usage in stream_answer(req.message, context):
                 if usage is not None:
                     # The last (zero-length) token carries the final usage dict.
@@ -239,7 +241,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             RAG_GATE_DECISIONS.labels(decision=result.decision, domain=result.domain or "general").inc()
             if last_usage is not None:
                 record_token_and_cost(
-                    model=SETTINGS.hchat_model or "minimax/minimax-m3:free",
+                    model=active_llm_model,
                     input_tokens=int(last_usage.get("input_tokens", 0)),
                     output_tokens=int(last_usage.get("output_tokens", 0)),
                 )
