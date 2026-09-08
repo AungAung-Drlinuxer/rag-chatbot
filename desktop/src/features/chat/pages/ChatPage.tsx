@@ -17,6 +17,7 @@ import {
   User,
   MessageSquareText,
   Check,
+  ExternalLink,
   Pencil,
   Copy,
   Share2,
@@ -1034,7 +1035,57 @@ function MessageBubble({
             </div>
           )}
 
-          {/* v0.21.74 — inline sources removed (right sidebar "Knowledge sources" shows them) */}
+          {/* Inline Knowledge Base Sources in answer card */}
+          {!isUser && (message.sources?.length ?? 0) > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
+              <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-blue-600 dark:text-blue-400" />
+                  Sources & Referenced Documents
+                </span>
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  {message.sources!.length} reference{message.sources!.length > 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {message.sources!.map((s, idx) => {
+                  const content = (
+                    <div className="flex items-start gap-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 transition hover:border-blue-300 hover:bg-blue-50/40 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-blue-900 dark:hover:bg-blue-950/30">
+                      <div className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                        {idx + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium text-slate-900 dark:text-slate-100" title={s.title}>
+                          {s.title}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          {s.space && <span className="capitalize">{s.space}</span>}
+                          {s.relevance != null && (
+                            <>
+                              <span>•</span>
+                              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                {s.relevance}% match
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {s.url && <ExternalLink className="size-3 shrink-0 text-slate-400 group-hover:text-blue-600" />}
+                    </div>
+                  );
+                  return s.url ? (
+                    <a key={`${s.page_id}-${idx}`} href={s.url} target="_blank" rel="noreferrer" className="block text-left">
+                      {content}
+                    </a>
+                  ) : (
+                    <div key={`${s.page_id}-${idx}`} className="block text-left">
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div
