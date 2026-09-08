@@ -175,10 +175,14 @@ function relTime(iso?: string | null) {
 
 export default function Knowledge({
   role,
+  initialTab,
   onToast,
 }: Props) {
   const canManage = role === "admin" || role === "agent";
   const canManageDomains = role === "admin" || role === "domain_manager";
+
+  // Tab State: "articles" | "domains"
+  const [activeTab, setActiveTab] = useState<"articles" | "domains">(initialTab || "articles");
 
   // Classifier Domain State
   const [classifierDomains, setClassifierDomains] = useState<ClassifierDomainItem[]>([]);
@@ -505,181 +509,255 @@ export default function Knowledge({
         </section>
 
         {/* ==============================================================
-            SPLIT TWO-COLUMN LAYOUT
-            Left Column: Domains & Classifier Router Panel (Settings / Edit)
-            Right Column: Knowledge Articles & Synchronizer
+            MODERN TAB NAVIGATION
         ============================================================== */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* ================= LEFT COLUMN: DOMAINS & ROUTING ================= */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Layers className="size-4 text-indigo-600 dark:text-indigo-400" />
-                  Domains & Routing Engine
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Classifier keywords, icons, and Jira project routing
-                </p>
-              </div>
-              <Badge variant="outline" className="text-[10px] bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900">
-                {classifierDomains.length} Domains
-              </Badge>
-            </div>
+        <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("articles")}
+              className={[
+                "flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition",
+                activeTab === "articles"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800",
+              ].join(" ")}
+            >
+              <BookOpen className="size-4" />
+              <span>Knowledge Base Articles</span>
+              <span
+                className={[
+                  "ml-1 rounded-md px-1.5 py-0.5 text-[10px]",
+                  activeTab === "articles" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                ].join(" ")}
+              >
+                {items ? items.length : "…"}
+              </span>
+            </button>
 
-            <div className="rounded-2xl border border-[var(--border)] bg-card shadow-xs overflow-hidden">
-              {domainsError && (
-                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-xs border-b border-rose-200 dark:border-rose-900">
-                  {domainsError}
-                </div>
-              )}
-
-              {domainsLoading && classifierDomains.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs">Loading domains configuration...</div>
-              ) : (
-                <DomainClassifierManager
-                  domains={classifierDomains}
-                  onRefresh={loadClassifierData}
-                  canManage={canManageDomains}
-                />
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("domains")}
+              className={[
+                "flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl transition",
+                activeTab === "domains"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800",
+              ].join(" ")}
+            >
+              <Layers className="size-4" />
+              <span>Domains & Routing Engine</span>
+              <span
+                className={[
+                  "ml-1 rounded-md px-1.5 py-0.5 text-[10px]",
+                  activeTab === "domains" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                ].join(" ")}
+              >
+                {classifierDomains.length}
+              </span>
+            </button>
           </div>
 
-          {/* ================= RIGHT COLUMN: KNOWLEDGE BASE ARTICLES ================= */}
-          <div className="lg:col-span-7 space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                  <BookOpen className="size-4 text-blue-600 dark:text-blue-400" />
-                  Knowledge Base Articles
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Indexed documents retrieved for AI answers
-                </p>
-              </div>
+          <div className="text-xs text-muted-foreground hidden sm:block">
+            {activeTab === "articles" ? "Full-width documents view & search" : "Configure AI classifiers & ticketing routing"}
+          </div>
+        </div>
 
-              {canManage && (
-                <Button
-                  size="sm"
-                  className="h-8 rounded-lg px-3 text-xs bg-blue-600 text-white hover:bg-blue-700"
-                  onClick={() =>
-                    setEdit({
-                      page_id: `manual-${Date.now()}`,
-                      title: "",
-                      domain: "general",
-                      body: "",
-                    })
-                  }
-                >
-                  <Plus className="mr-1.5 size-3.5" />
-                  Add Article
-                </Button>
-              )}
-            </div>
-
-            <Card className="rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[550px] text-xs">
-                  <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
-                    <tr className="text-left text-slate-600 dark:text-slate-300">
-                      <th className="px-4 py-3 font-semibold">Article Title</th>
-                      <th className="px-3 py-3 font-semibold">Domain</th>
-                      <th className="px-3 py-3 font-semibold">Synced</th>
-                      <th className="px-3 py-3 text-right font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {listing ? (
-                      <tr>
-                        <td colSpan={4} className="p-4">
-                          <Skeleton className="h-9 w-full rounded-lg" />
-                        </td>
-                      </tr>
-                    ) : !items || items.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                          No articles found in this filter.
-                        </td>
-                      </tr>
-                    ) : (
-                      items.slice((page - 1) * 8, page * 8).map((article) => {
-                        const meta = metaFor(article.domain);
-                        return (
-                          <tr key={article.page_id} className="border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60">
-                            <td className="max-w-[240px] truncate px-4 py-3 font-medium text-slate-900 dark:text-white">
-                              {article.title}
-                            </td>
-                            <td className="px-3 py-3">
-                              <Badge variant="outline" className="text-[10px] capitalize bg-slate-50 dark:bg-slate-800">
-                                {meta.label}
-                              </Badge>
-                            </td>
-                            <td className="px-3 py-3 text-muted-foreground text-[11px]">
-                              {relTime(article.last_synced)}
-                            </td>
-                            <td className="px-3 py-3 text-right">
-                              <div className="flex justify-end gap-1.5 items-center">
-                                {article.source_url && (
-                                  <a
-                                    href={article.source_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="rounded-md p-1 text-slate-400 hover:text-blue-600 transition"
-                                    title="Open source URL"
-                                  >
-                                    <ExternalLink className="size-3.5" />
-                                  </a>
-                                )}
-                                {canManage && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDelete(article.page_id, article.title)}
-                                    className="rounded-md p-1 text-slate-400 hover:text-rose-600 transition"
-                                    title="Delete article"
-                                  >
-                                    <Trash2 className="size-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination bar */}
-              {items && items.length > 8 && (
-                <div className="flex items-center justify-between border-t border-[var(--border)] px-4 py-2.5 bg-slate-50/50 dark:bg-slate-900/40 text-[11px] text-muted-foreground">
-                  <span>
-                    Showing {Math.min((page - 1) * 8 + 1, items.length)}–{Math.min(page * 8, items.length)} of {items.length}
-                  </span>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-[11px]"
-                      disabled={page <= 1}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      Prev
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-[11px]"
-                      disabled={page * 8 >= items.length}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
+        {/* ==============================================================
+            TAB 1: KNOWLEDGE BASE ARTICLES (FULL WIDTH)
+        ============================================================== */}
+        {activeTab === "articles" && (
+          <div className="space-y-5">
+            {/* TOP SEARCH BAR & DOMAIN CHIPS */}
+            <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-blue-50/40 via-card to-indigo-50/20 p-5 shadow-xs dark:from-blue-950/15 dark:via-card dark:to-indigo-950/15">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Sparkles className="size-4 text-blue-600" />
+                    Find Knowledge & Verify Document Coverage
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Real-time lexical and semantic search across indexed documents retrieved for AI answers.
+                  </p>
                 </div>
-              )}
-            </Card>
+
+                <form onSubmit={handleSearch} className="flex items-center gap-2 w-full md:w-[420px]">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search solutions, errors, procedures..."
+                      className="h-10 w-full rounded-xl border border-[var(--border)] bg-white pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:bg-slate-900"
+                    />
+                  </div>
+                  <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl px-4 text-xs">
+                    Search
+                  </Button>
+                </form>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--border)]/60">
+                <span className="text-[11px] font-semibold text-slate-400 mr-1">Filter Domain:</span>
+                {chips.map((domain) => {
+                  const active = domain === chip;
+                  const label = domain === "all" ? "All Domains" : metaFor(domain).label;
+                  return (
+                    <button
+                      key={domain}
+                      type="button"
+                      onClick={() => {
+                        setChip(domain);
+                        setPage(1);
+                      }}
+                      className={[
+                        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
+                        active
+                          ? "border-blue-600 bg-blue-600 text-white shadow-xs"
+                          : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* FULL WIDTH ARTICLES LIST */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <BookOpen className="size-4 text-blue-600 dark:text-blue-400" />
+                    Knowledge Base Articles
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Indexed documents retrieved for RAG context and user inquiries
+                  </p>
+                </div>
+
+                {canManage && (
+                  <Button
+                    size="sm"
+                    className="h-8 rounded-lg px-3 text-xs bg-blue-600 text-white hover:bg-blue-700"
+                    onClick={() =>
+                      setEdit({
+                        page_id: `manual-${Date.now()}`,
+                        title: "",
+                        domain: "general",
+                        body: "",
+                      })
+                    }
+                  >
+                    <Plus className="mr-1.5 size-3.5" />
+                    Add Article
+                  </Button>
+                )}
+              </div>
+
+              <Card className="rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
+                      <tr className="text-left text-slate-600 dark:text-slate-300">
+                        <th className="px-5 py-3.5 font-semibold">Article Title</th>
+                        <th className="px-4 py-3.5 font-semibold">Domain</th>
+                        <th className="px-4 py-3.5 font-semibold">Synced</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listing ? (
+                        <tr>
+                          <td colSpan={4} className="p-4">
+                            <Skeleton className="h-9 w-full rounded-lg" />
+                          </td>
+                        </tr>
+                      ) : !items || items.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                            No articles found in this filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        items.slice((page - 1) * 8, page * 8).map((article) => {
+                          const meta = metaFor(article.domain);
+                          return (
+                            <tr key={article.page_id} className="border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60">
+                              <td className="max-w-[400px] truncate px-5 py-3 font-medium text-slate-900 dark:text-white">
+                                {article.title}
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant="outline" className="text-[10px] capitalize bg-slate-50 dark:bg-slate-800">
+                                  {meta.label}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground text-[11px]">
+                                {relTime(article.last_synced)}
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                <div className="flex justify-end gap-1.5 items-center">
+                                  {article.source_url && (
+                                    <a
+                                      href={article.source_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="rounded-md p-1 text-slate-400 hover:text-blue-600 transition"
+                                      title="Open source URL"
+                                    >
+                                      <ExternalLink className="size-3.5" />
+                                    </a>
+                                  )}
+                                  {canManage && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDelete(article.page_id, article.title)}
+                                      className="rounded-md p-1 text-slate-400 hover:text-rose-600 transition"
+                                      title="Delete article"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {items && items.length > 8 && (
+                  <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 bg-muted/20">
+                    <p className="text-[11px] text-muted-foreground">
+                      Showing {(page - 1) * 8 + 1} to {Math.min(page * 8, items.length)} of {items.length} articles
+                    </p>
+                    <div className="flex gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs rounded-lg"
+                        disabled={page === 1}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs rounded-lg"
+                        disabled={page * 8 >= items.length}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
 
             {/* Quick sync & integration summary footer */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -704,7 +782,47 @@ export default function Knowledge({
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ==============================================================
+            TAB 2: DOMAINS & ROUTING ENGINE (FULL WIDTH)
+        ============================================================== */}
+        {activeTab === "domains" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Layers className="size-4 text-indigo-600 dark:text-indigo-400" />
+                  Domains & Routing Engine Configuration
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Classifier keywords, domain icons, colors, and Jira escalation routing rules
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900 px-3 py-1">
+                {classifierDomains.length} Active Domains
+              </Badge>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-card shadow-xs overflow-hidden">
+              {domainsError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-xs border-b border-rose-200 dark:border-rose-900">
+                  {domainsError}
+                </div>
+              )}
+
+              {domainsLoading && classifierDomains.length === 0 ? (
+                <div className="p-12 text-center text-slate-400 text-xs">Loading domains configuration...</div>
+              ) : (
+                <DomainClassifierManager
+                  domains={classifierDomains}
+                  onRefresh={loadClassifierData}
+                  canManage={canManageDomains}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ==========================================================

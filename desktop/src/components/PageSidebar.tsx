@@ -10,6 +10,7 @@ import { useNotifications, NotificationBell } from "@/components/NotificationBel
 import {
   listConversations,
   deleteConversation,
+  clearConversations,
   renameConversation,
   pinConversation,
 } from "@/features/conversations/api";
@@ -109,48 +110,60 @@ export default function PageSidebar({
           ) : (
             <div className="grid size-8 place-items-center rounded-lg bg-blue-600 text-xs font-bold text-white">iTH</div>
           )}
+          {onToggleCollapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              title="Expand sidebar (Ctrl+B)"
+              aria-label="Expand sidebar"
+              className="mt-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+          )}
         </div>
       ) : (
-        <div className="flex h-16 items-center gap-3 border-b px-5 dark:border-slate-800">
-          {branding.logo ? (
-            <img src={branding.logo} alt="Company logo" className="size-9 shrink-0 rounded-xl object-contain" />
-          ) : (
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white">iTH</div>
-          )}
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-100">{branding.appName || "IT Help Chatbot"}</div>
+        <div className="flex h-16 items-center justify-between border-b px-4 dark:border-slate-800">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {branding.logo ? (
+              <img src={branding.logo} alt="Company logo" className="size-8 shrink-0 rounded-xl object-contain" />
+            ) : (
+              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white shadow-xs">iTH</div>
+            )}
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-slate-100 truncate">{branding.appName || "IT Help Chatbot"}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("ith:restore-assistant-btn"));
+              }}
+              title="Assistant widget"
+              aria-label="Show floating assistant button"
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+            >
+              <Bot className="size-4" />
+            </button>
+            {canManage && (
+              <NotificationBell notices={notices} collapsed={collapsed} onOpen={onNavigate} />
+            )}
+            {onToggleCollapsed && (
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                title="Collapse sidebar (Ctrl+B)"
+                aria-label="Collapse sidebar"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+              >
+                <PanelLeftClose className="size-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
-
-      {/* Action icons row (bot restore / notifications / collapse) */}
-      <div className={"flex items-center gap-1 border-b border-[var(--sidebar-border)] py-2 " + (collapsed ? "flex-col justify-center px-1" : "justify-end px-4")}>
-        <button
-          type="button"
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent("ith:restore-assistant-btn"));
-          }}
-          title="Show floating assistant button"
-          aria-label="Show floating assistant button"
-          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
-        >
-          <Bot className="size-4" />
-        </button>
-        {canManage && (
-          <NotificationBell notices={notices} collapsed={collapsed} onOpen={onNavigate} />
-        )}
-        {onToggleCollapsed && (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            title={collapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
-          >
-            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-          </button>
-        )}
-      </div>
 
       <nav className={"flex-1 py-4 " + (collapsed ? "px-2" : "px-3")}>
         {items.map((item) => {
@@ -203,17 +216,40 @@ export default function PageSidebar({
         {/* Recent Chat History in Sidebar */}
         {!collapsed && (
           <div className="mt-4 pt-3 border-t border-[var(--sidebar-border)]/60">
-            <button
-              type="button"
-              onClick={() => setHistoryOpen(!historyOpen)}
-              className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-semibold tracking-wider text-slate-400 hover:text-slate-200 transition"
-            >
-              <span className="flex items-center gap-1.5">
-                History
+            <div className="flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold tracking-wider text-slate-400">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(!historyOpen)}
+                className="flex items-center gap-1.5 hover:text-slate-200 transition"
+              >
+                <span>History</span>
                 <span className="text-[10px] text-slate-500 font-normal">({conversations.length})</span>
-              </span>
-              {historyOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-            </button>
+                {historyOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+              </button>
+              {conversations.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (window.confirm("Are you sure you want to delete all chat history? This cannot be undone.")) {
+                      try {
+                        await clearConversations();
+                        loadHistory();
+                        setActiveSessionId("");
+                        window.dispatchEvent(new CustomEvent("ith:new-chat"));
+                      } catch {
+                        // ignore error
+                      }
+                    }
+                  }}
+                  className="rounded p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 transition"
+                  title="Delete all history"
+                  aria-label="Delete all history"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              )}
+            </div>
 
             {historyOpen && (
               <div className="mt-1 space-y-0.5 max-h-60 overflow-y-auto pr-1">
