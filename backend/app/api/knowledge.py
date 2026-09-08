@@ -269,6 +269,11 @@ def article_delete(page_id: str, user: str = Depends(get_current_user),
         if meta:
             s.delete(meta)
             s.commit()
+    try:
+        from app.rag.bm25_index import BM25IndexManager
+        BM25IndexManager.get_instance().invalidate()
+    except Exception as exc:
+        logging.getLogger("knowledge").debug("BM25 index invalidation ignored: %s", exc)
     return {"status": "deleted", "page_id": page_id}
 
 

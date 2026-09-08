@@ -124,6 +124,12 @@ def ingest_article(art: dict) -> str:
     _upsert_meta(art["page_id"], chash, art["domain"], art["title"], art.get("source_url") or "",
                  body=art.get("body"), updated_by=art.get("updated_by"))
 
+    try:
+        from app.rag.bm25_index import BM25IndexManager
+        BM25IndexManager.get_instance().invalidate()
+    except Exception as exc:
+        logger.debug("BM25 index invalidation ignored: %s", exc)
+
     return "updated" if existing else "inserted"
 
 

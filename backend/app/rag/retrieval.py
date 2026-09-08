@@ -62,12 +62,20 @@ def _vector_search(query: str, k: int, filter_clause: dict | None) -> list[dict]
 
 
 def _keyword_search(query: str, k: int, filter_clause: dict | None) -> list[dict]:
-    """Postgres full-text keyword search on chunk text (exact-term recall).
+    """Lexical keyword search: BM25 Okapi with PostgreSQL FTS fallback.
 
-    Uses websearch_to_tsquery over the langchain_pg_embedding.document column;
-    domain filter applied client-side (small corpus). Falls back to ILIKE
-    term matching when FTS finds nothing.
+    Option A: Uses in-memory BM25Okapi index for fast (<1.5ms) and accurate term
+    saturation / length normalization scoring without GPU overhead. Falls back
+    to PostgreSQL websearch_to_tsquery if BM25 is not ready.
     """
+    from app.rag.bm25_index import BM25IndexManager
+
+    bm25_mgr = BM25IndexManager.get_instance()
+    bm25_results = bm25_mgr.search(query, k=k, filter_clause=filter_clause)
+    if bm25_results:
+        return bm25_results
+
+    # Fallback to Postgres FTS if BM25 index returned nothing or is uninitialized
     from sqlalchemy import text as sqltext
 
     from app.persistence.database import engine
