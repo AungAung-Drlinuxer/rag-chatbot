@@ -1,68 +1,104 @@
-# ragchatbot — it-help-chatbot (governance refactor workspace)
+# ragchatbot — IT Help Chatbot (Enterprise RAG Assistant)
 
-Modular-architecture working copy of the **it-help-chatbot** project. Structure here is
-the target shape for the production app (see boundary rules below). Live production
-deployments still build from the original workspace until this repo is merged back.
+A production-grade, on-premise AI Assistant platform featuring **LangGraph RAG orchestration**, **Hybrid Search (PostgreSQL PGVector + in-memory BM25s Okapi)**, **Cross-Encoder Reranking**, **OpenBao Secrets Vault**, and full-stack **LGMT Observability (Loki, Grafana, Prometheus, Tempo via Grafana Alloy)**.
 
-## Layout
+---
 
+## 🌟 Core Architecture & Capabilities
+
+```text
+[ Desktop Client / Web (React 18 + Vite + Tailwind) ]
+                    │  HTTPS / SSE Streaming
+                    ▼
+[ NGINX Ingress Controller / MetalLB VIP: 10.10.10.200 ]
+                    │
+                    ▼
+[ FastAPI Backend + LangGraph StateGraph (drlinuxer-prod RKE2) ]
+   ├── Classify Domain ──────► Dynamic Keywords & Classifier Domains Engine
+   ├── Query Rewrite   ──────► Multi-turn Context Resolution
+   ├── Hybrid Retrieval:
+   │    ├── Dense Semantic  ──► Ollama (bge-m3:latest, 1024-dim, :11434) + PGVector HNSW
+   │    └── Sparse Lexical  ──► BM25s Okapi (< 1.5ms, CPU-only, in-memory inverted index)
+   ├── RRF Fusion (k=60)    ──► Reciprocal Rank Fusion of Vector & Lexical candidates
+   ├── Cross-Encoder Rerank ──► rerank-svc:8080 (bge-reranker-large deep scoring)
+   ├── Confidence Gate      ──► Blended Gate: Score >= 0.75 (Answer) vs < 0.75 (Caution / HITL)
+   └── Human-In-The-Loop    ──► Pauses graph; centered admin approval modal; creates Jira (ITHD)
 ```
+
+---
+
+## 📦 Directory Structure
+
+```text
 ragchatbot/
-├── backend/         FastAPI + LangGraph RAG service  (see backend/DEPLOYMENT-NOTES.md)
-│   └── app/{api,core,auth,classifier,orchestration,rag,llm,knowledge,
-│            integrations,persistence,observability,tools}/
-├── desktop/         Tauri + React client, feature-sliced (Step 1–4 done, verified)
-│   └── src/{shared,features/<domain>/{api.ts,api,pages,components,hooks},components}
-└── docs/qa/         screenshot evidence from live E2E runs
+├── backend/                  # FastAPI service, LangGraph RAG, PGVector & Celery workers
+│   ├── app/
+│   │   ├── api/              # REST & SSE routers (chat, auth, knowledge, tickets, admin, etc.)
+│   │   ├── classifier/       # Domain classification engine
+│   │   ├── knowledge/        # Confluence / file ingest & chunking pipelines
+│   │   ├── llm/              # Primary & fallback client (Ollama llama3.2:1b fallback)
+│   │   ├── observability/    # OTel tracing (Tempo) & Prometheus metrics exporter
+│   │   ├── orchestration/    # High-level RAG orchestration
+│   │   ├── persistence/      # CloudNativePG SQLAlchemy models, Redis Sentinel, OpenBao resolver
+│   │   ├── rag/              # Hybrid retrieval: PGVector, in-memory BM25s, reranker
+│   │   └── tools/            # Ticket tools & status query heuristics
+│   ├── eval/                 # RAG evaluation dataset & goldset test harness
+│   ├── workers/              # Celery background tasks & Confluence beat sync
+│   └── Dockerfile            # Python 3.12 + uv slim container image
+├── desktop/                  # Web SPA & Tauri cross-platform desktop application
+│   ├── src/
+│   │   ├── app/              # Unified theme engine, session bootstrap
+│   │   ├── components/       # Shared UI components (PageSidebar, FloatingChat, CommandPalette)
+│   │   └── features/         # Domain-sliced modules (chat, knowledge, tickets, users, settings...)
+│   └── Dockerfile            # Multi-stage Node.js 22 build + NGINX static server
+├── docs/                     # System architecture SVG/HTML diagram and QA screenshots
+└── infra/k8s/                # Kubernetes manifests
+    ├── monitoring/           # LGMT stack manifests (KSM, Node Exporter, Grafana Alloy)
+    ├── openbao/              # OpenBao 3-node Raft HA Vault manifests
+    └── postgres/             # CloudNativePG HA cluster templates
 ```
 
-Related components (live in the production workspace, deploy manifests):
-`rerank-svc/` standalone cross-encoder scoring service + `infra/k8s/*.yaml`.
+---
 
-## Boundary rules (enforced)
+## 🛡️ Telemetry & Observability (LGMT Stack)
 
-| Rule | Backend | Desktop |
-|---|---|---|
-| API layer = HTTP only | `app/api/*` routers | pages import `features/*/api.ts` |
-| DB access downstream only | `persistence/repositories/` | n/a |
-| External systems isolated | `integrations/` | `shared/api/client.ts` (only raw fetch) |
-| Config externalized | YAML/config env | `VITE_API_URL` build arg |
-| Long work in workers | `workers/` (celery) | n/a |
-| Governance gate | ruff + pytest | **eslint: `no-restricted-globals: fetch` + `no-restricted-imports: ./api`** |
+Telemetry data forwards to the central host (`10.10.10.18`):
+- **Grafana Web UI:** `http://10.10.10.18:3000`
+  - *IT Help Chatbot - Observability & LGMT:* `/d/apjntq/it-help-chatbot-observability-and-lgmt`
+  - *IT Help Chatbot - APM & Tracing (RAG Deep Dive):* `/d/az9v2m/it-help-chatbot-apm-and-tracing-rag-deep-dive`
+  - *IT Help Chatbot - LLM Observability (4 Pillars):* `/d/at9w8v/0698a8b`
+- **Prometheus (Metrics):** `http://10.10.10.18:9090` (Scraped by Grafana Alloy)
+- **Loki (Logs):** `http://10.10.10.18:3100` (Pushed by Grafana Alloy DaemonSet)
+- **Tempo (Traces):** `http://10.10.10.18:3200` & OTLP `http://10.10.10.18:4318` (Live RAG breakdown)
 
-## Verification gates (run before every merge)
+---
 
-Desktop:
+## 🚀 Quick Deployment Guide
+
+### 1. Build and Push Images
 ```bash
+# Build Frontend
 cd desktop
-npm ci
-npx tsc --noEmit            # must be 0 errors
-npx eslint src              # governance violations must be 0
-npm run build               # must succeed
-node scripts/step4-pages-verify.mjs   # 7-page walk against live API
-node scripts/live-fe0001-verify.mjs   # FULL live E2E incl. real chat stream
+docker build -t harbor.drlinuxer.com/ragchatbot/frontend:latest .
+docker push harbor.drlinuxer.com/ragchatbot/frontend:latest
+
+# Build Backend
+cd ../backend
+docker build -t harbor.drlinuxer.com/ragchatbot/backend:latest .
+docker push harbor.drlinuxer.com/ragchatbot/backend:latest
 ```
 
-Backend:
+### 2. Deploy to Kubernetes
 ```bash
-cd backend
-uv sync && uv run pytest -q
-uv run ruff check app workers
+# Deploy Monitoring stack (KSM + Node Exporter + Grafana Alloy)
+kubectl apply -k infra/k8s/monitoring/
+
+# Update Workloads
+kubectl -n it-help-chatbot set image deploy/frontend frontend=harbor.drlinuxer.com/ragchatbot/frontend:latest
+kubectl -n it-help-chatbot set image deploy/backend backend=harbor.drlinuxer.com/ragchatbot/backend:latest
 ```
 
-## Image / deploy convention (user-mandated discipline)
+---
 
-```
-build → push harbor.drlinuxer.com/ragchatbot/<component>:<ver> → kubectl set image
-→ LIVE VERIFY: served bundle hash + unique strings + screenshot E2E
-```
-Never declare "done" from a local build alone.
-- Frontend tag series restarted at **0.0.01** (2026-09-03) for this repo's lineage.
-- Live state at authoring time: `ragchatbot/frontend:0.0.01` on `deploy/frontend`,
-  backend `0.22.01` with `RERANK_MODE=remote`, `rerank-svc:1.0.0` (2–4 replicas, HPA).
-
-## Branch flow
-
-- `main` — tagged, deployable (tags = image versions)
-- `dev`  — active development; PRs into main require the verification gates above
-- Feature branches: `feat/<scope>-<summary>`, one refactor step per PR (see git log)
+## 🔐 Credentials & Secrets Hygiene
+All actual credentials, secrets, API tokens, and private keys have been completely sanitized and replaced with placeholders (`__REPLACE_WITH_*__`). Ensure real secrets are mounted via OpenBao Vault or sealed Kubernetes Secrets before production execution.

@@ -104,6 +104,7 @@ export default function App() {
     setRefreshToken(null);
     setUserName("");
     setAuthed(false);
+    // Note: Do NOT reset data-theme to light on logout so the user's preferred theme persists seamlessly
   }
 
   const shell = (active: string, children: React.ReactNode) => (

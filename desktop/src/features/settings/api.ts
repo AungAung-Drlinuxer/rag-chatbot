@@ -44,17 +44,19 @@ export async function putUserSettings(settings: Record<string, any>) {
   return r.json();
 }
 
-export async function getMySettings(): Promise<UserSettings> {
+export async function getMySettings(): Promise<UserSettings | Record<string, any>> {
   const r = await apiFetch(`${BASE}/api/settings`, { headers: authHeaders() });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
-  // v0.22.2 — backend returns { settings: {...} } (SettingsPage already unwraps
-  // it); App.tsx's boot-time theme restore consumed the WRAPPER and saw
-  // undefined for every pref, so the saved light/dark theme reset on relogin.
-  // Unwrap here so every consumer gets the flat prefs map.
-  return (j && typeof j === "object" && j.settings && typeof j.settings === "object")
-    ? j.settings
-    : (j ?? {});
+  // Backend returns flat user preferences dict directly on /api/settings.
+  // Handle both flat { theme, darkMode, ... } or legacy wrapped { settings: {...} }.
+  if (j && typeof j === "object") {
+    if (j.settings && typeof j.settings === "object") {
+      return { ...j, ...j.settings };
+    }
+    return j;
+  }
+  return {};
 }
 
 export async function updateMySettings(patch: Partial<UserSettings>): Promise<UserSettings> {
