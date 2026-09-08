@@ -178,8 +178,8 @@ export default function Knowledge({
   initialTab,
   onToast,
 }: Props) {
-  const canManage = role === "admin" || role === "agent";
-  const canManageDomains = role === "admin" || role === "domain_manager";
+  const canManage = role === "admin" || role === "agent" || role === "knowledge" || role === "domain_manager";
+  const canManageDomains = role === "admin" || role === "knowledge" || role === "domain_manager";
 
   // Tab State: "articles" | "domains"
   const [activeTab, setActiveTab] = useState<"articles" | "domains">(initialTab || "articles");
@@ -450,64 +450,6 @@ export default function Knowledge({
       />
 
       <main className="mx-auto max-w-[1560px] p-4 lg:p-6 space-y-5">
-        {/* ==============================================================
-            TOP SEARCH BAR & DOMAIN CHIPS
-        ============================================================== */}
-        <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-blue-50/40 via-card to-indigo-50/20 p-5 shadow-xs dark:from-blue-950/15 dark:via-card dark:to-indigo-950/15">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="size-4 text-blue-600" />
-                Find Knowledge & Verify Domain Coverage
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Real-time search across internal knowledge documents and classifier routing domains.
-              </p>
-            </div>
-
-            <form onSubmit={handleSearch} className="flex items-center gap-2 w-full md:w-[420px]">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search solutions, errors, procedures..."
-                  className="h-10 w-full rounded-xl border border-[var(--border)] bg-white pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:bg-slate-900"
-                />
-              </div>
-              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl px-4 text-xs">
-                Search
-              </Button>
-            </form>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--border)]/60">
-            <span className="text-[11px] font-semibold text-slate-400 mr-1">Filter Domain:</span>
-            {chips.map((domain) => {
-              const active = domain === chip;
-              const label = domain === "all" ? "All Domains" : metaFor(domain).label;
-              return (
-                <button
-                  key={domain}
-                  type="button"
-                  onClick={() => {
-                    setChip(domain);
-                    setPage(1);
-                  }}
-                  className={[
-                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
-                    active
-                      ? "border-blue-600 bg-blue-600 text-white shadow-xs"
-                      : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
-                  ].join(" ")}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
         {/* ==============================================================
             MODERN TAB NAVIGATION
         ============================================================== */}

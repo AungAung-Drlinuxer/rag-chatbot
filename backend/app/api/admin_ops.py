@@ -34,9 +34,9 @@ def _rows(sql: str, params: dict | None = None) -> list[dict]:
 # any non-Administrator permission via PUT /api/rbac/matrix.
 _RBAC_DEFAULT_MATRIX: dict[str, dict[str, bool]] = {
     "Administrator": {"chatbot": True,  "kb_search": True, "create_tickets": True, "manage_kb": True, "manage_users": True, "manage_domains": True},
-    "Domain Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": True},
+    "Domain Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": True},
     "IT Support":    {"chatbot": True,  "kb_search": True, "create_tickets": True, "manage_kb": False, "manage_users": False, "manage_domains": False},
-    "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": False},
+    "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": True},
     "User":          {"chatbot": True,  "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": False},
 }
 _RBAC_ROLES = tuple(_RBAC_DEFAULT_MATRIX.keys())

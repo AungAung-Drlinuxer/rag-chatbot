@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status
 from app.auth.deps import get_current_user
 from app.config import SETTINGS
 
-ROLES = ("admin", "agent", "user", "domain_manager")
+ROLES = ("admin", "agent", "user", "knowledge", "domain_manager")
 
 
 def get_groups(username: str) -> list[str]:
@@ -141,9 +141,9 @@ _MATRIX_ROLE_FOR = {
 
 _DEFAULT_MATRIX = {
     "Administrator": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": True, "manage_users": True, "manage_domains": True},
-    "Domain Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": True},
+    "Domain Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": True},
     "IT Support": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": False, "manage_users": False, "manage_domains": False},
-    "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": False},
+    "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": True},
     "User": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": False},
 }
 

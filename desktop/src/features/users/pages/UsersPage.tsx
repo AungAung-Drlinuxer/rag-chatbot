@@ -122,9 +122,9 @@ function normalizeRole(raw: string | null | undefined): UserRole {
 /* Canonical role → permission defaults (matches backend /api/rbac/matrix) */
 const ROLE_DEFAULTS: Record<UserRole, PermissionMap> = {
   Administrator: { chatbot: true, kb_search: true, create_tickets: true, manage_kb: true, manage_users: true, manage_domains: true },
-  "Domain Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: false, manage_users: false, manage_domains: true },
+  "Knowledge Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: true, manage_users: false, manage_domains: true },
+  "Domain Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: true, manage_users: false, manage_domains: true },
   "IT Support": { chatbot: true, kb_search: true, create_tickets: true, manage_kb: false, manage_users: false, manage_domains: false },
-  "Knowledge Manager": { chatbot: true, kb_search: true, create_tickets: false, manage_kb: true, manage_users: false, manage_domains: false },
   User: { chatbot: true, kb_search: true, create_tickets: false, manage_kb: false, manage_users: false, manage_domains: false },
 };
 
