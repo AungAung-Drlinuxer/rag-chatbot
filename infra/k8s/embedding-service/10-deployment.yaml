@@ -1,4 +1,4 @@
-# === it-help-chatbot — Embedding service (FastAPI / BAAI bge) =================
+# === rag-chatbot — Embedding service (FastAPI / BAAI bge) =================
 # Air-gapped inference server for vector embeddings. Wraps a SentenceTransformers
 # model loaded from the shared `embedding-models-pvc` (same PVC as ollama) OR
 # from the in-container model directory. The bge-small-en model is pre-baked
@@ -8,7 +8,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: embedding-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: embedding-service
     app.kubernetes.io/component: ai-runtime
@@ -55,7 +55,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: embedding-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: embedding-service
@@ -68,7 +68,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: embedding-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

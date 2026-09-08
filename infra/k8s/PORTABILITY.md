@@ -1,4 +1,4 @@
-# it-help-chatbot — Deployment Portability Checklist (New Cluster)
+# rag-chatbot — Deployment Portability Checklist (New Cluster)
 
 Verdict: **the repo is portable** — every file needed to rebuild the stack on a
 different cluster is in git, and nothing hard-codes values that cannot be
@@ -38,7 +38,7 @@ overridden. This checklist walks through what to change and what to watch.
    ```
    docker build -t <registry>/ragchatbot/backend:0.0.15 backend/
    docker build -t <registry>/ragchatbot/frontend:0.0.26 desktop/
-   docker build -t <registry>/ragchatbot/rerank-svc:1.0.0 infra/k8s/rerank-svc/   # build context = infra/k8s/rerank-svc
+   docker build -t <registry>/rag-chatbot/rerank-svc:1.0.1 infra/k8s/rerank-svc/   # build context = infra/k8s/rerank-svc
    docker build -t <registry>/platform/ollama:0.5.7-models <ollama-dir>          # needs model bake step
    ```
    Then `grep -rl "harbor.drlinuxer.com" infra/k8s/ | xargs sed -i 's|harbor.drlinuxer.com|<registry>|'`.
@@ -77,9 +77,9 @@ Fresh cluster = empty database. If you must carry conversations/KB content:
 
 ```bash
 # On the OLD cluster
-kubectl -n it-help-chatbot exec postgres-ha-1 -- pg_dump -U postgres -Fc assistant > dump.sql.f
+kubectl -n rag-chatbot exec postgres-ha-1 -- pg_dump -U postgres -Fc assistant > dump.sql.f
 # On the NEW cluster (after pods are up)
-kubectl -n it-help-chatbot exec -i postgres-ha-1 -- pg_restore -U postgres -d assistant --clean --if-exists < dump.sql.f
+kubectl -n rag-chatbot exec -i postgres-ha-1 -- pg_restore -U postgres -d assistant --clean --if-exists < dump.sql.f
 ```
 
 KB vectors live in `langchain_pg_embedding` — included in the same dump. If

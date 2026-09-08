@@ -1,4 +1,4 @@
-# === it-help-chatbot — Ingress (nginx-ingress + cert-manager) ================
+# === rag-chatbot — Ingress (nginx-ingress + cert-manager) ================
 # Public hostname: chat.drlinuxer.com
 # TLS: wildcard certificate `drlinuxer-tls` already issued in-cluster.
 # Path routing:
@@ -11,7 +11,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: frontend-ingress
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "32m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
@@ -59,7 +59,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: backend
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
 spec:

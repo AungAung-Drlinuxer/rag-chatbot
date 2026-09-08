@@ -1,23 +1,23 @@
-# === it-help-chatbot — Backend (FastAPI / modular app/) =====================
+# === rag-chatbot — Backend (FastAPI / modular app/) =====================
 # Source: harbor.drlinuxer.com/ragchatbot/backend
 # Reads config from env (live override) and `system_settings` (DB) for
 # integrations. Connects to:
-#   postgres-ha-rw.it-help-chatbot.svc.cluster.local:5432
-#   redis-service.it-help-chatbot.svc.cluster.local:6379
-#   ollama.it-help-chatbot.svc.cluster.local:11434
-#   embedding-service.it-help-chatbot.svc.cluster.local:8080
-#   rerank-svc.it-help-chatbot.svc.cluster.local:8080
+#   postgres-ha-rw.rag-chatbot.svc.cluster.local:5432
+#   redis-service.rag-chatbot.svc.cluster.local:6379
+#   ollama.rag-chatbot.svc.cluster.local:11434
+#   embedding-service.rag-chatbot.svc.cluster.local:8080
+#   rerank-svc.rag-chatbot.svc.cluster.local:8080
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: backend-config
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 data:
   # Non-secret runtime config
   APP_ENV: "prod"
   LOG_LEVEL: "info"
-  RAGCHAT_NAMESPACE: "it-help-chatbot"
+  RAGCHAT_NAMESPACE: "rag-chatbot"
   ALLOWED_DOMAINS: "chat.drlinuxer.com"
   CONFLUENCE_BASE_URL: "https://drlinuxer.atlassian.net/wiki"
   CONFLUENCE_EMAIL: "ops@drlinuxer.com"
@@ -52,13 +52,13 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: backend-secrets
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 type: Opaque
 stringData:
   # DB connection — used by the application AND by the in-cluster admin tools.
-  DATABASE_URL: "postgresql+psycopg2://app:__DB_PASSWORD__@postgres-ha-rw.it-help-chatbot.svc.cluster.local:5432/assistant"
+  DATABASE_URL: "postgresql+psycopg2://app:__DB_PASSWORD__@postgres-ha-rw.rag-chatbot.svc.cluster.local:5432/assistant"
   # Redis
-  REDIS_URL: "redis://app:__REDIS_PASSWORD__@redis-service.it-help-chatbot.svc.cluster.local:6379/0"
+  REDIS_URL: "redis://app:__REDIS_PASSWORD__@redis-service.rag-chatbot.svc.cluster.local:6379/0"
   # Auth
   JWT_SECRET: "__REPLACE_WITH_RANDOM_64_BYTES__"
   # Service-to-service auth between backend and rerank/embedding
@@ -77,7 +77,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: backend
     app.kubernetes.io/component: api
@@ -108,7 +108,7 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
-      serviceAccountName: it-help-chatbot-backend
+      serviceAccountName: rag-chatbot-backend
       automountServiceAccountToken: true
       containers:
         - name: backend
@@ -147,7 +147,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: backend
@@ -160,7 +160,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: it-help-api
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

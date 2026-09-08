@@ -1,4 +1,4 @@
-# === it-help-chatbot — Ollama (local CPU LLM / embeddings runtime) ===========
+# === rag-chatbot — Ollama (local CPU LLM / embeddings runtime) ===========
 # Air-gapped: model pre-baked into the image at build-time (no runtime pulls).
 # Models: nomic-embed-text (embeddings), llama3.2:1b (fallback chat).
 # Pulls from Harbor `platform/ollama:<tag>` — do NOT use the upstream ollama
@@ -8,7 +8,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ollama
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: ollama
     app.kubernetes.io/component: ai-runtime
@@ -67,7 +67,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: embedding-models-pvc
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
@@ -79,7 +79,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ollama
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: ollama

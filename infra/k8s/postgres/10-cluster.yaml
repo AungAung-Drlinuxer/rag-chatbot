@@ -1,4 +1,4 @@
-# === it-help-chatbot — PostgreSQL HA (CloudNativePG) =========================
+# === rag-chatbot — PostgreSQL HA (CloudNativePG) =========================
 # 3-instance primary/standby/standby streaming replication cluster with
 # pgvector extension enabled at bootstrap. Storage class is TrueNAS iSCSI
 # (project-managed); substitute with your storage class when replaying.
@@ -16,11 +16,11 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: postgres-ha
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: postgres-ha
     app.kubernetes.io/component: database
-    app.kubernetes.io/part-of: it-help-chatbot
+    app.kubernetes.io/part-of: rag-chatbot
 spec:
   instances: 3
   imageName: ghcr.io/cloudnative-pg/postgresql:16.4

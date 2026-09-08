@@ -1,11 +1,11 @@
-# === it-help-chatbot — Rerank service (FastAPI / BAAI bge-reranker-base) ======
+# === rag-chatbot — Rerank service (FastAPI / BAAI bge-reranker-base) ======
 # Pairs with the retrieval pipeline to improve top-N precision.
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: rerank-svc
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: rerank-svc
     app.kubernetes.io/component: ai-runtime
@@ -23,7 +23,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: rerank
-          image: harbor.drlinuxer.com/ragchatbot/rerank-svc:1.0.0
+          image: harbor.drlinuxer.com/rag-chatbot/rerank-svc:1.0.1
           imagePullPolicy: IfNotPresent
           env:
             - name: RERANK_MODEL
@@ -64,7 +64,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: rerank-svc
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: rerank-svc
@@ -77,7 +77,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: rerank-svc
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

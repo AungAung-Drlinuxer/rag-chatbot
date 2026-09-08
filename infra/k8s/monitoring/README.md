@@ -13,7 +13,7 @@ This directory contains the Kubernetes manifests to deploy cluster telemetry age
         ├── Scrapes KSM + Node Exporter + cAdvisor ──► Prometheus (http://10.10.10.18:9090/api/v1/write)
         └── Scrapes /var/log/pods/*/*/*.log       ──► Loki       (http://10.10.10.18:3100/loki/api/v1/push)
 
-[ it-help-chatbot Backend ]
+[ rag-chatbot Backend ]
   └── OpenTelemetry SDK           (Traces per chat query) ──► Tempo (http://10.10.10.18:4318/v1/traces)
 ```
 
@@ -31,8 +31,8 @@ kubectl -n monitoring get pods -o wide
 
 - **Grafana Web UI:** `http://10.10.10.18:3000` (User: `admin` / Password: `[CONFIGURED]`)
   - Dashboards:
-    - *IT Help Chatbot - Observability & LGMT:* `/d/apjntq/it-help-chatbot-observability-and-lgmt`
-    - *IT Help Chatbot - APM & Tracing (RAG Deep Dive):* `/d/az9v2m/it-help-chatbot-apm-and-tracing-rag-deep-dive`
+    - *IT Help Chatbot - Observability & LGMT:* `/d/apjntq/rag-chatbot-observability-and-lgmt`
+    - *IT Help Chatbot - APM & Tracing (RAG Deep Dive):* `/d/az9v2m/rag-chatbot-apm-and-tracing-rag-deep-dive`
 - **Prometheus:** `http://10.10.10.18:9090`
 - **Loki:** `http://10.10.10.18:3100`
 - **Tempo:** `http://10.10.10.18:3200` (Search / HTTP) & `http://10.10.10.18:4318` (OTLP receiver)

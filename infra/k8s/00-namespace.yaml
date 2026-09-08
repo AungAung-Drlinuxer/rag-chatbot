@@ -1,4 +1,4 @@
-# === it-help-chatbot — Namespace + Kustomize root =============================
+# === rag-chatbot — Namespace + Kustomize root =============================
 # Apply with:
 #   kubectl apply -f infra/k8s/00-namespace.yaml
 #   kubectl apply -k infra/k8s/
@@ -6,20 +6,20 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: it-help-chatbot
+  name: rag-chatbot
   labels:
-    name: it-help-chatbot
-    app.kubernetes.io/part-of: it-help-chatbot
+    name: rag-chatbot
+    app.kubernetes.io/part-of: rag-chatbot
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: it-help-chatbot
+namespace: rag-chatbot
 
 commonLabels:
-  app.kubernetes.io/part-of: it-help-chatbot
+  app.kubernetes.io/part-of: rag-chatbot
 
 resources:
   - postgres/00-secret-app.yaml

@@ -1,10 +1,10 @@
-# === it-help-chatbot — redisinsight (Redis admin UI) =========================
+# === rag-chatbot — redisinsight (Redis admin UI) =========================
 
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redisinsight-data
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
@@ -16,7 +16,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redisinsight
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: redisinsight
 spec:
@@ -56,7 +56,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redisinsight-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: redisinsight

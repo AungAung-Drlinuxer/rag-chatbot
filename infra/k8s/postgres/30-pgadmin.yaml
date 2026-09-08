@@ -1,4 +1,4 @@
-# === it-help-chatbot — pgAdmin (admin web UI for the HA cluster) =============
+# === rag-chatbot — pgAdmin (admin web UI for the HA cluster) =============
 # Internal-only — exposed via the same `chat.drlinuxer.com` ingress with a
 # path prefix. NOT publicly reachable.
 
@@ -6,7 +6,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pgadmin
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: pgadmin
     app.kubernetes.io/component: database-tools
@@ -76,7 +76,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: pgadmin-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: pgadmin
@@ -89,7 +89,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: pgadmin-pvc
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   accessModes: ["ReadWriteOnce"]
   resources:
@@ -101,7 +101,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: pgadmin-secret
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 type: Opaque
 stringData:
   password: __REPLACE_WITH_RANDOM_24_BYTES__

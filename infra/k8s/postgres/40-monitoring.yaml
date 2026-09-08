@@ -1,11 +1,11 @@
-# === it-help-chatbot — CNPG monitoring configmap =============================
+# === rag-chatbot — CNPG monitoring configmap =============================
 # Standard queries for CloudNativePG podmonitor (postgres_exporter sidecar).
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cnpg-default-monitoring
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     cnpg.io/monitoring: "true"
 data:

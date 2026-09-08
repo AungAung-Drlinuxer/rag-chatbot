@@ -1,4 +1,4 @@
-# === it-help-chatbot — Redis Sentinel =========================================
+# === rag-chatbot — Redis Sentinel =========================================
 # 3 sentinels form a Raft group, automatically elect a master after failover.
 # Application connects via `redis-service` ClusterIP which the backend
 # python-redis client resolves through sentinel topology discovery.
@@ -7,7 +7,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: redis-sentinel
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   serviceName: redis-sentinel-headless
   replicas: 3
@@ -62,7 +62,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-sentinel-headless
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   clusterIP: None
   selector:
@@ -77,7 +77,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-sentinel-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: redis
@@ -91,7 +91,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-service
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   spec:
   # Empty selector + sentinel-managed proxy discovery (sentinel-aware client).
   # Python redis://...&sentinel=it-help-redis discovers the master at runtime.

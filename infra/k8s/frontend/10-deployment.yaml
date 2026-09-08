@@ -1,4 +1,4 @@
-# === it-help-chatbot — Frontend (Vite/React, served by nginx) ===============
+# === rag-chatbot — Frontend (Vite/React, served by nginx) ===============
 # Source: harbor.drlinuxer.com/ragchatbot/frontend
 # Static SPA — pure nginx, no API in the pod. All `/api/*` calls are reverse
 # proxied to the backend service in-cluster.
@@ -7,7 +7,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: frontend
 spec:
@@ -47,7 +47,7 @@ spec:
           env:
             # Vite build-time env (VITE_*) is baked into the bundle; runtime
             # only configures nginx behaviour.
-            - { name: BACKEND_UPSTREAM, value: "http://backend.it-help-chatbot.svc.cluster.local:8000" }
+            - { name: BACKEND_UPSTREAM, value: "http://backend.rag-chatbot.svc.cluster.local:8000" }
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 200m, memory: 128Mi }
@@ -68,7 +68,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   selector:
     app.kubernetes.io/name: frontend

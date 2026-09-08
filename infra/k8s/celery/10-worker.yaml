@@ -1,4 +1,4 @@
-# === it-help-chatbot — Celery workers (async jobs) ===========================
+# === rag-chatbot — Celery workers (async jobs) ===========================
 # celery-beat triggers periodic KB sync, classifier reload, model-warmup
 # celery-worker runs the actual task graph
 
@@ -6,13 +6,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: backend
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: celery-worker
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: celery-worker
 spec:
@@ -29,7 +29,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
-      serviceAccountName: it-help-chatbot-backend
+      serviceAccountName: rag-chatbot-backend
       automountServiceAccountToken: true
       containers:
         - name: celery-worker
@@ -46,7 +46,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: celery-beat
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
   labels:
     app.kubernetes.io/name: celery-beat
 spec:
@@ -82,7 +82,7 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: keda-hpa-it-help-celery
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   scaleTargetRef:
     name: celery-worker
@@ -93,7 +93,7 @@ spec:
   triggers:
     - type: redis
       metadata:
-        address: redis-service.it-help-chatbot.svc.cluster.local:6379
+        address: redis-service.rag-chatbot.svc.cluster.local:6379
         listName: celery
         listLength: "5"
         passwordFromEnv: REDIS_PASSWORD

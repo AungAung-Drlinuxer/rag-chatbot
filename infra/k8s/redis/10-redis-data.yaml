@@ -1,4 +1,4 @@
-# === it-help-chatbot — Redis (Sentinel HA: 3 primaries + 3 sentinels) =========
+# === rag-chatbot — Redis (Sentinel HA: 3 primaries + 3 sentinels) =========
 # Topology:
 #   redis-data   (StatefulSet, 3 replicas)  — AOF + everysec fsync
 #   redis-sentinel (StatefulSet, 3 replicas) — monitors and elects a master
@@ -11,7 +11,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: redis-pass
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 type: Opaque
 stringData:
   # ACL user 'app' used by the chat backend
@@ -21,7 +21,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: redis-config
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 data:
   redis.conf: |
     bind 0.0.0.0
@@ -57,10 +57,10 @@ data:
     daemonize no
 
     # Master set — three sentinels, 2 votes = quorum
-    sentinel monitor it-help-redis it-help-redis-0.redis-data-headless.it-help-chatbot.svc.cluster.local 6379 2
-    sentinel down-after-milliseconds it-help-redis 5000
-    sentinel failover-timeout it-help-redis 60000
-    sentinel parallel-syncs it-help-redis 1
+    sentinel monitor rag-chatbot-redis redis-data-0.redis-data-headless.rag-chatbot.svc.cluster.local 6379 2
+    sentinel down-after-milliseconds rag-chatbot-redis 5000
+    sentinel failover-timeout rag-chatbot-redis 60000
+    sentinel parallel-syncs rag-chatbot-redis 1
   users.acl: |
     user default off
     user app on >__REPLACE_WITH_RANDOM_32_BYTES__ ~* &* +@all
@@ -70,7 +70,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: redis-data
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   serviceName: redis-data-headless
   replicas: 3
@@ -108,7 +108,7 @@ spec:
                 cp /readonly/redis.conf /conf/redis.conf
               else
                 cp /readonly/redis.conf /conf/redis.conf
-                echo "replicaof it-help-redis-0.redis-data-headless.it-help-chatbot.svc.cluster.local 6379" >> /conf/redis.conf
+                echo "replicaof redis-data-0.redis-data-headless.rag-chatbot.svc.cluster.local 6379" >> /conf/redis.conf
               fi
           volumeMounts:
             - { name: conf,        mountPath: /conf }
@@ -160,7 +160,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-data-headless
-  namespace: it-help-chatbot
+  namespace: rag-chatbot
 spec:
   clusterIP: None
   selector:

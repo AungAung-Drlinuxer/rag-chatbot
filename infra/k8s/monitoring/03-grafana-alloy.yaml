@@ -133,7 +133,7 @@ data:
       role = "pod"
       selectors {
         role  = "pod"
-        field = "metadata.namespace=it-help-chatbot"
+        field = "metadata.namespace=rag-chatbot"
         label = "app=backend"
       }
     }
