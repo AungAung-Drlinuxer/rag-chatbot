@@ -155,8 +155,15 @@ export default function Chat({
       AUTO SCROLL
   ---------------------------------------------------------- */
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
   }, [messages, isTyping]);
 
   /* ----------------------------------------------------------
@@ -339,7 +346,9 @@ export default function Chat({
     setStage("");
     setIsTyping(false);
     window.dispatchEvent(new CustomEvent("ith:new-chat-started"));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   // Ctrl+N / Cmd+N — new chat shortcut
@@ -440,14 +449,14 @@ export default function Chat({
   ---------------------------------------------------------- */
 
   return (
-    <div className="flex h-[calc(100vh-0px)] min-h-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       {mobileHistory && (
         <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMobileHistory(false)} />
       )}
 
       {/* ================= MAIN CHAT ================= */}
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setMobileHistory(true)}>
               <Menu className="size-5" />
@@ -476,7 +485,7 @@ export default function Chat({
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1000px] px-4 py-6 lg:px-8">
             {messages.length === 0 ? (
               <EmptyChat onSuggestion={(q) => { setInput(q); }} />
@@ -609,7 +618,7 @@ export default function Chat({
         )}
 
         {/* Composer — compact single-row */}
-        <div className="border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">
+        <div className="shrink-0 border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">
           <div className="mx-auto max-w-[860px] px-4 py-2 sm:px-6 sm:py-2.5">
             <form onSubmit={sendMessage} className="relative">
               {pendingFiles.length > 0 && (
