@@ -38,10 +38,10 @@ data:
   LANGGRAPH_ENABLED: "1"
   # OAuth / LDAP
   LDAP_ENABLED: "false"
-  LDAP_URL: ""
-  LDAP_BASE_DN: ""
-  LDAP_BIND_DN: ""
-  LDAP_USER_FILTER: "(sAMAccountName={username})"
+  LDAP_URL: "ldap://10.10.10.10:389"
+  LDAP_BASE_DN: "OU=Employees,OU=Dr-Linuxer,DC=drlinuxer,DC=com"
+  LDAP_BIND_DN: "chatbot-svc@drlinuxer.com"
+  LDAP_USER_FILTER: "(&(sAMAccountName={username})(userPrincipalName=*@drlinuxer.com))"
   RBAC_ADMIN_GROUPS: "cn=it-help-admins,ou=groups,dc=drlinuxer,dc=local"
   RBAC_AGENT_GROUPS: "it-help-agents"
   # Observability
@@ -60,6 +60,8 @@ stringData:
   # Redis (sentinel mode; password matches redis users.acl / requirepass)
   REDIS_URL: "redis://redis-service.rag-chatbot.svc.cluster.local:6379/0"
   REDIS_PASSWORD: "__REPLACE_WITH_RANDOM_32_BYTES__"
+  # LDAP service-bind credential (synced with Settings -> Integrations -> LDAP)
+  LDAP_BIND_PASSWORD: "__REPLACE_WITH_RANDOM_32_BYTES__"
   # Auth
   JWT_SECRET: "__REPLACE_WITH_RANDOM_64_BYTES__"
   # Service-to-service auth between backend and rerank/embedding
