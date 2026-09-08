@@ -257,9 +257,9 @@ def update_my_settings(payload: dict, user: str = Depends(get_current_user)) -> 
                 _t(
                     "INSERT INTO user_settings (username, theme, density, prefs) "
                     "VALUES (:u, :t, :d, :p) "
-                    "ON CONFLICT (username) DO UPDATE SET prefs = :p, updated_at = NOW()"
-                ),
-                {"u": user, "t": row.theme or "light", "d": row.density or "comfortable",
+                    "ON CONFLICT (username) DO UPDATE SET theme = :t, density = :d, prefs = :p, updated_at = NOW()"
+                    ),
+                    {"u": user, "t": row.theme or "light", "d": row.density or "comfortable",
                  "p": _json.dumps(prefs)},
             )
         s.commit()

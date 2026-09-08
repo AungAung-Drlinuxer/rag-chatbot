@@ -17,7 +17,13 @@ export function applyStoredTheme(): void {
 export function applyUserPrefs(s: any): void {
   const root = document.documentElement;
   let theme: string | undefined = s?.theme;
-  if (typeof s?.darkMode === "boolean") theme = s.darkMode ? "dark" : "light";
+  // If theme is explicit ("dark" | "light"), trust theme over legacy darkMode
+  if (s?.theme === "dark" || s?.theme === "light") {
+    theme = s.theme;
+  } else if (typeof s?.darkMode === "boolean") {
+    theme = s.darkMode ? "dark" : "light";
+  }
+
   if (!theme || theme === "undefined" || theme === "system") {
     // Check system preference if system or undefined
     const prefersDark = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;

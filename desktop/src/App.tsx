@@ -103,6 +103,9 @@ export default function App() {
     setAuthToken(null);
     setRefreshToken(null);
     setUserName("");
+    setLoginUser("");
+    setLoginPass("");
+    setLoginErr("");
     setAuthed(false);
     // Note: Do NOT reset data-theme to light on logout so the user's preferred theme persists seamlessly
   }

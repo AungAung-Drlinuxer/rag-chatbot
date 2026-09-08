@@ -170,6 +170,8 @@ export default function Settings({ role }: { role?: string }) {
         if (typeof s.appName === "string") setAppName(s.appName);
         if (typeof s.language === "string") setLanguage(s.language);
         if (typeof s.darkMode === "boolean") setDarkMode(s.darkMode);
+        else if (s.theme === "dark") setDarkMode(true);
+        else if (s.theme === "light") setDarkMode(false);
         if (typeof s.compact === "boolean") setCompact(s.compact);
         if (typeof s.timezone === "string") setTimezone(s.timezone);
         if (typeof s.dateFormat === "string") setDateFormat(s.dateFormat);
@@ -207,6 +209,7 @@ export default function Settings({ role }: { role?: string }) {
     setSaving(true); setSaveError(null);
     const payload = {
       appName, language, darkMode, compact, timezone, dateFormat,
+      theme: darkMode ? "dark" : "light",
       itemsPerPage, animations, sounds, welcome, rememberLast,
       emailNotifications, ticketNotifications, sourceCitations,
       strictRBAC, autoSync, syncInterval, topK, similarityThreshold,
