@@ -227,6 +227,25 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         record_counter("chat_requests_total", 1, {"domain": result.domain, "decision": result.decision})
         record_histogram("chat_latency_seconds", time.time() - t0, {"domain": result.domain, "decision": result.decision})
         audit("chat", user, result.domain, result.confidence, result.decision)
+
+        # Record LLM Observability Metrics (Tokens, Cost, Confidence Gate)
+        try:
+            from app.observability.metrics import (
+                RAG_CONFIDENCE_SCORE,
+                RAG_GATE_DECISIONS,
+                record_token_and_cost,
+            )
+            RAG_CONFIDENCE_SCORE.labels(domain=result.domain or "general").observe(result.confidence)
+            RAG_GATE_DECISIONS.labels(decision=result.decision, domain=result.domain or "general").inc()
+            if last_usage is not None:
+                record_token_and_cost(
+                    model=SETTINGS.hchat_model or "minimax/minimax-m3:free",
+                    input_tokens=int(last_usage.get("input_tokens", 0)),
+                    output_tokens=int(last_usage.get("output_tokens", 0)),
+                )
+        except Exception as exc:
+            logger.debug("Failed to update observability metrics: %s", exc)
+
         # Echo LLM usage + RAG tunables on the terminal event so the frontend can
         # show a compact "Usage" pill under the answer.
         done_payload: dict = {"message_id": message_id, "latency_ms": int((time.time() - t0) * 1000)}
@@ -294,6 +313,14 @@ def feedback(req: FeedbackRequest, user: str = Depends(get_current_user)) -> dic
     s.commit()
     s.close()
     audit("feedback", user, detail=f"message_id={req.message_id} rating={req.rating}")
+
+    try:
+        from app.observability.metrics import USER_FEEDBACK_TOTAL
+        label = "helpful" if req.rating > 0 else "not_helpful"
+        USER_FEEDBACK_TOTAL.labels(rating=label).inc()
+    except Exception as exc:
+        logger.debug("Failed to record feedback metric: %s", exc)
+
     return {"status": "ok", "saved": True, "rating": req.rating}
 
 

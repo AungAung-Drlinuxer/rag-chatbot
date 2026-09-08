@@ -341,6 +341,8 @@ def decide_approval(approval_id: str, payload: dict, user: str = Depends(get_cur
 
     try:
         audit("approval.decision", user, detail=f"id={approval_id} decision={decision} ticket={ticket_id}")
+        from app.observability.metrics import ESCALATION_TICKETS_TOTAL
+        ESCALATION_TICKETS_TOTAL.labels(status=decision).inc()
     except Exception:
         pass
     return {

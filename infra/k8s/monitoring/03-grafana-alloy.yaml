@@ -127,6 +127,16 @@ data:
       forward_to      = [prometheus.remote_write.external_prom.receiver]
       scrape_interval = "15s"
     }
+
+    // D. IT-Help-Chatbot Backend LLM & RAG Application Metrics
+    prometheus.scrape "chatbot_backend" {
+      targets = [{
+        __address__ = "backend.it-help-chatbot.svc.cluster.local:8000",
+      }]
+      metrics_path    = "/metrics"
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "10s"
+    }
 ---
 apiVersion: apps/v1
 kind: DaemonSet

@@ -66,3 +66,8 @@ app.include_router(users_router)
 app.include_router(settings_router)
 from app.api.domain_rename import router as domain_rename_router
 app.include_router(domain_rename_router)
+
+from app.observability.metrics import metrics_endpoint
+@app.get("/metrics")
+def get_metrics():
+    return metrics_endpoint()
