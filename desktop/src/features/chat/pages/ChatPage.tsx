@@ -565,8 +565,8 @@ export default function Chat({
         )}
 
         {/* Composer */}
-        <div className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-[#070B14]">
-          <div className="mx-auto max-w-[900px] px-4 py-3 lg:px-8">
+        <div className="border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">
+          <div className="mx-auto max-w-[860px] px-4 py-3.5 sm:px-6 sm:py-4">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                 <Sparkles className="size-3.5 text-blue-500" />
@@ -591,12 +591,12 @@ export default function Chat({
                   ))}
                 </div>
               )}
-              <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 shadow-xs transition-all focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-2 shadow-xs transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900/80 dark:focus-within:bg-slate-900">
                 <button
                   type="button"
                   disabled={uploading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                  className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                   title="Attach file or image"
                 >
                   <Paperclip className="size-4" />
@@ -632,13 +632,13 @@ export default function Chat({
                   }}
                   rows={1}
                   placeholder="Ask an IT question..."
-                  className="max-h-32 min-h-[28px] flex-1 resize-none bg-transparent py-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isTyping}
                   aria-label="Send message"
-                  className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                  className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
                   <ArrowUp className="size-4" />
                 </button>

@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Bot,
@@ -49,28 +48,10 @@ const SUGGESTIONS = [
 ];
 
 export function EmptyChat({ onSuggestion }: { onSuggestion: (question: string) => void }) {
-  const [domains, setDomains] = useState<Array<{ domain: string; display_name?: string }>>([]);
-
-  useEffect(() => {
-    import("@/features/domains/api")
-      .then(({ getClassifierDomains }) => getClassifierDomains())
-      .then((res) => {
-        if (Array.isArray(res?.domains) && res.domains.length > 0) {
-          setDomains(
-            res.domains.map((d: any) => ({
-              domain: d.domain_key,
-              display_name: d.display_name,
-            }))
-          );
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   const chipFor = (key: string) => DOMAIN_ICONS[key] ?? DOMAIN_ICONS.general;
 
   return (
-    <div className="mx-auto w-full max-w-2xl py-4 sm:py-8">
+    <div className="mx-auto w-full max-w-2xl py-6 sm:py-10">
       {/* ============ GREETING HEADER (Clean, modern, Perplexity/ChatGPT style) ============ */}
       <div className="mb-6 text-center sm:mb-8">
         <div className="mx-auto mb-3.5 grid size-12 place-items-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-600/20">
@@ -84,44 +65,8 @@ export function EmptyChat({ onSuggestion }: { onSuggestion: (question: string) =
         </p>
       </div>
 
-      {/* ============ QUICK DOMAIN CHIPS (Minimal horizontal pill list) ============ */}
-      {domains.length > 0 && (
-        <div className="mb-6">
-          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-            {domains.map((d) => {
-              const meta = chipFor(d.domain);
-              const Icon = meta.icon;
-              return (
-                <button
-                  key={d.domain}
-                  type="button"
-                  onClick={() =>
-                    onSuggestion(
-                      SUGGESTIONS.find((s) => s.key === d.domain)?.question ??
-                        `I have a ${d.display_name || d.domain} question.`
-                    )
-                  }
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 text-[11px] font-medium text-slate-600 transition hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-blue-950/40"
-                >
-                  <Icon className={`size-3 ${meta.color}`} />
-                  {d.display_name || d.domain}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => { window.location.hash = "#/articles"; }}
-              className="inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-400"
-            >
-              All domains
-              <ArrowRight className="size-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ============ PROMPT SUGGESTION CARDS (Clean, compact 2x2 grid) ============ */}
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {SUGGESTIONS.map((s) => {
           const meta = chipFor(s.key);
           const Icon = meta.icon;
@@ -130,19 +75,19 @@ export function EmptyChat({ onSuggestion }: { onSuggestion: (question: string) =
               key={s.title}
               type="button"
               onClick={() => onSuggestion(s.question)}
-              className="group flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 text-left transition hover:border-blue-300 hover:bg-slate-50/60 hover:shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
+              className="group flex items-start gap-3 rounded-2xl border border-slate-200/90 bg-white p-4 text-left shadow-xs transition hover:border-blue-400 hover:bg-slate-50/70 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
             >
-              <div className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg ${meta.bg}`}>
-                <Icon className={`size-3.5 ${meta.color}`} />
+              <div className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl ${meta.bg}`}>
+                <Icon className={`size-4 ${meta.color}`} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-xs font-semibold text-slate-800 group-hover:text-blue-600 dark:text-slate-100 dark:group-hover:text-blue-400">
                     {s.title}
                   </span>
-                  <ArrowRight className="size-3 shrink-0 text-slate-300 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 dark:text-slate-600" />
+                  <ArrowRight className="size-3.5 shrink-0 text-slate-300 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 dark:text-slate-600" />
                 </div>
-                <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
                   {s.desc}
                 </p>
               </div>
