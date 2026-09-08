@@ -75,30 +75,38 @@ class RAGState(TypedDict):
 
 
 def _node_classify(state: RAGState) -> dict:
+    from app.observability.telemetry import start_span
     from app.orchestration.orchestrator import classify_domain
 
-    domain, _conf = classify_domain(state["question"])
+    with start_span("graph.classify_domain", {"question": state["question"][:60]}):
+        domain, _conf = classify_domain(state["question"])
     return {"domain": domain}
 
 
 def _node_rewrite(state: RAGState) -> dict:
+    from app.observability.telemetry import start_span
     from app.orchestration.orchestrator import _query_rewrite
 
     q = state["rewritten"] or state["question"]
-    return {"rewritten": _query_rewrite(q, state["history"])}
+    with start_span("graph.query_rewrite"):
+        return {"rewritten": _query_rewrite(q, state["history"])}
 
 
 def _node_retrieve(state: RAGState) -> dict:
+    from app.observability.telemetry import start_span
     from app.orchestration.orchestrator import _retrieve
 
-    docs = _retrieve(state["rewritten"], state["domain"], k=state["top_k"])
+    with start_span("graph.hybrid_retrieve", {"domain": state["domain"]}):
+        docs = _retrieve(state["rewritten"], state["domain"], k=state["top_k"])
     return {"docs": docs}
 
 
 def _node_gate(state: RAGState) -> dict:
+    from app.observability.telemetry import start_span
     from app.orchestration.orchestrator import _gate
 
-    confidence, decision = _gate(state["docs"])
+    with start_span("graph.confidence_gate"):
+        confidence, decision = _gate(state["docs"])
     return {"confidence": confidence, "decision": decision,
             "retries": state["retries"] + 1}
 

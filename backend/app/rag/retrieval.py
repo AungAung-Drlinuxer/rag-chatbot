@@ -38,11 +38,14 @@ def add_texts(texts: list[str], metadatas: list[dict[str, str]]) -> list[str]:
 
 def _vector_search(query: str, k: int, filter_clause: dict | None) -> list[dict]:
     """Embedding similarity search (semantic recall)."""
-    vs = get_vectorstore()
-    if filter_clause:
-        hits = vs.similarity_search_with_score(query, k=k, filter=filter_clause)
-    else:
-        hits = vs.similarity_search_with_score(query, k=k)
+    from app.observability.telemetry import start_span
+
+    with start_span("rag.vector_search.embed_and_query", {"query.text": query[:80], "k": k}):
+        vs = get_vectorstore()
+        if filter_clause:
+            hits = vs.similarity_search_with_score(query, k=k, filter=filter_clause)
+        else:
+            hits = vs.similarity_search_with_score(query, k=k)
     out = []
     for rank, (doc, distance) in enumerate(hits):
         meta = doc.metadata
@@ -68,10 +71,12 @@ def _keyword_search(query: str, k: int, filter_clause: dict | None) -> list[dict
     saturation / length normalization scoring without GPU overhead. Falls back
     to PostgreSQL websearch_to_tsquery if BM25 is not ready.
     """
+    from app.observability.telemetry import start_span
     from app.rag.bm25_index import BM25IndexManager
 
-    bm25_mgr = BM25IndexManager.get_instance()
-    bm25_results = bm25_mgr.search(query, k=k, filter_clause=filter_clause)
+    with start_span("rag.bm25_search", {"query.text": query[:80], "k": k}):
+        bm25_mgr = BM25IndexManager.get_instance()
+        bm25_results = bm25_mgr.search(query, k=k, filter_clause=filter_clause)
     if bm25_results:
         return bm25_results
 
@@ -88,28 +93,29 @@ def _keyword_search(query: str, k: int, filter_clause: dict | None) -> list[dict
         return []
     results: list[dict] = []
     try:
-        with engine.begin() as conn:
-            rows = conn.execute(
-                sqltext(
-                    "SELECT document, cmetadata "
-                    "FROM langchain_pg_embedding "
-                    "WHERE tsv @@ websearch_to_tsquery('english', :q) "
-                    "LIMIT :k"
-                ),
-                {"q": " ".join(terms), "k": k},
-            ).fetchall()
-        if not rows:
-            # fallback: simple ILIKE any-term
-            like = " OR ".join(["document ILIKE :t" + str(i) for i in range(len(terms))])
-            params = {("t" + str(i)): f"%{w}%" for i, w in enumerate(terms)}
-            params["k"] = k
+        with start_span("rag.postgres_fts_fallback", {"terms": str(terms)}):
             with engine.begin() as conn:
                 rows = conn.execute(
                     sqltext(
-                        f"SELECT document, cmetadata FROM langchain_pg_embedding WHERE {like} LIMIT :k"
+                        "SELECT document, cmetadata "
+                        "FROM langchain_pg_embedding "
+                        "WHERE tsv @@ websearch_to_tsquery('english', :q) "
+                        "LIMIT :k"
                     ),
-                    params,
+                    {"q": " ".join(terms), "k": k},
                 ).fetchall()
+            if not rows:
+                # fallback: simple ILIKE any-term
+                like = " OR ".join(["document ILIKE :t" + str(i) for i in range(len(terms))])
+                params = {("t" + str(i)): f"%{w}%" for i, w in enumerate(terms)}
+                params["k"] = k
+                with engine.begin() as conn:
+                    rows = conn.execute(
+                        sqltext(
+                            f"SELECT document, cmetadata FROM langchain_pg_embedding WHERE {like} LIMIT :k"
+                        ),
+                        params,
+                    ).fetchall()
         for rank, (document, cmetadata) in enumerate(rows):
             meta = cmetadata or {}
             if filter_clause and any(meta.get(kk) != vv for kk, vv in filter_clause.items()):
@@ -177,9 +183,11 @@ def retrieve(query: str, domain: str | None = None, k: int | None = None) -> lis
         candidates = _vector_search(query, SETTINGS.rerank_candidates if SETTINGS.rerank_enabled else k, filter_clause)
 
     if SETTINGS.rerank_enabled and candidates:
+        from app.observability.telemetry import start_span
         from app.rag.reranker import rerank
 
-        return rerank(query, candidates, top_k=k)
+        with start_span("rag.cross_encoder_rerank", {"candidates.count": len(candidates), "top_k": k}):
+            return rerank(query, candidates, top_k=k)
 
     return sorted(candidates, key=lambda d: d["distance"])[:k]
 
