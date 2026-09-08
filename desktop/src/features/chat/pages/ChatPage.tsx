@@ -520,43 +520,69 @@ export default function Chat({
           </div>
         </div>
 
-        {/* v0.21.70 — admin escalation approval banner / modal card */}
+        {/* v0.22 — HITL escalation approval: centered confirmation modal */}
         {role === "admin" && approval && (
-          <div className="border-t border-amber-200/80 bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50/80 px-4 py-3.5 shadow-sm dark:border-amber-900/60 dark:from-amber-950/40 dark:via-orange-950/20 dark:to-amber-950/30">
-            <div className="mx-auto flex max-w-[860px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
-                  <Shield className="size-4.5" />
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[3px]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Escalation approval"
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-amber-200/60 bg-[var(--card)] shadow-2xl dark:border-amber-900/50">
+              {/* Header */}
+              <div className="flex items-start gap-3 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50/60 px-5 py-4 dark:border-amber-900/40 dark:from-amber-950/40 dark:to-orange-950/20">
+                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
+                  <Shield className="size-5" />
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-amber-950 dark:text-amber-200">
-                      Escalation Approval Required (HITL)
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold text-amber-950 dark:text-amber-200">
+                      Escalation Approval Required
+                    </h3>
+                    <span className="inline-flex items-center rounded-full bg-amber-200/70 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/70 dark:text-amber-300">
+                      HITL &middot; Pending
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-amber-200/60 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
-                      Pending Action
-                    </span>
                   </div>
-                  <div className="mt-0.5 line-clamp-2 text-xs text-slate-700 dark:text-slate-300 font-medium">
-                    &ldquo;{approval.question}&rdquo;
-                  </div>
-                  <div className="mt-0.5 text-[10px] text-amber-800/80 dark:text-amber-400/80">
-                    Approve will automatically create a Jira ticket and notify the requester via email.
-                  </div>
+                  <p className="mt-0.5 text-[11px] text-amber-800/80 dark:text-amber-400/80">
+                    Human-in-the-loop review before the ticket is created.
+                  </p>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
+
+              {/* Body */}
+              <div className="space-y-3 px-5 py-4">
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    User Request
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200">
+                    &ldquo;{approval.question}&rdquo;
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-xl bg-blue-50/70 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600 dark:bg-blue-950/30 dark:text-slate-300">
+                  <Sparkles className="mt-0.5 size-3.5 shrink-0 text-blue-500" />
+                  <span>
+                    Approving will <strong>automatically create a Jira ticket</strong> and notify the requester via email.
+                    Rejecting will inform the user that the escalation was not approved.
+                  </span>
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/40">
                 <button
                   type="button"
                   onClick={async () => {
                     const d = await decideApproval(approval.id, "rejected");
                     setMessages((prev) => prev.map((m) =>
                       m.id === approval.id
-                        ? { ...m, content: m.content + `\n\n❌ **Rejected** — ${(d.messages ?? ["Ticket creation was rejected by the administrator."]).join(" ")}` }
+                        ? { ...m, content: m.content + `
+
+❌ **Rejected** — ${(d.messages ?? ["Ticket creation was rejected by the administrator."]).join(" ")}` }
                         : m));
                     setApproval(null);
                   }}
-                  className="rounded-xl border border-slate-300/80 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:bg-slate-100 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-2xs transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   Reject
                 </button>
@@ -566,30 +592,25 @@ export default function Chat({
                     const d = await decideApproval(approval.id, "approved");
                     setMessages((prev) => prev.map((m) =>
                       m.id === approval.id
-                        ? { ...m, content: m.content + `\n\n✅ **Approved** — ${d.ticket_id ? `Ticket ${d.ticket_id} created. ` : ""}${(d.messages ?? []).join(" ")}` }
+                        ? { ...m, content: m.content + `
+
+✅ **Approved** — ${d.ticket_id ? `Ticket ${d.ticket_id} created. ` : ""}${(d.messages ?? []).join(" ")}` }
                         : m));
                     setApproval(null);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:from-emerald-700 hover:to-teal-700 hover:shadow-sm"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:from-emerald-700 hover:to-teal-700"
                 >
                   <CheckCircle2 className="size-3.5" />
-                  Approve & Create Ticket
+                  Approve &amp; Create Ticket
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Composer */}
+        {/* Composer — compact single-row */}
         <div className="border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">
-          <div className="mx-auto max-w-[860px] px-4 py-3.5 sm:px-6 sm:py-4">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <Sparkles className="size-3.5 text-blue-500" />
-                Answers are grounded in your internal knowledge base.
-              </div>
-            </div>
-
+          <div className="mx-auto max-w-[860px] px-4 py-2 sm:px-6 sm:py-2.5">
             <form onSubmit={sendMessage} className="relative">
               {pendingFiles.length > 0 && (
                 <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
@@ -648,20 +669,20 @@ export default function Chat({
                   }}
                   rows={1}
                   placeholder="Ask an IT question..."
-                  className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="max-h-32 min-h-[30px] flex-1 resize-none bg-transparent px-2 py-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isTyping}
                   aria-label="Send message"
-                  className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                  className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
                   <ArrowUp className="size-4" />
                 </button>
               </div>
             </form>
 
-            <div className="mt-2 text-center text-[10px] text-slate-400">
+            <div className="mt-1.5 text-center text-[10px] text-slate-400">
               AI-generated answers may require verification. Sensitive information is protected by RBAC.
             </div>
           </div>
