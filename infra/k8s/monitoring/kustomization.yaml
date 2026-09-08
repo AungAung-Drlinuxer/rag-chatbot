@@ -1,0 +1,12 @@
+# Monitoring & Observability Stack (LGMT)
+#
+# Cluster-side components deployed to RKE2, forwarding telemetry to external LGMT host (10.10.10.18):
+# - Prometheus: http://10.10.10.18:9090 (Remote Write)
+# - Loki:       http://10.10.10.18:3100 (Log Push)
+# - Tempo:      http://10.10.10.18:4318 (OTel Trace HTTP)
+# - Grafana:    http://10.10.10.18:3000 (Dashboards & Visualization)
+
+resources:
+  - 01-kube-state-metrics.yaml
+  - 02-node-exporter.yaml
+  - 03-grafana-alloy.yaml

@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alloy
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - nodes/metrics
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alloy
+subjects:
+- kind: ServiceAccount
+  name: alloy
+  namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: alloy
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: monitoring
+data:
+  config.alloy: |
+    // =========================================================================
+    // 1. LOGS PIPELINE: Pod stdout/stderr -> External Loki (10.10.10.18:3100)
+    // =========================================================================
+    local.file_match "pod_logs" {
+      path_targets = [{
+        __path__ = "/var/log/pods/*/*/*.log",
+      }]
+    }
+
+    loki.source.file "pod_logs_scraper" {
+      targets    = local.file_match.pod_logs.targets
+      forward_to = [loki.process.add_labels.receiver]
+    }
+
+    loki.process "add_labels" {
+      stage.cri {}
+      stage.regex {
+        expression = `^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_[^/]+/(?P<container>[^/]+)/.*\.log$`
+        source     = "filename"
+      }
+      stage.labels {
+        values = {
+          namespace = "",
+          pod       = "",
+          container = "",
+        }
+      }
+      forward_to = [loki.write.endpoint.receiver]
+    }
+
+    loki.write "endpoint" {
+      endpoint {
+        url = "http://10.10.10.18:3100/loki/api/v1/push"
+      }
+    }
+
+    // =========================================================================
+    // 2. METRICS PIPELINE: KSM, Node Exporter, cAdvisor -> Prometheus (10.10.10.18:9090)
+    // =========================================================================
+    prometheus.remote_write "external_prom" {
+      endpoint {
+        url = "http://10.10.10.18:9090/api/v1/write"
+      }
+    }
+
+    // A. Kube-State-Metrics (Cluster State)
+    prometheus.scrape "kube_state_metrics" {
+      targets = [{
+        __address__ = "kube-state-metrics.monitoring.svc.cluster.local:8080",
+      }]
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "15s"
+    }
+
+    // B. Kubernetes Nodes cAdvisor (Container CPU, Memory, Network)
+    discovery.kubernetes "nodes" {
+      role = "node"
+    }
+
+    prometheus.scrape "cadvisor" {
+      targets = discovery.kubernetes.nodes.targets
+      scheme  = "https"
+      tls_config {
+        ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+      }
+      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      metrics_path      = "/metrics/cadvisor"
+      forward_to        = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval   = "15s"
+    }
+
+    // C. Node Exporter (Host CPU, RAM, Disk, Load)
+    discovery.kubernetes "node_exporter_pods" {
+      role = "pod"
+      selectors {
+        role  = "pod"
+        field = "metadata.namespace=monitoring"
+        label = "app.kubernetes.io/name=node-exporter"
+      }
+    }
+
+    prometheus.scrape "node_exporter" {
+      targets         = discovery.kubernetes.node_exporter_pods.targets
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "15s"
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alloy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alloy
+    spec:
+      serviceAccountName: alloy
+      containers:
+      - name: alloy
+        image: grafana/alloy:v1.0.0
+        args:
+        - "run"
+        - "/etc/alloy/config.alloy"
+        - "--storage.path=/var/lib/alloy/data"
+        - "--server.http.listen-addr=0.0.0.0:12345"
+        ports:
+        - name: http-metrics
+          containerPort: 12345
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alloy
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: data
+          mountPath: /var/lib/alloy/data
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+      volumes:
+      - name: config
+        configMap:
+          name: alloy-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: data
+        emptyDir: {}
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
