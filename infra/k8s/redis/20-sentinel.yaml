@@ -31,6 +31,15 @@ spec:
                   matchLabels:
                     app.kubernetes.io/name: redis
                     app.kubernetes.io/component: sentinel
+      initContainers:
+        - name: sentinel-config-init
+          image: redis:7.4
+          imagePullPolicy: IfNotPresent
+          # Sentinel rewrites its config at runtime → needs a WRITABLE /conf.
+          command: ["sh","-c","cp /readonly-config/sentinel.conf /conf/sentinel.conf && chmod 644 /conf/sentinel.conf"]
+          volumeMounts:
+            - { name: conf, mountPath: /conf }
+            - { name: readonly-config, mountPath: /readonly-config }
       containers:
         - name: sentinel
           image: redis:7.4
@@ -54,6 +63,8 @@ spec:
             periodSeconds: 15
       volumes:
         - name: conf
+          emptyDir: {}
+        - name: readonly-config
           configMap:
             name: redis-config
             items: [{ key: sentinel.conf, path: sentinel.conf }]
@@ -92,13 +103,12 @@ kind: Service
 metadata:
   name: redis-service
   namespace: rag-chatbot
-  spec:
-  # Empty selector + sentinel-managed proxy discovery (sentinel-aware client).
-  # Python redis://...&sentinel=it-help-redis discovers the master at runtime.
+spec:
+  # Points at the redis DATA pods (the current master is discovered via Sentinel).
   selector:
     app.kubernetes.io/name: redis
     app.kubernetes.io/component: data
   ports:
     - name: client
       port: 6379
-      targetPort: 6379
+      targetPort: client

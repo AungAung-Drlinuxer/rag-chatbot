@@ -40,7 +40,7 @@ spec:
             - name: OLLAMA_MAX_LOADED_MODELS
               value: "1"
             - name: OLLAMA_MODELS
-              value: /models
+              value: /root/.ollama/models   # models pre-baked into the image (airgapped)
           ports:
             - name: http
               containerPort: 11434

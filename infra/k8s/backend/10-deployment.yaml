@@ -57,8 +57,9 @@ type: Opaque
 stringData:
   # DB connection — used by the application AND by the in-cluster admin tools.
   DATABASE_URL: "postgresql+psycopg2://app:__DB_PASSWORD__@postgres-ha-rw.rag-chatbot.svc.cluster.local:5432/assistant"
-  # Redis
-  REDIS_URL: "redis://app:__REDIS_PASSWORD__@redis-service.rag-chatbot.svc.cluster.local:6379/0"
+  # Redis (sentinel mode; password matches redis users.acl / requirepass)
+  REDIS_URL: "redis://redis-service.rag-chatbot.svc.cluster.local:6379/0"
+  REDIS_PASSWORD: "__REPLACE_WITH_RANDOM_32_BYTES__"
   # Auth
   JWT_SECRET: "__REPLACE_WITH_RANDOM_64_BYTES__"
   # Service-to-service auth between backend and rerank/embedding
