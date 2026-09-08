@@ -129,10 +129,17 @@ data:
     }
 
     // D. IT-Help-Chatbot Backend LLM & RAG Application Metrics
+    discovery.kubernetes "backend_pods" {
+      role = "pod"
+      selectors {
+        role  = "pod"
+        field = "metadata.namespace=it-help-chatbot"
+        label = "app=backend"
+      }
+    }
+
     prometheus.scrape "chatbot_backend" {
-      targets = [{
-        __address__ = "backend.it-help-chatbot.svc.cluster.local:8000",
-      }]
+      targets         = discovery.kubernetes.backend_pods.targets
       metrics_path    = "/metrics"
       forward_to      = [prometheus.remote_write.external_prom.receiver]
       scrape_interval = "10s"
