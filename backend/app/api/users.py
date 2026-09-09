@@ -105,7 +105,8 @@ def list_users(user: str = Depends(get_current_user)) -> dict:
             for r in rows:
                 u = r["username"]
                 raw_r = r.get("role_override") or "user"
-                role = "Domain Manager" if raw_r == "domain_manager" else ("Knowledge Manager" if raw_r == "knowledge" else ("IT Support" if raw_r == "agent" else raw_r.capitalize()))
+                # v1.1.1 — domain_manager merged into Knowledge Manager
+                role = "Knowledge Manager" if raw_r in ("knowledge", "domain_manager") else ("IT Support" if raw_r == "agent" else raw_r.capitalize())
                 out[u] = {
                     "id": f"local:{u}",
                     "name": u,
@@ -222,9 +223,10 @@ def update_user_role(username: str, payload: dict, user: str = Depends(get_curre
         raise HTTPException(status_code=403, detail="Admin only")
     role = (payload.get("role") or "").strip().lower()
     # Map display names to backend enum
-    role = {"it support": "agent", "knowledge manager": "knowledge", "domain manager": "domain_manager", "administrator": "admin", "user": "user", "admin": "admin", "agent": "agent", "domain_manager": "domain_manager"}.get(role, role)
-    if role not in ("admin", "agent", "user", "knowledge", "domain_manager"):
-        raise HTTPException(status_code=400, detail="role must be admin|agent|user|knowledge|domain_manager")
+    # v1.1.1 — domain_manager merged into knowledge; legacy input names map there too
+    role = {"it support": "agent", "knowledge manager": "knowledge", "domain manager": "knowledge", "domain_manager": "knowledge", "administrator": "admin", "user": "user", "admin": "admin", "agent": "agent"}.get(role, role)
+    if role not in ("admin", "agent", "user", "knowledge"):
+        raise HTTPException(status_code=400, detail="role must be admin|agent|user|knowledge")
     with SessionLocal() as s:
         s.execute(text(
             "INSERT INTO users (username, role_override) VALUES (:u, :r) "

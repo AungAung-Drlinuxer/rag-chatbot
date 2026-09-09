@@ -178,6 +178,7 @@ export default function Knowledge({
   initialTab,
   onToast,
 }: Props) {
+  // v1.1.1 — domain_manager merged into knowledge (single Knowledge Manager role)
   const canManage = role === "admin" || role === "agent" || role === "knowledge" || role === "domain_manager";
   const canManageDomains = role === "admin" || role === "knowledge" || role === "domain_manager";
 

@@ -15,8 +15,10 @@ export default function DomainsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // v1.1.1 — domain_manager merged into knowledge (Knowledge Manager role)
   const canManage =
     role === "admin" ||
+    role === "knowledge" ||
     role === "domain_manager" ||
     !!perms?.manage_domains ||
     !!perms?.manage_users;
@@ -55,7 +57,7 @@ export default function DomainsPage({
             </div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-white">Access Restricted</h3>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-              Only Administrator and Domain Manager roles are authorized to access and modify routing domains and classification rules.
+              Only Administrator and Knowledge Manager roles are authorized to access and modify routing domains and classification rules.
             </p>
           </div>
         </main>
@@ -68,7 +70,7 @@ export default function DomainsPage({
       <PageHeader
         icon={<Layers className="size-6 text-emerald-600 dark:text-emerald-400" />}
         title="Domain Manager"
-        badge={role === "admin" ? "Administrator" : "Domain Manager"}
+        badge={role === "admin" ? "Administrator" : "Knowledge Manager"}
         description="Live management of classification domains, dynamic keyword matching, and Jira routes."
       />
 

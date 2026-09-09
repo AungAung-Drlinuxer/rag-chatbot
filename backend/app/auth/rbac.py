@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, status
 from app.auth.deps import get_current_user
 from app.config import SETTINGS
 
-ROLES = ("admin", "agent", "user", "knowledge", "domain_manager")
+ROLES = ("admin", "agent", "user", "knowledge")  # v1.1.1: domain_manager merged into knowledge
 
 
 def get_groups(username: str) -> list[str]:
@@ -88,7 +88,7 @@ def allowed_domains(role: str) -> set[str] | None:
 def require_role(*roles: str):
     """FastAPI dependency factory — returns the role or 403 if the user lacks one."""
     _ROLE_LABEL = {"admin": "Administrator", "agent": "IT Support",
-                   "knowledge": "Knowledge Manager", "domain_manager": "Domain Manager", "user": "User"}
+                   "knowledge": "Knowledge Manager", "user": "User"}
 
     def dependency(user: str = Depends(get_current_user)) -> str:
         role = get_role(user)  # already override-aware (v0.21.57)
@@ -130,18 +130,21 @@ CAPABILITIES = {
     "manage_domains": "Manage routing domains & classifier keywords",
 }
 
-# Map the internal role (admin/agent/user + knowledge) to the matrix display role.
+# v1.1.1 — Knowledge Manager & Domain Manager merged into ONE role:
+# the Knowledge page hosts BOTH article management (manage_kb) and the
+# Domains & Routing engine (manage_domains), so a single "Knowledge Manager"
+# role owns both capabilities. Legacy `domain_manager` values are mapped to
+# the same matrix row for backward compatibility.
 _MATRIX_ROLE_FOR = {
     "admin": "Administrator",
     "agent": "IT Support",
     "knowledge": "Knowledge Manager",
-    "domain_manager": "Domain Manager",
+    "domain_manager": "Knowledge Manager",  # legacy alias — merged role
     "user": "User",
 }
 
 _DEFAULT_MATRIX = {
     "Administrator": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": True, "manage_users": True, "manage_domains": True},
-    "Domain Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": True},
     "IT Support": {"chatbot": True, "kb_search": True, "create_tickets": True, "manage_kb": False, "manage_users": False, "manage_domains": False},
     "Knowledge Manager": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": True, "manage_users": False, "manage_domains": True},
     "User": {"chatbot": True, "kb_search": True, "create_tickets": False, "manage_kb": False, "manage_users": False, "manage_domains": False},
@@ -209,7 +212,7 @@ def _group_permissions(username: str) -> dict | None:
         return None
     if not rows:
         return None
-    rank = {"admin": 3, "agent": 2, "knowledge": 2, "user": 1}
+    rank = {"admin": 3, "agent": 2, "knowledge": 2, "domain_manager": 2, "user": 1}  # domain_manager = legacy alias of knowledge
     best = max(rows, key=lambda r: rank.get(r["role"], 1))
     extra = best["permissions"] or {}
     return {"role": best["role"], "extra": extra}

@@ -98,7 +98,7 @@ export default function PageSidebar({
     { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
     { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
   ];
-  const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Domain Manager" } as Record<string, string>)[role || "user"] || "User";
+  const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Knowledge Manager" } as Record<string, string>)[role || "user"] || "User";
 
   const navBody = (
     <>
