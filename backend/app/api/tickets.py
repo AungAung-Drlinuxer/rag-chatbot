@@ -95,6 +95,10 @@ def list_tickets(
         jk = r.get("jira_key")
         if not jk:
             continue
+        # v1.1.0 — OpenProject work packages: status already synced at pull time;
+        # Jira-only live sync path below.
+        if jk.startswith("op-"):
+            continue
         cached = _jira_status_cache.get(jk)
         if cached and (now_cached := cached[0]) and (time.time() - now_cached) < _JIRA_SYNC_TTL:
             r["status"] = cached[1]
@@ -480,6 +484,48 @@ def get_attachment(att_id: str, user: str = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Attachment not found")
     return Response(content=bytes(row[2]), media_type=row[1],
                     headers={"Content-Disposition": f'inline; filename="{row[0]}"'})
+
+
+# === v1.1.0 — OpenProject work-package ticket sync ===========================
+@router.post("/tickets/openproject/sync")
+def openproject_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
+    """Pull OpenProject work packages into jira_tickets (jira_key='op-<id>').
+
+    Idempotent: existing op-* keys are updated in place; new ones inserted.
+    Admin/agent-triggered from Settings -> Integrations -> OpenProject.
+    """
+    from app.integrations.openproject import fetch_work_packages
+
+    tickets = fetch_work_packages()
+    if not tickets:
+        return {"ok": True, "created": 0, "updated": 0, "total": 0,
+                "message": "No work packages returned — check OpenProject config"}
+
+    created = updated = 0
+    with SessionLocal() as s:
+        for t in tickets:
+            existing = s.execute(
+                text("SELECT id FROM jira_tickets WHERE jira_key = :k"),
+                {"k": t["ticket_id"]},
+            ).first()
+            if existing:
+                s.execute(text(
+                    "UPDATE jira_tickets SET status=:st, subject=:sj, description=:ds, "
+                    "assignee=:asg WHERE jira_key=:k"
+                ), {"st": t["status"], "sj": t["title"], "ds": t["body"],
+                    "asg": t["assignee"], "k": t["ticket_id"]})
+                updated += 1
+            else:
+                s.execute(text(
+                    "INSERT INTO jira_tickets (jira_key, domain, status, created_by, "
+                    "created_at, subject, description, priority, assignee) "
+                    "VALUES (:k, :dm, :st, :cb, NOW(), :sj, :ds, :pr, :asg)"
+                ), {"k": t["ticket_id"], "dm": "general", "st": t["status"],
+                    "cb": "openproject-sync", "sj": t["title"], "ds": t["body"],
+                    "pr": "medium", "asg": t["assignee"]})
+                created += 1
+        s.commit()
+    return {"ok": True, "created": created, "updated": updated, "total": len(tickets)}
 
 
 # === v0.21.14 — RBAC role/permission matrix (admin-editable) ===

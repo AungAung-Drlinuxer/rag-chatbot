@@ -158,6 +158,19 @@ export async function testIntegration(key: string): Promise<{ ok: boolean; statu
   }
 }
 
+// v1.1.0 — trigger OpenProject work-package ticket sync (admin action)
+export async function syncOpenProjectTickets(): Promise<{ ok: boolean; created?: number; updated?: number; total?: number; message?: string }> {
+  const r = await apiFetch(`${BASE}/api/tickets/openproject/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+  });
+  try {
+    return await r.json();
+  } catch {
+    return { ok: false, message: `Sync failed (HTTP ${r.status})` };
+  }
+}
+
 export type ProviderModel = { id: string; name: string };
 
 export async function getLlmModels(): Promise<{ models: ProviderModel[]; count: number }> {

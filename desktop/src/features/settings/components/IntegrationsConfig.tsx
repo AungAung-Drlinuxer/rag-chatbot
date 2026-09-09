@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon, AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
-import { getIntegrationSettings, putIntegrationSettings, testIntegration, getLlmModels } from "@/features/settings/api";
+import { getIntegrationSettings, putIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
 import type { ProviderModel } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki";
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -69,6 +69,29 @@ const META: Record<IntegrationKey, {
       { key: "model", label: "Model", placeholder: "z-ai/glm-5.3-flash" },
     ],
   },
+  openproject: {
+    label: "OpenProject (Tickets & Wiki)",
+    desc: "Connect a self-hosted OpenProject instance. Syncs work packages as tickets and optionally ingests wiki pages into the knowledge base.",
+    docs: "https://www.openproject.org/docs/api/",
+    fields: [
+      { key: "base_url", label: "Base URL", placeholder: "https://openproject.drlinuxer.com" },
+      { key: "api_key", label: "API Key", placeholder: "OpenProject access token", isSecret: true },
+      { key: "project_id", label: "Project ID", placeholder: "1 or project identifier" },
+      { key: "wiki_enabled", label: "Ingest Wiki Pages (true/false)", placeholder: "true" },
+    ],
+  },
+  xwiki: {
+    label: "XWiki (Knowledge Base)",
+    desc: "Connect an external XWiki instance. Pages from the configured spaces are ingested into the knowledge base alongside Confluence.",
+    docs: "https://www.xwiki.org/xwiki/bin/view/Documentation/UserGuide/Features/XWikiRESTfulAPIReferenceGuide/",
+    fields: [
+      { key: "base_url", label: "Base URL", placeholder: "https://xwiki.drlinuxer.com" },
+      { key: "username", label: "Username", placeholder: "xwiki service user" },
+      { key: "api_token", label: "API Token / Password", placeholder: "xwiki access token", isSecret: true },
+      { key: "wiki", label: "Wiki Name", placeholder: "xwiki" },
+      { key: "spaces", label: "Spaces (comma separated)", placeholder: "Main,IT,Help" },
+    ],
+  },
 };
 
 export function IntegrationsConfig() {
@@ -82,6 +105,7 @@ export function IntegrationsConfig() {
   const [models, setModels] = useState<ProviderModel[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const isLlm = active === "llm";
 
@@ -150,7 +174,7 @@ export function IntegrationsConfig() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
+        {(["confluence", "jira", "openproject", "xwiki", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
           <button
             key={k}
             onClick={() => switchTab(k)}
@@ -276,6 +300,32 @@ export function IntegrationsConfig() {
             {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LoaderIcon className="h-3.5 w-3.5" />}
             Test connection
           </button>
+          {active === "openproject" && (
+            <button
+              onClick={async () => {
+                setSyncing(true);
+                setResult(null);
+                try {
+                  const res = await syncOpenProjectTickets();
+                  if (res?.ok) {
+                    setResult({ ok: true, message: `Synced: ${res.created ?? 0} created, ${res.updated ?? 0} updated (total ${res.total ?? 0})` });
+                  } else {
+                    setResult({ ok: false, message: res?.message || "Sync failed" });
+                  }
+                } catch (e: any) {
+                  setResult({ ok: false, message: e?.message || "Sync failed" });
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+              disabled={syncing}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-xs font-medium px-3 py-2 disabled:opacity-50"
+              title="Pull work packages from OpenProject into the tickets board"
+            >
+              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Sync tickets now
+            </button>
+          )}
           {result && (
             <span
               className={[

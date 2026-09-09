@@ -168,7 +168,7 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
-INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama"}
+INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama", "openproject", "xwiki"}
 
 @router.get("/settings/integrations/{key}")
 def get_integration_settings(key: str, user: str = Depends(get_current_user)) -> dict:
@@ -296,6 +296,16 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
             r = httpx.get(f"{issuer}/realms/{realm}/.well-known/openid-configuration", timeout=15)
             status = r.status_code
             detail = "" if r.status_code == 200 else r.text[:200]
+        elif key == "openproject":
+            from app.integrations.openproject import test_connection as _op_test
+            result = _op_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("message", "")
+        elif key == "xwiki":
+            from app.integrations.xwiki import test_connection as _xw_test
+            result = _xw_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("message", "")
         else:
             raise ValueError(f"no test for {key}")
         if status in (200, 201):

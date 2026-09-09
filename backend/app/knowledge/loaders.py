@@ -4,10 +4,13 @@ Returns article dicts: {page_id, title, domain, source_url, body}.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from app.config import SETTINGS
 from app.integrations.confluence import fetch_space as _fetch_confluence
+
+logger = logging.getLogger("knowledge.loaders")
 
 _TEXTLIKE = (".md", ".txt", ".pdf", ".docx")
 
@@ -66,6 +69,23 @@ def load_fileshare(base_dir: str | None = None) -> list[dict]:
 
 
 def load_all() -> list[dict]:
-    """Aggregate KB sources. v0.16.0: Confluence is the only enabled source —
-    local fileshare mock docs removed from the ingest path."""
-    return load_confluence()
+    """Aggregate KB sources (v1.1.0): Confluence + OpenProject wiki + XWiki.
+
+    Each loader returns article dicts with the standard shape; missing/empty
+    integrations simply contribute nothing (safe no-op)."""
+    articles: list[dict] = []
+    articles.extend(load_confluence())
+
+    try:
+        from app.integrations.openproject import fetch_wiki_pages as _fetch_op_wiki
+        articles.extend(_fetch_op_wiki())
+    except Exception as exc:  # pragma: no cover — never break the whole ingest
+        logger.warning("openproject wiki load skipped: %s", exc)
+
+    try:
+        from app.integrations.xwiki import fetch_pages as _fetch_xwiki
+        articles.extend(_fetch_xwiki())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("xwiki load skipped: %s", exc)
+
+    return articles
