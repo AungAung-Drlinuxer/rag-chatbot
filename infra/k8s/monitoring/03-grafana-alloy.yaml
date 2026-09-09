@@ -49,9 +49,71 @@ data:
     // conflicting timestamps, which Prometheus remote_write rejects
     // ("out of order sample") — leaving dashboards empty.
     //
+    // TRACES : OTLP (4318/4317) -> Tempo + service graph/span metrics -> Prom
     // METRICS: KSM / cAdvisor / node-exporter / rag-chatbot backend -> Prometheus
-    //             + rag-chatbot backend app metrics
     // =========================================================================
+
+    // ------------------------- 1. TRACES PIPELINE ---------------------------
+    // Receives OTLP traces from rag-chatbot backend, forwards them to Tempo,
+    // AND generates service graph + span metrics (RED) into Prometheus so the
+    // Tempo "Service Graph" tab in Grafana has data.
+    otelcol.receiver.otlp "traces" {
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+      output {
+        traces = [
+          otelcol.connector.servicegraph.default.input,
+          otelcol.connector.spanmetrics.default.input,
+          otelcol.exporter.otlphttp.tempo.input,
+        ]
+      }
+    }
+
+    // Service graph metrics: edges between services (rate/error/duration)
+    otelcol.connector.servicegraph "default" {
+      dimensions     = ["namespace", "k8s.namespace.name", "k8s.pod.name"]
+      output {
+        metrics = [otelcol.exporter.prometheus.servicegraph.input]
+      }
+    }
+
+    // Span metrics: RED metrics per span (rate/error/duration table)
+    otelcol.connector.spanmetrics "default" {
+      dimension {
+        name = "k8s.namespace.name"
+      }
+      histogram {
+        unit = "s"
+        explicit {
+          buckets = ["2ms", "10ms", "50ms", "100ms", "200ms", "500ms", "1s", "2s", "5s", "10s", "30s"]
+        }
+      }
+      output {
+        metrics = [otelcol.exporter.prometheus.spanmetrics.input]
+      }
+    }
+
+    // Forward raw traces to Tempo (external VM, OTLP HTTP on 4318)
+    otelcol.exporter.otlphttp "tempo" {
+      client {
+        endpoint = "http://10.10.10.18:4318"
+      }
+    }
+
+    // Expose generated metrics on a prometheus-scrapable endpoint
+    otelcol.exporter.prometheus "servicegraph" {
+      resource_to_telemetry_conversion = true
+      forward_to = [prometheus.remote_write.external_prom.receiver]
+    }
+
+    otelcol.exporter.prometheus "spanmetrics" {
+      resource_to_telemetry_conversion = true
+      forward_to = [prometheus.remote_write.external_prom.receiver]
+    }
 
     // ------------------------ 2. METRICS PIPELINE ---------------------------
     prometheus.remote_write "external_prom" {
@@ -163,6 +225,10 @@ spec:
         ports:
         - name: http-metrics
           containerPort: 12345
+        - name: otlp-http
+          containerPort: 4318
+        - name: otlp-grpc
+          containerPort: 4317
         volumeMounts:
         - name: config
           mountPath: /etc/alloy
@@ -180,6 +246,25 @@ spec:
           name: alloy-config
       - name: data
         emptyDir: {}
+---
+# OTLP receiver service — rag-chatbot backend sends traces here
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy-otlp
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alloy
+spec:
+  selector:
+    app.kubernetes.io/name: alloy
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
 ---
 # LOGS-ONLY collector: one pod per node ships /var/log/pods to Loki.
 # Metrics are deliberately NOT scraped here (single Deployment above owns all

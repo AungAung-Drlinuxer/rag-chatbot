@@ -187,23 +187,29 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         last_usage: dict | None = None
         from app.llm.client import get_active_model_name
         active_llm_model = get_active_model_name()
-        with start_span("chat.stream.llm") as span:
-            span.set_attribute("rag.confidence", result.confidence)
-            span.set_attribute("rag.decision", result.decision)
-            span.set_attribute("llm.model", active_llm_model)
-            for tok, usage in stream_answer(req.message, context):
-                if usage is not None:
-                    # The last (zero-length) token carries the final usage dict.
-                    last_usage = usage
-                    continue
-                if not tok:
-                    continue
-                answer_parts.append(tok)
-                yield _sse("token", {"token": tok})
-            if last_usage is not None:
-                span.set_attribute("llm.input_tokens", last_usage.get("input_tokens", 0))
-                span.set_attribute("llm.output_tokens", last_usage.get("output_tokens", 0))
-                span.set_attribute("llm.total_tokens", last_usage.get("total_tokens", 0))
+
+        # v1.1.1 — SERVER-kind request span so the Tempo service graph has a node
+        # (the servicegraph connector only pairs CLIENT/SERVER span kinds).
+        from app.observability.telemetry import start_span_with_kind
+        with start_span_with_kind("chat.request", "SERVER") as req_span:
+            req_span.set_attribute("chat.domain", result.domain or "general")
+            with start_span("chat.stream.llm") as span:
+                span.set_attribute("rag.confidence", result.confidence)
+                span.set_attribute("rag.decision", result.decision)
+                span.set_attribute("llm.model", active_llm_model)
+                for tok, usage in stream_answer(req.message, context):
+                    if usage is not None:
+                        # The last (zero-length) token carries the final usage dict.
+                        last_usage = usage
+                        continue
+                    if not tok:
+                        continue
+                    answer_parts.append(tok)
+                    yield _sse("token", {"token": tok})
+                if last_usage is not None:
+                    span.set_attribute("llm.input_tokens", last_usage.get("input_tokens", 0))
+                    span.set_attribute("llm.output_tokens", last_usage.get("output_tokens", 0))
+                    span.set_attribute("llm.total_tokens", last_usage.get("total_tokens", 0))
 
         answer = "".join(answer_parts)
         # Stamp LLM usage + RAG tunables onto the persisted meta so they survive

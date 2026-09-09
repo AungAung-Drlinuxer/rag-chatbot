@@ -58,6 +58,23 @@ def start_span(name: str, attrs: dict | None = None):
     return _tracer.start_as_current_span(name, attributes=attrs or {})
 
 
+def start_span_with_kind(name: str, kind: str, attrs: dict | None = None):
+    """Span with an explicit OpenTelemetry span kind (SERVER/CLIENT/PRODUCER/CONSUMER).
+
+    Required for the Tempo service graph: the servicegraph connector only pairs
+    CLIENT/SERVER spans to build request edges. Best-effort — no-op when
+    telemetry is disabled or the kind string is invalid.
+    """
+    if not _enabled or _tracer is None:
+        return _null_span()
+    try:
+        from opentelemetry.trace import SpanKind
+        span_kind = getattr(SpanKind, kind.upper(), SpanKind.INTERNAL)
+    except Exception:
+        span_kind = SpanKind.INTERNAL
+    return _tracer.start_as_current_span(name, kind=span_kind, attributes=attrs or {})
+
+
 class _null_span_context:
     def __init__(self): pass
     def __enter__(self): return self
