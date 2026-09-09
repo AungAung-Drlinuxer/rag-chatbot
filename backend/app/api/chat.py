@@ -190,8 +190,11 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
         # v1.1.1 — SERVER-kind request span so the Tempo service graph has a node
         # (the servicegraph connector only pairs CLIENT/SERVER span kinds).
-        from app.observability.telemetry import start_span_with_kind
-        with start_span_with_kind("chat.request", "SERVER") as req_span:
+        from app.observability.telemetry import start_quiet_span
+        # start_quiet_span: SSE generator resumes in a different contextvars
+        # Context per yield -> plain start_as_current_span logs a harmless
+        # "Failed to detach context" ValueError on close. _quiet_span swallows it.
+        with start_quiet_span("chat.request", kind="SERVER") as req_span:
             req_span.set_attribute("chat.domain", result.domain or "general")
             with start_span("chat.stream.llm") as span:
                 span.set_attribute("rag.confidence", result.confidence)

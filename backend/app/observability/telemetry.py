@@ -82,8 +82,53 @@ class _null_span_context:
     def set_attribute(self, *a, **k): return None
 
 
-def _null_span():
-    return _null_span_context()
+class _quiet_span:
+    """Context-managed span that suppresses the harmless
+    'Failed to detach context' ValueError noise when a span survives
+    across asyncio context switches.
+
+    The SSE streaming generator (`def gen()` in chat.py) is resumed by
+    Starlette in a *different* contextvars Context on every yield, so the
+    contextvars Token created when the span opened cannot be reset when it
+    closes. OpenTelemetry logs the full ValueError traceback every time —
+    noisy but harmless: the span is already complete and exported.
+
+    This wrapper delegates everything to the real span object and swallows
+    only that specific ValueError on exit.
+    """
+
+    def __init__(self, cm):
+        self._cm = cm
+        self._span = None
+
+    def __enter__(self):
+        self._span = self._cm.__enter__()
+        return self._span
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return self._cm.__exit__(exc_type, exc, tb)
+        except ValueError as exc:
+            # openetelemetry.context: Token was created in a different Context
+            if "was created in a different Context" in str(exc):
+                logger.debug("span context detach skipped across asyncio context switch")
+                return False
+            raise
+
+    def set_attribute(self, key, value):
+        self._span.set_attribute(key, value)
+
+    def __getattr__(self, name):
+        return getattr(self._span, name)
+
+
+def start_quiet_span(name: str, kind: str | None = None, attrs: dict | None = None):
+    """start_span/start_span_with_kind wrapper safe for SSE generator spans.
+
+    Use for any span whose `with` block spans multiple `yield`s.
+    """
+    cm = start_span_with_kind(name, "SERVER", attrs) if kind else start_span(name, attrs)
+    return _quiet_span(cm)
 
 
 def record_counter(name: str, value: int = 1, attrs: dict | None = None) -> None:
