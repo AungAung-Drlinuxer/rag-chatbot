@@ -42,8 +42,155 @@ metadata:
 data:
   config.alloy: |
     // =========================================================================
-    // 1. LOGS PIPELINE: Pod stdout/stderr -> External Loki (10.10.10.18:3100)
+    // GRAFANA ALLOY — SINGLE-INSTANCE COLLECTOR (Deployment, replicas=1)
+    //
+    // IMPORTANT: metrics + logs are collected by exactly ONE pod. Multiple
+    // replicas scraping identical targets produce duplicate samples with
+    // conflicting timestamps, which Prometheus remote_write rejects
+    // ("out of order sample") — leaving dashboards empty.
+    //
+    // METRICS: KSM / cAdvisor / node-exporter / rag-chatbot backend -> Prometheus
+    //             + rag-chatbot backend app metrics
     // =========================================================================
+
+    // ------------------------ 2. METRICS PIPELINE ---------------------------
+    prometheus.remote_write "external_prom" {
+      endpoint {
+        url = "http://10.10.10.18:9090/api/v1/write"
+      }
+    }
+
+    // A. Kube-State-Metrics (pod/deployment/node state — up/down visibility)
+    prometheus.scrape "kube_state_metrics" {
+      targets = [{
+        __address__ = "kube-state-metrics.monitoring.svc.cluster.local:8080",
+      }]
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "15s"
+    }
+
+    // B. cAdvisor (container CPU / memory / network)
+    discovery.kubernetes "nodes" {
+      role = "node"
+    }
+
+    prometheus.scrape "cadvisor" {
+      targets = discovery.kubernetes.nodes.targets
+      scheme  = "https"
+      tls_config {
+        ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+      }
+      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      metrics_path      = "/metrics/cadvisor"
+      forward_to        = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval   = "15s"
+    }
+
+    // C. Node Exporter (host CPU / RAM / disk)
+    discovery.kubernetes "node_exporter_pods" {
+      role = "pod"
+      selectors {
+        role  = "pod"
+        field = "metadata.namespace=monitoring"
+        label = "app.kubernetes.io/name=node-exporter"
+      }
+    }
+
+    prometheus.scrape "node_exporter" {
+      targets         = discovery.kubernetes.node_exporter_pods.targets
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "15s"
+    }
+
+    // D. rag-chatbot backend application metrics (LLM/RAG)
+    discovery.kubernetes "backend_pods" {
+      role = "pod"
+      selectors {
+        role  = "pod"
+        field = "metadata.namespace=rag-chatbot"
+        label = "app.kubernetes.io/name=backend"
+      }
+    }
+
+    prometheus.scrape "chatbot_backend" {
+      targets         = discovery.kubernetes.backend_pods.targets
+      metrics_path    = "/metrics"
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "10s"
+    }
+
+    // E. Alloy self-metrics (pipeline health)
+    prometheus.scrape "self" {
+      targets = [{"__address__" = "127.0.0.1:12345"}]
+      forward_to      = [prometheus.remote_write.external_prom.receiver]
+      scrape_interval = "15s"
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alloy
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alloy
+spec:
+  replicas: 1            # MUST stay 1 — see header comment
+  strategy:
+    type: Recreate       # avoid two collectors overlapping during rollout
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alloy
+    spec:
+      serviceAccountName: alloy
+      # Pin to the first master so /var/log/pods covers master-hosted pods;
+      # worker pod logs are still covered because ALL pods write to /var/log/pods
+      # on their own node — a single-node agent would miss them. Therefore run as
+      # a Deployment on a node and ALSO keep node coverage via multi-writer safe
+      # pattern: ONLY this single replica ships metrics; logs follow the same
+      # rule (single writer, no duplicates).
+      containers:
+      - name: alloy
+        image: grafana/alloy:v1.0.0
+        args:
+        - "run"
+        - "/etc/alloy/config.alloy"
+        - "--storage.path=/var/lib/alloy/data"
+        - "--server.http.listen-addr=0.0.0.0:12345"
+        ports:
+        - name: http-metrics
+          containerPort: 12345
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alloy
+        - name: data
+          mountPath: /var/lib/alloy/data
+        resources:
+          requests: { cpu: 250m, memory: 512Mi }
+          limits:   { cpu: "2",  memory: 2Gi }
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+      volumes:
+      - name: config
+        configMap:
+          name: alloy-config
+      - name: data
+        emptyDir: {}
+---
+# LOGS-ONLY collector: one pod per node ships /var/log/pods to Loki.
+# Metrics are deliberately NOT scraped here (single Deployment above owns all
+# metrics to avoid duplicate-sample "out of order" rejections).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-logs-config
+  namespace: monitoring
+data:
+  config.alloy: |
     local.file_match "pod_logs" {
       path_targets = [{
         __path__ = "/var/log/pods/*/*/*.log",
@@ -76,90 +223,22 @@ data:
         url = "http://10.10.10.18:3100/loki/api/v1/push"
       }
     }
-
-    // =========================================================================
-    // 2. METRICS PIPELINE: KSM, Node Exporter, cAdvisor -> Prometheus (10.10.10.18:9090)
-    // =========================================================================
-    prometheus.remote_write "external_prom" {
-      endpoint {
-        url = "http://10.10.10.18:9090/api/v1/write"
-      }
-    }
-
-    // A. Kube-State-Metrics (Cluster State)
-    prometheus.scrape "kube_state_metrics" {
-      targets = [{
-        __address__ = "kube-state-metrics.monitoring.svc.cluster.local:8080",
-      }]
-      forward_to      = [prometheus.remote_write.external_prom.receiver]
-      scrape_interval = "15s"
-    }
-
-    // B. Kubernetes Nodes cAdvisor (Container CPU, Memory, Network)
-    discovery.kubernetes "nodes" {
-      role = "node"
-    }
-
-    prometheus.scrape "cadvisor" {
-      targets = discovery.kubernetes.nodes.targets
-      scheme  = "https"
-      tls_config {
-        ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-      }
-      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-      metrics_path      = "/metrics/cadvisor"
-      forward_to        = [prometheus.remote_write.external_prom.receiver]
-      scrape_interval   = "15s"
-    }
-
-    // C. Node Exporter (Host CPU, RAM, Disk, Load)
-    discovery.kubernetes "node_exporter_pods" {
-      role = "pod"
-      selectors {
-        role  = "pod"
-        field = "metadata.namespace=monitoring"
-        label = "app.kubernetes.io/name=node-exporter"
-      }
-    }
-
-    prometheus.scrape "node_exporter" {
-      targets         = discovery.kubernetes.node_exporter_pods.targets
-      forward_to      = [prometheus.remote_write.external_prom.receiver]
-      scrape_interval = "15s"
-    }
-
-    // D. IT-Help-Chatbot Backend LLM & RAG Application Metrics
-    discovery.kubernetes "backend_pods" {
-      role = "pod"
-      selectors {
-        role  = "pod"
-        field = "metadata.namespace=rag-chatbot"
-        label = "app=backend"
-      }
-    }
-
-    prometheus.scrape "chatbot_backend" {
-      targets         = discovery.kubernetes.backend_pods.targets
-      metrics_path    = "/metrics"
-      forward_to      = [prometheus.remote_write.external_prom.receiver]
-      scrape_interval = "10s"
-    }
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: alloy
+  name: alloy-logs
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: alloy
+    app.kubernetes.io/name: alloy-logs
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: alloy
+      app.kubernetes.io/name: alloy-logs
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: alloy
+        app.kubernetes.io/name: alloy-logs
     spec:
       serviceAccountName: alloy
       containers:
@@ -170,9 +249,6 @@ spec:
         - "/etc/alloy/config.alloy"
         - "--storage.path=/var/lib/alloy/data"
         - "--server.http.listen-addr=0.0.0.0:12345"
-        ports:
-        - name: http-metrics
-          containerPort: 12345
         volumeMounts:
         - name: config
           mountPath: /etc/alloy
@@ -181,13 +257,16 @@ spec:
           readOnly: true
         - name: data
           mountPath: /var/lib/alloy/data
+        resources:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
         securityContext:
           runAsUser: 0
           runAsGroup: 0
       volumes:
       - name: config
         configMap:
-          name: alloy-config
+          name: alloy-logs-config
       - name: varlog
         hostPath:
           path: /var/log
