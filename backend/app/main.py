@@ -61,6 +61,8 @@ app.include_router(knowledge_router)
 app.include_router(admin_router)
 app.include_router(admin_ops_router)
 app.include_router(dashboard_router)
+from app.security.api_keys import router as apikeys_router
+app.include_router(apikeys_router)
 app.include_router(tickets_router)
 app.include_router(users_router)
 app.include_router(settings_router)

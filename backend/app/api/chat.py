@@ -17,6 +17,7 @@ from app.auth.rbac import get_role, require_role, allowed_domains
 from app.config import SETTINGS
 from app.observability.audit import audit
 from app.observability.telemetry import start_span
+from app.security.rate_limit import limit
 from app.persistence.models import ChatMessage, ChatSession, Feedback
 from app.persistence.database import SessionLocal
 from app.orchestration.orchestrator import run_rag
@@ -34,6 +35,7 @@ def _sse(event: str, data: dict) -> str:
 
 
 @router.post("/api/chat/stream")
+@limit("chat")
 def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> StreamingResponse:
     """Design doc §3 single pipeline, streamed over SSE.
 
@@ -308,6 +310,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
 
 @router.post("/api/escalate")
+@limit("escalate")
 def escalate(req: EscalateRequest, user: str = Depends(get_current_user)) -> dict:
     """Phase 6 — create a Jira ticket AS the authenticated user (reporter=username)."""
     summary = (req.message or "IT help escalation").strip()[:120]

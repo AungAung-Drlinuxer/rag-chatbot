@@ -4,7 +4,8 @@ import logging
 
 from app.schemas import LoginRequest, RefreshRequest
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.security.rate_limit import limit
 from pydantic import BaseModel
 
 from app.auth.deps import get_current_user
@@ -22,7 +23,8 @@ router = APIRouter()
 _require_chatbot = require_cap("chatbot")
 
 @router.post("/api/auth/login")
-def login(req: LoginRequest) -> dict:
+@limit("login", by_ip=True)
+def login(req: LoginRequest, request: Request = None) -> dict:
     """LDAP/AD authenticate (Phase 5) → JWT access + refresh tokens (dev fallback: dev/dev)."""
     subject = authenticate(req.username, req.password)
     if not subject:

@@ -129,6 +129,26 @@ class KbMeta(Base):
     last_synced: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ApiKey(Base):
+    """v1.1.8 — External API keys for programmatic chat access.
+
+    Users/automation integrate via `Authorization: Bearer ith_xxx` instead of a
+    JWT login. Keys are stored HASHED (sha256) — the raw value is shown once at
+    creation. Scope limits exposure: 'chat' allows only the chat/conversation
+    endpoints; 'read' adds read-only KB listing. Rate limits apply per key.
+    """
+    __tablename__ = "api_keys"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)          # label, e.g. "ops-bot"
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    key_prefix: Mapped[str] = mapped_column(String(16), nullable=False)     # ith_ab12…  (display)
+    scope: Mapped[str] = mapped_column(String(32), nullable=False, default="chat")  # chat | readonly
+    owner: Mapped[str] = mapped_column(String(64), nullable=False)          # admin who created
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class RuntimeKv(Base):
     """Key-value overrides for settings that admins want to change at runtime
     (without re-deploying). Loaded at request time by `runtime.get()` and
