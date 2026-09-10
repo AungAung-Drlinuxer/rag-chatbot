@@ -313,22 +313,40 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         # (fast, accurate, rate-limit friendly).
         import re as _re
         _msg_l = req.message.lower()
-        _mon_patterns = [
-            (r"(inventory|asset|serial number|who (is|has) .*assigned|which (laptop|server|printer))", "inventory"),
-            (r"zabbix", "zabbix"),
-            (r"grafana|dashboard", "grafana"),
-            (r"(cpu|memory|ram).*(usage|consum|top|highest|most)|(top|highest|most).*(cpu|memory|ram)|pod.*(cpu|memory)", "top_pods"),
-            (r"(which|what).*(device|server|host)s?\s+(are\s+)?(down|up|offline|online|unavailable)", "hosts"),
-            (r"(device|server|host|network).*(status|health|up|down|available)", "status"),
-            (r"(ingress|route|external url|domain entry)", "ingress"),
-            (r"(service|svc).*(list|overview|all)|list.*(service|svc)", "services"),
-            (r"(namespaces|namespaces overview|cluster overview|what namespaces)", "namespaces"),
-            (r"(nodes?\s+(list|detail|overview|status)|how many nodes|node spec)", "nodes"),
-            (r"(cluster|kubernetes|k8s|pod|node).*(status|health|running|down|restart)", "cluster"),
-            (r"(is|are)\s+(the\s+)?(backend|frontend|ollama|redis|postgres|rerank)", "app"),
-            (r"(active\s+)?(problems|alerts|incidents)", "problems"),
-        ]
-        _mon_kind = next((kind for pat, kind in _mon_patterns if _re.search(pat, _msg_l)), None)
+
+        # v1.3.3 — PANEL-INDEX INTENT: before keyword patterns, check whether the
+        # question naturally matches any Grafana panel title (users don't say
+        # "grafana" — they just ask "what is the token cost?").
+        try:
+            from app.integrations.grafana import is_configured as _gf_cfg, match_question_to_panels
+            if _gf_cfg():
+                _panel_matches = match_question_to_panels(req.message, top_n=1)
+                if _panel_matches and _panel_matches[0]["_score"] >= 4:
+                    _mon_kind = "grafana"
+                else:
+                    _mon_kind = None
+            else:
+                _mon_kind = None
+        except Exception:
+            _mon_kind = None
+
+        if not _mon_kind:
+            _mon_patterns = [
+                (r"(inventory|asset|serial number|who (is|has) .*assigned|which (laptop|server|printer))", "inventory"),
+                (r"zabbix", "zabbix"),
+                (r"grafana|dashboard", "grafana"),
+                (r"(cpu|memory|ram).*(usage|consum|top|highest|most)|(top|highest|most).*(cpu|memory|ram)|pod.*(cpu|memory)", "top_pods"),
+                (r"(which|what).*(device|server|host)s?\s+(are\s+)?(down|up|offline|online|unavailable)", "hosts"),
+                (r"(device|server|host|network).*(status|health|up|down|available)", "status"),
+                (r"(ingress|route|external url|domain entry)", "ingress"),
+                (r"(service|svc).*(list|overview|all)|list.*(service|svc)", "services"),
+                (r"(namespaces|namespaces overview|cluster overview|what namespaces)", "namespaces"),
+                (r"(nodes?\s+(list|detail|overview|status)|how many nodes|node spec)", "nodes"),
+                (r"(cluster|kubernetes|k8s|pod|node).*(status|health|running|down|restart)", "cluster"),
+                (r"(is|are)\s+(the\s+)?(backend|frontend|ollama|redis|postgres|rerank)", "app"),
+                (r"(active\s+)?(problems|alerts|incidents)", "problems"),
+            ]
+            _mon_kind = next((kind for pat, kind in _mon_patterns if _re.search(pat, _msg_l)), None)
         if _mon_kind:
             yield _sse("stage", {"stage": "tool", "detail": "Querying live monitoring data"})
             _answer_text, _mon_rows = _monitoring_answer(_mon_kind, req.message)

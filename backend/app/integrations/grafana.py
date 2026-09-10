@@ -162,3 +162,74 @@ def render_prom_results(results: list, legend: str, max_rows: int = 12) -> str:
 
 def metric_of(item: dict) -> dict:
     return item.get("metric", {})
+
+
+# ---------------------------------------------------------------------------
+# v1.3.3 — PANEL INDEX + intent matching (natural-language pin-pointing)
+# Users ask "what is the token cost?" or "select Node Exporter Full" without
+# saying "grafana". We score the question against every panel title and route
+# to the grafana tool when a confident match exists.
+# ---------------------------------------------------------------------------
+
+_PANEL_INDEX: list[dict] | None = None
+_PANEL_INDEX_AT: float = 0.0
+_PANEL_INDEX_TTL = 300.0  # 5 min cache — new dashboards appear within 5 min
+
+
+def _stop_words() -> set:
+    return {"the", "what", "is", "are", "show", "me", "how", "many", "much", "a",
+            "an", "of", "in", "on", "for", "to", "and", "or", "please", "can",
+            "you", "tell", "give", "current", "now", "right", "get", "do", "does",
+            "there", "any", "from", "with", "about", "it", "this", "that"}
+
+
+def panel_index(force: bool = False) -> list[dict]:
+    """Cached flat index of all panels across all dashboards.
+
+    Each entry: {dashboard_title, dashboard_uid, title, type, expr, legend}
+    """
+    global _PANEL_INDEX, _PANEL_INDEX_AT
+    import time as _t
+    now = _t.time()
+    if not force and _PANEL_INDEX is not None and (now - _PANEL_INDEX_AT) < _PANEL_INDEX_TTL:
+        return _PANEL_INDEX
+    idx: list[dict] = []
+    for d in list_dashboards():
+        dash = get_dashboard(d["uid"])
+        if not dash:
+            continue
+        for panel in flatten_panels(dash):
+            if "$" in panel.get("expr", ""):
+                continue
+            idx.append({
+                "dashboard_title": d.get("title", ""),
+                "dashboard_uid": d["uid"],
+                **panel,
+            })
+    _PANEL_INDEX = idx
+    _PANEL_INDEX_AT = now
+    return idx
+
+
+def match_question_to_panels(question: str, top_n: int = 4) -> list[dict]:
+    """Score the question against all panel titles. Returns top matches with score.
+
+    Token-overlap scoring, stop-word filtered. Empty result = not a panel question.
+    """
+    q_words = {w for w in re.split(r"\W+", question.lower()) if len(w) > 2} - _stop_words()
+    if not q_words:
+        return []
+    scored: list[dict] = []
+    for entry in panel_index():
+        pt_words = {w for w in re.split(r"\W+", (entry.get("title") or "").lower()) if len(w) > 2}
+        overlap = q_words & pt_words
+        if not overlap:
+            continue
+        score = len(overlap) * 2 + sum(1 for w in overlap if len(w) > 4)
+        # strong bonus: dashboard title words also match (e.g. "node exporter full")
+        dt_words = {w for w in re.split(r"\W+", entry.get("dashboard_title", "").lower()) if len(w) > 2}
+        if q_words & dt_words:
+            score += 3
+        scored.append({**entry, "_score": score})
+    scored.sort(key=lambda x: -x["_score"])
+    return scored[:top_n]
