@@ -43,6 +43,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
   const [formName, setFormName] = useState("");
   const [formScope, setFormScope] = useState<"chat" | "readonly">("chat");
   const [confirmRevoke, setConfirmRevoke] = useState<ApiKeyRow | null>(null);
+  const [confirmPurge, setConfirmPurge] = useState<ApiKeyRow | null>(null);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [activeSnippetTab, setActiveSnippetTab] = useState<"curl" | "python" | "powershell">("curl");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
@@ -104,6 +105,26 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
     } finally {
       setBusy(false);
       setConfirmRevoke(null);
+    }
+  }
+
+  /** v1.3.5 — PERMANENTLY delete a revoked key (row disappears forever). */
+  async function purgeKey(key: ApiKeyRow) {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`${BASE}/api/apikeys/${key.id}/purge`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d?.detail ?? "delete failed");
+      onToast?.(`Key "${key.name}" permanently deleted`);
+      load();
+    } catch (e: any) {
+      onToast?.(e?.message ?? "Delete failed", "err");
+    } finally {
+      setBusy(false);
+      setConfirmPurge(null);
     }
   }
 
@@ -244,6 +265,15 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                         <Trash2 className="size-4" />
                       </button>
                     )}
+                    {!k.active && (isAdmin || k.owner === userName) && (
+                      <button
+                        onClick={() => setConfirmPurge(k)}
+                        title="Permanently delete this revoked key"
+                        className="rounded-lg p-2 text-red-400 transition hover:bg-rose-50 hover:text-red-700 dark:hover:bg-rose-950/40"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -334,6 +364,37 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                 className="rounded-xl bg-rose-600 text-white hover:bg-rose-700"
               >
                 {busy ? "Revoking…" : "Revoke key"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* v1.3.5 — Permanently delete confirm dialog */}
+      {confirmPurge && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+          <Card className="w-full max-w-sm rounded-2xl p-6">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="size-5 shrink-0 text-red-600" />
+              <div>
+                <h3 className="text-sm font-semibold">Permanently delete "{confirmPurge.name}"?</h3>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  This revoked key and its record will be removed forever. Any client still
+                  sending it receives 401. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setConfirmPurge(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => purgeKey(confirmPurge)}
+                className="rounded-xl bg-red-600 text-white hover:bg-red-700"
+              >
+                {busy ? "Deleting…" : "Delete permanently"}
               </Button>
             </div>
           </Card>

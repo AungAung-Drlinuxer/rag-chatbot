@@ -149,3 +149,31 @@ def revoke_key(key_id: int, user: str = Depends(get_current_user)) -> dict:
     from app.observability.audit import audit
     audit("apikey.revoke", user, detail=row.name)
     return {"status": "revoked", "name": row.name}
+
+
+@router.delete("/{key_id}/purge")
+def purge_key(key_id: int, user: str = Depends(get_current_user)) -> dict:
+    """v1.3.5 — PERMANENT DELETE of a revoked key (must be inactive first).
+
+    Security best practice: revoked keys can be purged to remove their audit
+    surface entirely — the row disappears from the list forever. Admins may
+    purge any revoked key; users may purge their own revoked keys.
+    """
+    from app.auth.rbac import get_role
+    role = get_role(user)
+    is_admin = role in ("admin", "administrator", "Administrator")
+    with SessionLocal() as s:
+        row = s.query(ApiKey).filter(ApiKey.id == key_id).first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Key not found")
+        if not is_admin and row.owner != user:
+            raise HTTPException(status_code=403, detail="You can only delete your own keys")
+        if row.active:
+            raise HTTPException(status_code=400,
+                                detail="Revoke the key first — active keys cannot be purged")
+        name = row.name
+        s.delete(row)
+        s.commit()
+    from app.observability.audit import audit
+    audit("apikey.purge", user, detail=name)
+    return {"status": "deleted", "name": name}
