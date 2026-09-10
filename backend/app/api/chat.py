@@ -159,48 +159,74 @@ def _monitoring_answer(kind: str, message: str) -> tuple[str, list[dict]]:
                             "source_url": url,
                         })
                 else:
-                    # Match specific dashboard by keywords in query
-                    target = None
-                    best_score = 0
-                    generic_words = {"dashboard", "dashboards", "grafana", "data", "view", "views", "show", "get"}
+                    # v1.3.2 — PANEL-LEVEL scoring: score every panel title across ALL
+                    # dashboards against the question, render the top matches first.
+                    # This gives precise pin-point answers ("latency", "tokens", "cost",
+                    # "guardrail", "restarts"…) instead of dumping the first 3 panels.
+                    generic_words = {"dashboard", "dashboards", "grafana", "data", "view",
+                                     "views", "show", "get", "what", "which", "how", "the"}
+                    scored: list[tuple[int, dict, dict]] = []  # (score, dashboard, panel)
                     for d in dbs:
-                        t = (d.get("title") or "").lower()
-                        words = [w for w in _re.split(r"\W+", t) if len(w) > 3]
-                        score = sum(1 for w in words if w in q and w not in generic_words)
-                        if score > best_score:
-                            best_score = score
-                            target = d
-                    if target is None:
+                        dash = gf.get_dashboard(d["uid"])
+                        if not dash:
+                            continue
+                        for panel in gf.flatten_panels(dash):
+                            if "$" in panel.get("expr", ""):
+                                continue  # template-variable panels need user context
+                            pt = (panel.get("title") or "").lower()
+                            if not pt:
+                                continue
+                            score = 0
+                            for w in _re.split(r"\W+", pt):
+                                if len(w) > 2 and w in q:
+                                    score += 2
+                            # bonus for high-signal words appearing in the question
+                            for w in _re.split(r"\W+", q):
+                                if len(w) > 2 and w in pt:
+                                    score += 1
+                            if score > 0:
+                                scored.append((score, d, panel))
+                    scored.sort(key=lambda x: -x[0])
+
+                    if scored:
+                        parts.append(f"\n**Grafana — {len(scored)} matching panels (top 4):**")
+                        for score, d, panel in scored[:4]:
+                            try:
+                                res = gf.run_prom_query(panel["expr"])
+                                parts.append(
+                                    f"\n*{panel['title']}*  _(from: {d.get('title')})_\n"
+                                    + gf.render_prom_results(res, panel.get("legend", "")))
+                                hits.append({"page_id": f"grafana-{d['uid']}",
+                                             "title": panel["title"], "source": "Grafana",
+                                             "relevance": min(100, 60 + score * 5),
+                                             "excerpt": f"{len(res)} series",
+                                             "source_url": gf._cfg("base_url") + "/d/" + d["uid"]})
+                            except Exception as perr:
+                                logger.debug("panel %s failed: %s", panel.get("title"), perr)
+                    else:
+                        # No keyword match → fall back to the primary RAG dashboard overview
                         rag_dbs = [d for d in dbs
                                    if (d.get("title") or "").lower().startswith("rag chatbot")]
                         target = rag_dbs[0] if rag_dbs else (dbs[0] if dbs else None)
-
-                    if target:
-                        dash = gf.get_dashboard(target["uid"])
-                        panels = gf.flatten_panels(dash) if dash else []
-                        parts.append(f"\n**Grafana: {target.get('title')}**")
-                        rendered = 0
-                        for panel in panels:
-                            if rendered >= 3:
-                                break
-                            if "$" in panel.get("expr", ""):
-                                continue  # template-variable panels need user context — skip
-                            try:
-                                res = gf.run_prom_query(panel["expr"])
-                                if res:
-                                    parts.append(f"\n*{panel['title']}*\n" + gf.render_prom_results(res, panel.get("legend", "")))
-                                    hits.append({"page_id": f"grafana-{target['uid']}",
-                                                 "title": panel["title"], "source": "Grafana",
-                                                 "relevance": 100,
-                                                 "excerpt": f"{len(res)} series",
-                                                 "source_url": gf._cfg("base_url") + "/d/" + target["uid"]})
-                                    rendered += 1
-                            except Exception as perr:
-                                logger.debug("panel %s failed: %s", panel.get("title"), perr)
-                        if rendered == 0:
-                            parts.append("\n_Panels returned no data right now._")
-                    else:
-                        parts.append("\n_No dashboards visible with the configured token._")
+                        if target:
+                            dash = gf.get_dashboard(target["uid"])
+                            panels = gf.flatten_panels(dash) if dash else []
+                            parts.append(f"\n**Grafana: {target.get('title')}**")
+                            rendered = 0
+                            for panel in panels:
+                                if rendered >= 3:
+                                    break
+                                if "$" in panel.get("expr", ""):
+                                    continue
+                                try:
+                                    res = gf.run_prom_query(panel["expr"])
+                                    if res:
+                                        parts.append(f"\n*{panel['title']}*\n" + gf.render_prom_results(res, panel.get("legend", "")))
+                                        rendered += 1
+                                except Exception:
+                                    pass
+                        else:
+                            parts.append("\n_No dashboards visible with the configured token._")
         except Exception as exc:
             logger.warning("grafana query failed: %s", exc)
             parts.append(f"Grafana query failed: {type(exc).__name__}: {exc}")
