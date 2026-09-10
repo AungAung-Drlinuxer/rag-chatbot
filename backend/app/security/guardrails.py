@@ -30,7 +30,7 @@ _INJECTION_PATTERNS: list[tuple[str, str]] = [
     (r"disregard\s+(all\s+)?(previous|your|the)\s+(instructions|rules|training)", "instruction_override"),
     (r"you\s+are\s+now\s+(dan|developer\s+mode|unfiltered|jailbreak)", "role_hijack"),
     (r"system\s+p(rompt|essage)\s*[:=]", "system_prompt_probe"),
-    (r"print|show|reveal|repeat|output\s+(your\s+|the\s+)?(full\s+)?system\s+prompt", "system_prompt_probe"),
+    (r"(print|show|reveal|repeat|output)\s+(your\s+|the\s+)?(full\s+)?system\s+prompt", "system_prompt_probe"),
     (r"(your\s+)?(initial|original|secret)\s+(instructions|prompt)", "system_prompt_probe"),
     (r"act\s+as\s+an?\s+(unrestricted|uncensored|amoral|evil)", "role_hijack"),
     (r"developer\s+mode\s+enabled", "role_hijack"),
