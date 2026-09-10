@@ -673,3 +673,67 @@ def list_escalations(user: str = Depends(get_current_user)) -> dict:
 def contacts(domain: str, user: str = Depends(get_current_user)) -> dict:
     return get_contact(domain)
 
+
+# ---------------------------------------------------------------------------
+# v1.3.4 — GRAFANA SELECT-FLOW: question → panel choices popup → user picks →
+# live data → LLM generates the final narrative answer.
+# ---------------------------------------------------------------------------
+
+@router.post("/api/grafana/panels")
+def grafana_panel_choices(body: dict, user: str = Depends(get_current_user)) -> dict:
+    """Match a natural-language question to candidate Grafana panels.
+
+    Returns a list of choices the frontend renders as a selectable popup.
+    """
+    from app.integrations import grafana as gf
+    if not gf.is_configured():
+        raise HTTPException(status_code=503, detail="Grafana integration not configured")
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question required")
+    matches = gf.match_question_to_panels(question, top_n=6)
+    return {"choices": [
+        {
+            "dashboard_uid": m["dashboard_uid"],
+            "dashboard_title": m["dashboard_title"],
+            "panel_title": m["title"],
+            "expr": m["expr"],
+            "legend": m.get("legend", ""),
+            "score": m["_score"],
+        } for m in matches
+    ]}
+
+
+@router.post("/api/grafana/panel-data")
+def grafana_panel_data(body: dict, user: str = Depends(get_current_user)) -> dict:
+    """Execute one panel's PromQL and return formatted rows for the LLM.
+
+    body: { dashboard_uid, dashboard_title, panel_title, expr, legend }
+    """
+    from app.integrations import grafana as gf
+    if not gf.is_configured():
+        raise HTTPException(status_code=503, detail="Grafana integration not configured")
+    expr = (body.get("expr") or "").strip()
+    panel_title = (body.get("panel_title") or "Panel").strip()
+    dashboard_title = (body.get("dashboard_title") or "Dashboard").strip()
+    if not expr:
+        raise HTTPException(status_code=400, detail="expr required")
+    try:
+        res = gf.run_prom_query(expr)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Prometheus query failed: {type(exc).__name__}: {exc}")
+    rows = []
+    for item in res:
+        metric = gf.metric_of(item)
+        # strip __name__ noise; keep meaningful labels
+        labels = {k: v for k, v in metric.items() if k not in ("__name__",)}
+        value = float(item.get("value", [0, 0])[1])
+        rows.append({"labels": labels, "value": value})
+    return {
+        "panel_title": panel_title,
+        "dashboard_title": dashboard_title,
+        "expr": expr,
+        "series_count": len(res),
+        "rows": rows[:30],
+    }
+

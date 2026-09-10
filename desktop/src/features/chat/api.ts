@@ -38,6 +38,39 @@ export async function streamChat(
   }
 }
 
+// --- v1.3.4 Grafana select-flow: question → panel choices → live data ---
+export type GrafanaPanelChoice = {
+  dashboard_uid: string;
+  dashboard_title: string;
+  panel_title: string;
+  expr: string;
+  legend: string;
+  score: number;
+};
+
+export async function grafanaPanelChoices(question: string): Promise<{ choices: GrafanaPanelChoice[] }> {
+  const r = await apiFetch(`${BASE}/api/grafana/panels`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ question }),
+  });
+  if (!r.ok) throw new Error(`panel choices failed (HTTP ${r.status})`);
+  return r.json();
+}
+
+export async function grafanaPanelData(choice: GrafanaPanelChoice) {
+  const r = await apiFetch(`${BASE}/api/grafana/panel-data`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(choice),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.detail || `panel data failed (HTTP ${r.status})`);
+  }
+  return r.json();
+}
+
 export async function escalate(body: any) {
   const r = await apiFetch(`${BASE}/api/escalate`, {
     method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify(body),
