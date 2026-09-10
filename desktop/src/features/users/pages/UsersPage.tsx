@@ -72,13 +72,16 @@ type PermissionKey =
 
 type PermissionMap = Record<PermissionKey, boolean>;
 
+// v1.3.6 — "Manage routing domains" merged into "Manage knowledge": the Knowledge
+// page hosts BOTH article management AND routing-domain management, so one
+// capability (manage_kb) governs both. manage_domains stays as a backend alias
+// (granted whenever manage_kb is granted) for DB compatibility.
 const RBAC_CAPABILITIES: { key: PermissionKey; label: string }[] = [
   { key: "chatbot", label: "Access chatbot" },
   { key: "kb_search", label: "Search knowledge base" },
   { key: "create_tickets", label: "Create tickets" },
-  { key: "manage_kb", label: "Manage knowledge" },
+  { key: "manage_kb", label: "Manage knowledge & routing domains" },
   { key: "manage_users", label: "Manage users" },
-  { key: "manage_domains", label: "Manage routing domains" },
 ];
 
 const EMPTY_PERMISSIONS: PermissionMap = {
@@ -624,7 +627,8 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
       try {
         const data = await getUserPermissions(user.username);
         if (!mounted) return;
-        setPermissions({ ...EMPTY_PERMISSIONS, ...(data.effective ?? {}) });
+        const eff = { ...EMPTY_PERMISSIONS, ...(data.effective ?? {}) };
+        setPermissions({ ...eff, manage_domains: eff.manage_kb }); // v1.3.6 merged capability
       } catch (err: any) {
         if (mounted) setPermissions(EMPTY_PERMISSIONS);
         console.warn("Failed to load user permissions:", err);
@@ -640,13 +644,19 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
      (from ROLE_DEFAULTS + user's saved overrides). Saves re-fetch effective perms. */
   const previewPerms: PermissionMap = useMemo(() => {
     const defaults = ROLE_DEFAULTS[selectedRole] ?? EMPTY_PERMISSIONS;
-    if (selectedRole === user.role) return permissions;
-    // merge: role defaults + any override the user already has for caps the new role lacks
-    const merged = { ...defaults };
-    (Object.keys(merged) as PermissionKey[]).forEach((k) => {
-      if (!merged[k] && permissions[k] && user.roleOverride) merged[k] = true; // keep explicit grants
-    });
-    return merged;
+    let base: PermissionMap;
+    if (selectedRole === user.role) {
+      base = permissions;
+    } else {
+      // merge: role defaults + any override the user already has for caps the new role lacks
+      const merged = { ...defaults } as PermissionMap;
+      (Object.keys(merged) as PermissionKey[]).forEach((k) => {
+        if (!merged[k] && permissions[k] && user.roleOverride) merged[k] = true; // keep explicit grants
+      });
+      base = merged;
+    }
+    // v1.3.6 — merged capability: manage_domains follows manage_kb (one switch in UI)
+    return { ...base, manage_domains: base.manage_kb };
   }, [selectedRole, permissions, user.role, user.roleOverride]);
 
   async function saveRole() {

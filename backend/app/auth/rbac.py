@@ -253,6 +253,11 @@ def permissions_for(username: str) -> dict:
                 perms[k] = bool(v)
     except Exception:
         pass
+
+    # v1.3.6 — merged capability: "Manage routing domains" follows "Manage knowledge"
+    # (both live on the Knowledge page). manage_domains stays defined for backend
+    # compatibility but is always equal to manage_kb.
+    perms["manage_domains"] = perms.get("manage_kb", False)
     return perms
 
 
