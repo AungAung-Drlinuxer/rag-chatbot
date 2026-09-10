@@ -111,6 +111,17 @@ export default function App() {
     // Note: Do NOT reset data-theme to light on logout so the user's preferred theme persists seamlessly
   }
 
+  // v1.1.9 — JWT rotated server-side (secret rotation) → stale sessions can't recover.
+  // Any page that gets a 401 after a failed refresh dispatches this; force logout → login page.
+  useEffect(() => {
+    const onExpired = () => {
+      void onLogout();
+      setLoginErr("Your session has expired — please sign in again.");
+    };
+    window.addEventListener("ith:session-expired", onExpired);
+    return () => window.removeEventListener("ith:session-expired", onExpired);
+  }, []);
+
   const shell = (active: string, children: React.ReactNode) => (
     <>
       <div className="flex h-screen overflow-hidden">

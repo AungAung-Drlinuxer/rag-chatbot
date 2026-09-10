@@ -62,6 +62,15 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ name: formName.trim(), scope: formScope }),
       });
+      if (r.status === 401) {
+        // v1.1.9 — JWT was rotated / expired: the stale session cannot recover.
+        // Force re-login instead of leaving the dialog in a dead state.
+        setFormOpen(false);
+        setBusy(false);
+        window.dispatchEvent(new CustomEvent("ith:session-expired"));
+        onToast?.("Session expired — please sign in again.", "err");
+        return;
+      }
       const d = await r.json();
       if (!r.ok) throw new Error(d?.detail ?? "failed");
       setCreated(d);
