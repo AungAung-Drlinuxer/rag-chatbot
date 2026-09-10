@@ -4,7 +4,7 @@ Phase 4 — Zabbix/LGTM alert status delivered both in-app and by email.
 
 Design:
 - Celery beat runs `check_monitoring_alerts` every 5 minutes.
-- Pulls Zabbix active problems + LGTM cluster health.
+- Pullsx active problems + LGTM cluster health.
 - NEW problems (not seen in previous checks — tracked by source_id uniqueness) are:
   1. Persisted to `monitoring_alerts` (in-app notification source)
   2. Emailed via app.notifier.send_alert (admins) on High/Disaster severity
@@ -36,38 +36,6 @@ def check_monitoring_alerts() -> dict:
     emailed = 0
 
     with SessionLocal() as s:
-        seen_ids: set[str] = {
-            r[0] for r in s.query(MonitoringAlert.external_id).filter(
-                MonitoringAlert.source == "zabbix").all()
-        }
-
-        # --- Zabbix problems ------------------------------------------------
-        try:
-            from app.integrations import zabbix as zb
-            if zb.is_configured():
-                for p in zb.client().problems():
-                    pid = f"zabbix:{p['name']}"
-                    if pid in seen_ids:
-                        continue
-                    alert = MonitoringAlert(
-                        source="zabbix",
-                        external_id=pid,
-                        severity=int(p.get("severity", 0)),
-                        name=p["name"],
-                        status="active",
-                    )
-                    s.add(alert)
-                    s.commit()
-                    s.refresh(alert)
-                    seen_ids.add(pid)
-                    created += 1
-                    # email on High/Disaster
-                    if int(p.get("severity", 0)) >= 4:
-                        _email_admins(alert)
-                        emailed += 1
-        except Exception as exc:
-            logger.warning("monitoring: zabbix check skipped (%s)", exc)
-
         # --- LGTM cluster health (only alert on total failure) --------------
         try:
             from app.integrations.lgmt import cluster_health_summary

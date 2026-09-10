@@ -48,7 +48,7 @@ export type GrafanaPanelChoice = {
   score: number;
 };
 
-export async function grafanaPanelChoices(question: string): Promise<{ choices: GrafanaPanelChoice[] }> {
+export async function grafanaPanelChoices(question: string): Promise<{ choices: GrafanaPanelChoice[]; guardrail?: { action: string; type: string; message: string } }> {
   const r = await apiFetch(`${BASE}/api/grafana/panels`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },

@@ -275,33 +275,7 @@ def monitoring_status(user: str = Depends(get_current_user)) -> dict:
 
     Non-blocking per-source: failures return partial data with an error note.
     """
-    out: dict = {"zabbix": None, "cluster": None}
-
-    # --- Zabbix hosts (device/server availability) ---
-    try:
-        from app.integrations import zabbix as zb
-        if zb.is_configured():
-            hosts = zb.client().hosts()
-            ups = [h for h in hosts if h.get("available") == "up"]
-            downs = [h for h in hosts if h.get("available") == "down"]
-            unknown = [h for h in hosts if h.get("available") == "unknown"]
-            problems = zb.client().problems()
-            out["zabbix"] = {
-                "configured": True,
-                "total": len(hosts),
-                "up": len(ups),
-                "down": len(downs),
-                "unknown": len(unknown),
-                "active_problems": len(problems),
-                "down_hosts": [{"host": h["host"], "ip": h["ip"]} for h in downs[:10]],
-                "top_problems": [
-                    {"name": p["name"], "severity": p["severity"]} for p in problems[:5]
-                ],
-            }
-        else:
-            out["zabbix"] = {"configured": False}
-    except Exception as exc:
-        out["zabbix"] = {"configured": True, "error": f"{type(exc).__name__}: {exc}"}
+    out: dict = {"cluster": None}
 
     # --- LGTM cluster health ---
     try:

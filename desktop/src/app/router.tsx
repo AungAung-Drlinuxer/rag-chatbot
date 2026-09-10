@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 export const NAV_IDS = [
-  "chat", "dashboard", "articles", "tickets", "domains", "inventory", "users", "apikeys", "history", "audits", "settings",
+  "chat", "dashboard", "articles", "tickets", "domains", "users", "apikeys", "history", "audits", "settings",
 ] as const;
 export type NavId = (typeof NAV_IDS)[number];
 

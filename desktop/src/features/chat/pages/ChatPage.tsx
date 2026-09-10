@@ -259,7 +259,21 @@ export default function Chat({
     // v1.3.4 — GRAFANA SELECT-FLOW pre-check: if the question matches dashboard
     // panels, show a selectable popup instead of the KB pipeline.
     try {
-      const { choices } = await grafanaPanelChoices(question);
+      const res = await grafanaPanelChoices(question);
+      // v1.3.7 — guardrail response: show the refusal directly
+      if ((res as any).guardrail) {
+        const g = (res as any).guardrail;
+        setMessages((prev) => [
+          ...prev,
+          userMessage,
+          { id: assistantId, role: "assistant", content: g.message,
+            timestamp: currentTime(),
+            ...((g.action === "blocked") ? { guardrail: g.type } : {}) },
+        ] as Message[]);
+        historyRef.current = [...historyRef.current, { role: "user", content }, { role: "assistant", content: g.message }];
+        return;
+      }
+      const choices = (res as any).choices ?? [];
       if (choices.length > 0) {
         setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", timestamp: currentTime() }]);
         setPendingChoices({ forMessageId: assistantId, question, choices });

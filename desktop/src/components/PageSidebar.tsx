@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useBranding } from "@/app/useBranding";
 import {
-  BookOpen, Bot, Boxes, ChevronDown, ChevronRight, Home, KeyRound as KeyIcon, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
+  BookOpen, Bot, ChevronDown, ChevronRight, Home, KeyRound as KeyIcon, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
   Pin, Pencil, Trash2, MoreHorizontal, ScrollText, Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
 } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
@@ -93,7 +93,6 @@ export default function PageSidebar({
     { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
     { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base & domains" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
-    { id: "inventory", label: "Assets", icon: <Boxes className="size-4" />, cap: "kb_search", capLabel: "IT hardware & asset catalog" },
     { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
     { id: "apikeys", label: "API Keys", icon: <KeyIcon className="size-4" /> },
     { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review organization conversation history" },

@@ -48,70 +48,6 @@ def _monitoring_answer(kind: str, message: str) -> tuple[str, list[dict]]:
     parts: list[str] = []
     hits: list[dict] = []
 
-    # --- Zabbix side (devices/servers) -------------------------------------
-    if kind in ("zabbix", "hosts", "status", "problems"):
-        try:
-            from app.integrations import zabbix as zb
-            if zb.is_configured():
-                problems = zb.client().problems()
-                summary = zb.summarize_problems(problems)
-                parts.append("**Zabbix — active problems**\n" + summary)
-                hits.append({"page_id": "zabbix-problems", "title": "Zabbix active problems",
-                             "source": "Zabbix", "relevance": 100,
-                             "excerpt": summary[:180], "source_url": None})
-                if kind in ("hosts", "status"):
-                    hosts = zb.client().hosts()
-                    downs = [h for h in hosts if h["available"] == "down"]
-                    ups = [h for h in hosts if h["available"] == "up"]
-                    parts.append(f"\n**Hosts** — {len(ups)} up, {len(downs)} down, "
-                                 f"{len(hosts) - len(ups) - len(downs)} unknown")
-                    for h in downs[:10]:
-                        parts.append(f"- 🔴 {h['host']} ({h['ip']}) — unreachable")
-                    for h in ups[:10]:
-                        parts.append(f"- 🟢 {h['host']} ({h['ip']})")
-            else:
-                parts.append("Zabbix is not configured yet. An administrator can connect it in "
-                             "Settings → Integrations → Zabbix (base URL + API token).")
-        except Exception as exc:
-            logger.warning("zabbix query failed: %s", exc)
-            parts.append(f"Zabbix query failed: {type(exc).__name__}: {exc}")
-
-    # --- IT inventory --------------------------------------------------------
-    if kind == "inventory":
-        try:
-            from sqlalchemy import text as _t
-            from app.persistence.database import SessionLocal as _SL
-            # extract search keyword from the question (last noun-ish token)
-            import re as _re2
-            m = _re2.search(r'(?:for|of|about|assigned to|hosting|on)\s+([a-zA-Z0-9._-]{2,40})', message.lower())
-            kw = m.group(1) if m else ""
-            with _SL() as s:
-                if kw:
-                    rows = s.execute(_t(
-                        "SELECT name, category, hostname, ip_address, location, assigned_to "
-                        "FROM inventory_items WHERE name ILIKE :kw OR hostname ILIKE :kw "
-                        "OR ip_address ILIKE :kw OR assigned_to ILIKE :kw OR location ILIKE :kw LIMIT 20"
-                    ), {"kw": f"%{kw}%"}).fetchall()
-                else:
-                    rows = s.execute(_t(
-                        "SELECT name, category, hostname, ip_address, location, assigned_to "
-                        "FROM inventory_items ORDER BY name LIMIT 20")).fetchall()
-            if rows:
-                parts.append(f"\n**IT Inventory** — {len(rows)} matching items")
-                for r in rows:
-                    parts.append(
-                        f"- 🖥 **{r[0]}** ({r[1]}) — host: {r[2] or '-'} · IP: {r[3] or '-'} · "
-                        f"location: {r[4] or '-'} · assigned: {r[5] or '-'}")
-                hits.append({"page_id": "inventory", "title": "IT inventory lookup",
-                             "source": "Inventory", "relevance": 100,
-                             "excerpt": f"{len(rows)} items", "source_url": None})
-            else:
-                suffix = f" for '{kw}'" if kw else ""
-                parts.append(f"\nNo inventory items found{suffix}.")
-        except Exception as exc:
-            logger.warning("inventory query failed: %s", exc)
-            parts.append(f"Inventory query failed: {type(exc).__name__}: {exc}")
-
     # --- Kubernetes / LGTM side --------------------------------------------
     if kind in ("cluster", "app", "status"):
         try:
@@ -353,9 +289,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
         if not _mon_kind:
             _mon_patterns = [
-                (r"(inventory|asset|serial number|who (is|has) .*assigned|which (laptop|server|printer))", "inventory"),
-                (r"zabbix", "zabbix"),
-                (r"grafana|dashboard", "grafana"),
+                    (r"grafana|dashboard", "grafana"),
                 (r"(cpu|memory|ram).*(usage|consum|top|highest|most)|(top|highest|most).*(cpu|memory|ram)|pod.*(cpu|memory)", "top_pods"),
                 (r"(which|what).*(device|server|host)s?\s+(are\s+)?(down|up|offline|online|unavailable)", "hosts"),
                 (r"(device|server|host|network).*(status|health|up|down|available)", "status"),

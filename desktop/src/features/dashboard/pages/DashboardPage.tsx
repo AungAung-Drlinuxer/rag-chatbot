@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   BarChart3,
   BookOpen,
-  Boxes,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -325,7 +324,6 @@ export default function Dashboard({ role, onNavigate }: Props) {
               <span className="text-[10px] font-medium text-muted-foreground">Quick actions:</span>
               <QuickAction label="Ask a question" icon={<MessageSquare className="size-3.5" />} onClick={() => onNavigate?.("chat")} />
               <QuickAction label="Browse knowledge" icon={<BookOpen className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
-              <QuickAction label="IT Assets" icon={<Boxes className="size-3.5" />} onClick={() => onNavigate?.("inventory")} />
               {(role === "admin" || role === "knowledge") && (
                 <>
                   <QuickAction label="Sync KB now" icon={<RefreshCw className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
@@ -386,77 +384,30 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 )}
               </Card>
 
-              {/* Zabbix Devices Widget */}
+              {/* Recent Alerts Widget (LGTM) */}
               <Card className="rounded-2xl p-5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold">Network Devices & Servers</h3>
-                  {monStatus?.zabbix?.configured ? (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                      Zabbix Live
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                      Not configured
-                    </span>
-                  )}
-                </div>
-                {monStatus?.zabbix?.configured ? (
-                  <div className="mt-3">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl bg-emerald-50 p-2.5 dark:bg-emerald-950/30">
-                        <div className="text-lg font-semibold text-emerald-600">{monStatus.zabbix.up ?? 0}</div>
-                        <div className="text-[9px] text-emerald-700/70 dark:text-emerald-400">Up</div>
-                      </div>
-                      <div className="rounded-xl bg-red-50 p-2.5 dark:bg-red-950/30">
-                        <div className="text-lg font-semibold text-red-600">{monStatus.zabbix.down ?? 0}</div>
-                        <div className="text-[9px] text-red-700/70 dark:text-red-400">Down</div>
-                      </div>
-                      <div className="rounded-xl bg-amber-50 p-2.5 dark:bg-amber-950/30">
-                        <div className="text-lg font-semibold text-amber-600">{monStatus.zabbix.active_problems ?? 0}</div>
-                        <div className="text-[9px] text-amber-700/70 dark:text-amber-400">Problems</div>
-                      </div>
-                    </div>
-                    {(monStatus.zabbix.down_hosts ?? []).length > 0 && (
-                      <div className="mt-2 rounded-xl bg-red-50/70 p-2 dark:bg-red-950/20">
-                        {monStatus.zabbix.down_hosts.slice(0, 3).map((h: any) => (
-                          <div key={h.host} className="flex items-center justify-between text-[10px] text-red-700 dark:text-red-300">
-                            <span className="font-medium">{h.host}</span>
-                            <span className="font-mono text-[9px]">{h.ip}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="mt-3 py-6 text-center text-[10px] text-muted-foreground">
-                    {monStatus?.zabbix?.configured === false
-                      ? "Zabbix not connected — configure in Settings → Integrations."
-                      : "Zabbix data unavailable."}
-                  </div>
-                )}
-              </Card>
-
-              {/* Notification / Alert Summary Widget */}
-              <Card className="rounded-2xl p-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold">Recent Alerts</h3>
+                  <h3 className="text-xs font-semibold">Cluster Alerts</h3>
                   <span className="text-[9px] text-muted-foreground">via monitoring worker</span>
                 </div>
-                {monStatus?.zabbix?.top_problems?.length ? (
+                {(monStatus?.cluster?.pods_failed ?? 0) > 0 || (monStatus?.cluster?.pods_pending ?? 0) > 0 ? (
                   <div className="mt-3 space-y-2">
-                    {monStatus.zabbix.top_problems.slice(0, 4).map((p: any, i: number) => (
-                      <div key={i} className="flex items-start gap-2 rounded-lg border border-slate-100 p-2 dark:border-slate-800">
-                        <span className={[
-                          "mt-1 size-1.5 shrink-0 rounded-full",
-                          p.severity >= 4 ? "bg-red-500" : p.severity >= 2 ? "bg-amber-500" : "bg-slate-400",
-                        ].join(" ")} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[10px] font-medium text-slate-800 dark:text-slate-200" title={p.name}>
-                            {p.name}
-                          </p>
-                        </div>
+                    {(monStatus?.cluster?.pods_failed ?? 0) > 0 && (
+                      <div className="flex items-start gap-2 rounded-lg border border-red-100 p-2 dark:border-red-900/50">
+                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-red-500" />
+                        <p className="text-[10px] font-medium text-slate-800 dark:text-slate-200">
+                          {monStatus.cluster.pods_failed} failed pod(s) detected
+                        </p>
                       </div>
-                    ))}
+                    )}
+                    {(monStatus?.cluster?.pods_pending ?? 0) > 0 && (
+                      <div className="flex items-start gap-2 rounded-lg border border-amber-100 p-2 dark:border-amber-900/50">
+                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-amber-500" />
+                        <p className="text-[10px] font-medium text-slate-800 dark:text-slate-200">
+                          {monStatus.cluster.pods_pending} pod(s) pending
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-3 py-6 text-center text-[10px] text-muted-foreground">
