@@ -85,6 +85,23 @@ ESCALATION_TICKETS_TOTAL = Counter(
     ["status"],  # status = approved | rejected
 )
 
+# v1.1.5 — chat volume/latency moved from the OTel meter path (dead: MIMIR_OTLP_URL
+# was empty, so record_counter/record_histogram were silent no-ops and these two
+# series never existed in Prometheus) to prometheus_client, like every other
+# dashboard metric.
+CHAT_REQUESTS_TOTAL = Counter(
+    "chat_requests_total",
+    "Completed chat requests",
+    ["domain", "decision"],
+)
+
+CHAT_LATENCY_SECONDS = Histogram(
+    "chat_latency_seconds",
+    "End-to-end chat answer latency in seconds",
+    ["domain", "decision"],
+    buckets=(0.5, 1, 2, 5, 10, 20, 30, 60, 90, 120),
+)
+
 def record_token_and_cost(model: str, input_tokens: int, output_tokens: int) -> None:
     """Increment token counters and calculate incurred cost."""
     try:

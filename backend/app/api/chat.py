@@ -16,7 +16,7 @@ from app.api.auth import _require_chatbot
 from app.auth.rbac import get_role, require_role, allowed_domains
 from app.config import SETTINGS
 from app.observability.audit import audit
-from app.observability.telemetry import record_counter, record_histogram, start_span
+from app.observability.telemetry import start_span
 from app.persistence.models import ChatMessage, ChatSession, Feedback
 from app.persistence.database import SessionLocal
 from app.orchestration.orchestrator import run_rag
@@ -268,8 +268,9 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 logger.warning(f"persist assistant turn skipped ({type(exc).__name__}): {exc}")
 
         message_id = db_msg_id or str(uuid.uuid4())
-        record_counter("chat_requests_total", 1, {"domain": result.domain, "decision": result.decision})
-        record_histogram("chat_latency_seconds", time.time() - t0, {"domain": result.domain, "decision": result.decision})
+        from app.observability.metrics import CHAT_REQUESTS_TOTAL, CHAT_LATENCY_SECONDS
+        CHAT_REQUESTS_TOTAL.labels(domain=result.domain or "general", decision=result.decision).inc()
+        CHAT_LATENCY_SECONDS.labels(domain=result.domain or "general", decision=result.decision).observe(time.time() - t0)
         audit("chat", user, result.domain, result.confidence, result.decision)
 
         # Record LLM Observability Metrics (Tokens, Cost, Confidence Gate)
