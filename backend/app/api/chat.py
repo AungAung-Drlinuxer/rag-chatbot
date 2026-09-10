@@ -125,6 +125,27 @@ def _monitoring_answer(kind: str, message: str) -> tuple[str, list[dict]]:
             logger.warning("lgmt query failed: %s", exc)
             parts.append(f"Cluster status query failed: {type(exc).__name__}: {exc}")
 
+    # --- Kubernetes namespaces list (v1.3.10) -------------------------------
+    if kind == "namespaces":
+        try:
+            from app.integrations.lgmt import namespaces_overview
+            rows = namespaces_overview()
+            if rows:
+                parts.append(f"\n**Kubernetes Namespaces ({len(rows)} total)**")
+                for r in rows:
+                    flag = " ⚠️" if r["restarts_1h"] > 0 else ""
+                    parts.append(
+                        f"- 📦 **{r['namespace']}** — {r['pods']} pods · "
+                        f"{r['restarts_1h']} restarts (1h){flag}")
+                hits.append({"page_id": "k8s-namespaces", "title": "Namespace list",
+                             "source": "LGTM", "relevance": 100,
+                             "excerpt": f"{len(rows)} namespaces", "source_url": None})
+            else:
+                parts.append("\n_No namespace data available right now._")
+        except Exception as exc:
+            logger.warning("namespaces query failed: %s", exc)
+            parts.append(f"Namespace query failed: {type(exc).__name__}: {exc}")
+
     # --- Grafana dashboards-as-knowledge (v1.2.6) ---------------------------
     # Pulls the administrator-created dashboards via service-account token and
     # executes their panel PromQL — multi-cluster coverage without hardcoding.
@@ -340,7 +361,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 (r"(device|server|host|network).*(status|health|up|down|available)", "status"),
                 (r"(ingress|route|external url|domain entry)", "ingress"),
                 (r"(service|svc).*(list|overview|all)|list.*(service|svc)", "services"),
-                (r"(namespaces|namespaces overview|cluster overview|what namespaces)", "namespaces"),
+                (r"(namespaces?\s*(list|overview)?|what namespaces|namespace list|list namespaces|all namespaces|how many namespaces)", "namespaces"),
                 (r"(nodes?\s+(list|detail|overview|status)|how many nodes|node spec)", "nodes"),
                 (r"(cluster|kubernetes|k8s|pod|node).*(status|health|running|down|restart)", "cluster"),
                 (r"(is|are)\s+(the\s+)?(backend|frontend|ollama|redis|postgres|rerank)", "app"),
