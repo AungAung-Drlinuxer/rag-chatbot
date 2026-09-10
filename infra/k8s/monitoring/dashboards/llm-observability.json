@@ -1,0 +1,1102 @@
+{
+ "annotations": {
+  "list": [
+   {
+    "builtIn": 1,
+    "datasource": {
+     "type": "grafana",
+     "uid": "-- Grafana --"
+    },
+    "enable": true,
+    "hide": true,
+    "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts",
+    "type": "dashboard"
+   }
+  ]
+ },
+ "editable": true,
+ "fiscalYearStartMonth": 0,
+ "graphTooltip": 0,
+ "liveNow": false,
+ "panels": [
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": 0
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 0,
+    "y": 0
+   },
+   "id": 1,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(llm_tokens_total{type=\"input\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Total Tokens (in)",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": 0
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 4,
+    "y": 0
+   },
+   "id": 2,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(llm_tokens_total{type=\"output\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Total Tokens (out)",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": 0
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "currencyUSD"
+    }
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 8,
+    "y": 0
+   },
+   "id": 3,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(llm_cost_dollars_total)",
+     "refId": "A"
+    }
+   ],
+   "title": "Estimated LLM Cost ($)",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "max": 1,
+     "min": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": 0
+       },
+       {
+        "color": "amber",
+        "value": 0.2
+       },
+       {
+        "color": "red",
+        "value": 0.5
+       }
+      ]
+     },
+     "unit": "percentunit"
+    }
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 12,
+    "y": 0
+   },
+   "id": 4,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(rate(rag_gate_decisions_total{decision=\"caution\"}[30m])) / clamp_min(sum(rate(rag_gate_decisions_total[30m])), 0.001)",
+     "refId": "A"
+    }
+   ],
+   "title": "RAG Caution Rate",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": 0
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 16,
+    "y": 0
+   },
+   "id": 5,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(user_feedback_total{rating=\"helpful\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Helpful Feedback",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": 0
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 20,
+    "y": 0
+   },
+   "id": 6,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(escalation_tickets_total) or vector(0)",
+     "refId": "A"
+    }
+   ],
+   "title": "HITL Escalations",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisBorderShow": false,
+      "axisCenteredZero": false,
+      "axisColorMode": "text",
+      "axisLabel": "",
+      "axisPlacement": "auto",
+      "barAlignment": 0,
+      "barWidthFactor": 0.6,
+      "drawStyle": "line",
+      "fillOpacity": 12,
+      "gradientMode": "none",
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      },
+      "insertNulls": false,
+      "lineInterpolation": "linear",
+      "lineWidth": 1,
+      "pointSize": 5,
+      "scaleDistribution": {
+       "type": "linear"
+      },
+      "showPoints": "auto",
+      "showValues": false,
+      "spanNulls": false,
+      "stacking": {
+       "group": "A",
+       "mode": "none"
+      },
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": 0
+       },
+       {
+        "color": "red",
+        "value": 80
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 0,
+    "y": 4
+   },
+   "id": 7,
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "hideZeros": false,
+     "mode": "single",
+     "sort": "none"
+    }
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(rate(llm_tokens_total[5m])) by (model, type)",
+     "legendFormat": "{{model}} ({{type}})",
+     "refId": "A"
+    }
+   ],
+   "title": "Token Usage by Model",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisBorderShow": false,
+      "axisCenteredZero": false,
+      "axisColorMode": "text",
+      "axisLabel": "",
+      "axisPlacement": "auto",
+      "barAlignment": 0,
+      "barWidthFactor": 0.6,
+      "drawStyle": "line",
+      "fillOpacity": 12,
+      "gradientMode": "none",
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      },
+      "insertNulls": false,
+      "lineInterpolation": "linear",
+      "lineWidth": 1,
+      "pointSize": 5,
+      "scaleDistribution": {
+       "type": "linear"
+      },
+      "showPoints": "auto",
+      "showValues": false,
+      "spanNulls": false,
+      "stacking": {
+       "group": "A",
+       "mode": "none"
+      },
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": 0
+       },
+       {
+        "color": "red",
+        "value": 80
+       }
+      ]
+     },
+     "unit": "currencyUSD"
+    }
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 12,
+    "y": 4
+   },
+   "id": 8,
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "hideZeros": false,
+     "mode": "single",
+     "sort": "none"
+    }
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(llm_cost_dollars_total) by (model)",
+     "legendFormat": "{{model}}",
+     "refId": "A"
+    }
+   ],
+   "title": "Cumulative Cost by Model ($)",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisBorderShow": false,
+      "axisCenteredZero": false,
+      "axisColorMode": "text",
+      "axisLabel": "",
+      "axisPlacement": "auto",
+      "barAlignment": 0,
+      "barWidthFactor": 0.6,
+      "drawStyle": "line",
+      "fillOpacity": 12,
+      "gradientMode": "none",
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      },
+      "insertNulls": false,
+      "lineInterpolation": "linear",
+      "lineWidth": 1,
+      "pointSize": 5,
+      "scaleDistribution": {
+       "type": "linear"
+      },
+      "showPoints": "auto",
+      "showValues": false,
+      "spanNulls": false,
+      "stacking": {
+       "group": "A",
+       "mode": "none"
+      },
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": 0
+       },
+       {
+        "color": "red",
+        "value": 80
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 0,
+    "y": 9
+   },
+   "id": 9,
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "hideZeros": false,
+     "mode": "single",
+     "sort": "none"
+    }
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(rate(rag_confidence_score_bucket[5m])) by (le)",
+     "legendFormat": "{{le}}",
+     "refId": "A"
+    }
+   ],
+   "title": "RAG Confidence Distribution",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisBorderShow": false,
+      "axisCenteredZero": false,
+      "axisColorMode": "text",
+      "axisLabel": "",
+      "axisPlacement": "auto",
+      "barAlignment": 0,
+      "barWidthFactor": 0.6,
+      "drawStyle": "line",
+      "fillOpacity": 12,
+      "gradientMode": "none",
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      },
+      "insertNulls": false,
+      "lineInterpolation": "linear",
+      "lineWidth": 1,
+      "pointSize": 5,
+      "scaleDistribution": {
+       "type": "linear"
+      },
+      "showPoints": "auto",
+      "showValues": false,
+      "spanNulls": false,
+      "stacking": {
+       "group": "A",
+       "mode": "none"
+      },
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": 0
+       },
+       {
+        "color": "red",
+        "value": 80
+       }
+      ]
+     },
+     "unit": "short"
+    }
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 8,
+    "y": 9
+   },
+   "id": 10,
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "hideZeros": false,
+     "mode": "single",
+     "sort": "none"
+    }
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(rate(rag_gate_decisions_total[5m])) by (decision)",
+     "legendFormat": "{{decision}}",
+     "refId": "A"
+    }
+   ],
+   "title": "Gate Decisions",
+   "type": "timeseries"
+  },
+  {
+   "description": "Prompt-injection / overflow / toxicity detections from the v1.1.4 input guardrail engine",
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisBorderShow": false,
+      "axisColorMode": "text",
+      "axisLabel": "",
+      "axisPlacement": "auto",
+      "fillOpacity": 80,
+      "gradientMode": "none",
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      },
+      "lineWidth": 1,
+      "scaleDistribution": {
+       "type": "linear"
+      },
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 16,
+    "y": 9
+   },
+   "id": 11,
+   "options": {
+    "barWidth": 0.8,
+    "groupWidth": 0.7,
+    "legend": {
+     "calcs": [
+      "sum"
+     ],
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "orientation": "auto",
+    "showValue": "auto",
+    "stacking": "normal",
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    },
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 0
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(increase(guardrail_events_total[6h])) by (type, action)",
+     "legendFormat": "{{type}} / {{action}}",
+     "refId": "A"
+    }
+   ],
+   "title": "Security Guardrail Events (by type & action)",
+   "type": "barchart"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "footer": {
+       "reducers": []
+      },
+      "inspect": false
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": 0
+       },
+       {
+        "color": "red",
+        "value": 80
+       }
+      ]
+     }
+    }
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 14
+   },
+   "id": 12,
+   "options": {
+    "cellHeight": "sm",
+    "showHeader": true
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "expr": "sum(llm_tokens_total) by (model)",
+     "format": "table",
+     "instant": true,
+     "refId": "A"
+    }
+   ],
+   "title": "Active Models (live token totals)",
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "instance": true,
+       "job": true
+      }
+     }
+    }
+   ],
+   "type": "table"
+  },
+  {
+   "datasource": {
+    "type": "loki",
+    "uid": "dfxmyb02uggzka"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 14
+   },
+   "id": 13,
+   "options": {
+    "dedupStrategy": "none",
+    "enableInfiniteScrolling": false,
+    "enableLogDetails": true,
+    "prettifyLogMessage": true,
+    "showControls": false,
+    "showFieldSelector": false,
+    "showLevel": true,
+    "showTime": false,
+    "sortOrder": "Descending",
+    "timestampResolution": "ms",
+    "unwrappedColumns": false,
+    "wrapLogMessage": false
+   },
+   "pluginVersion": "13.2.1",
+   "targets": [
+    {
+     "datasource": {
+      "type": "loki",
+      "uid": "dfxmyb02uggzka"
+     },
+     "expr": "{namespace=\"rag-chatbot\", pod=~\"backend.*\"}",
+     "queryType": "range",
+     "refId": "A"
+    }
+   ],
+   "title": "Backend Answer Events (Loki)",
+   "type": "logs"
+  },
+  {
+   "description": "Requests rejected by the input guardrail engine BEFORE any LLM call (injection, overflow, tool abuse)",
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "options": {
+        "0": {
+         "color": "green",
+         "text": "No attacks"
+        }
+       },
+       "type": "value"
+      }
+     ],
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 5
+       },
+       {
+        "color": "red",
+        "value": 20
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 22
+   },
+   "id": 100,
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(increase(guardrail_events_total{action=\"blocked\"}[6h])) or vector(0)",
+     "refId": "A"
+    }
+   ],
+   "title": "Blocked Attacks (6h)",
+   "type": "stat"
+  },
+  {
+   "description": "Rate of guardrail detections over time \u2014 spikes indicate active adversarial probing",
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisPlacement": "auto",
+      "drawStyle": "line",
+      "fillOpacity": 10,
+      "lineWidth": 2,
+      "showPoints": "never",
+      "spanNulls": true
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "unit": "ops"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 9,
+    "x": 6,
+    "y": 22
+   },
+   "id": 101,
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(rate(guardrail_events_total[5m])) by (type)",
+     "legendFormat": "{{type}}",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(rate(chat_requests_total[5m]))",
+     "legendFormat": "chat requests",
+     "refId": "B"
+    }
+   ],
+   "title": "Security Events Rate (by type)",
+   "type": "timeseries"
+  },
+  {
+   "datasource": {
+    "type": "loki",
+    "uid": "dfxmyb02uggzka"
+   },
+   "description": "Live GUARDRAIL log lines \u2014 who attempted what, and which pattern matched",
+   "gridPos": {
+    "h": 5,
+    "w": 9,
+    "x": 15,
+    "y": 22
+   },
+   "id": 102,
+   "options": {
+    "dedupStrategy": "none",
+    "enableLogDetails": true,
+    "prettifyLogMessage": false,
+    "showCommonLabels": false,
+    "showLabels": true,
+    "showTime": true,
+    "sortOrder": "Descending",
+    "wrapLogMessage": true
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "loki",
+      "uid": "dfxmyb02uggzka"
+     },
+     "expr": "{namespace=\"rag-chatbot\"} |= \"GUARDRAIL\"",
+     "queryType": "range",
+     "refId": "A"
+    }
+   ],
+   "title": "Security Audit Log (Guardrail Detections)",
+   "type": "logs"
+  }
+ ],
+ "preload": false,
+ "refresh": "30s",
+ "schemaVersion": 42,
+ "tags": [
+  "rag-chatbot",
+  "llm",
+  "rag",
+  "observability"
+ ],
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "timepicker": {
+  "refresh_intervals": [
+   "5s",
+   "10s",
+   "30s",
+   "1m",
+   "5m",
+   "15m",
+   "30m",
+   "1h",
+   "2h",
+   "1d"
+  ]
+ },
+ "timezone": "browser",
+ "title": "RAG Chatbot - LLM & RAG Observability",
+ "uid": "rag-llm-observability",
+ "version": 6
+}

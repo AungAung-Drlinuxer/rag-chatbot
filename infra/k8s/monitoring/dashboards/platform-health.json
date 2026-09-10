@@ -1,0 +1,875 @@
+{
+ "panels": [
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 0,
+    "y": 0
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "up{job=~\".*chatbot_backend.*\"}",
+     "refId": "A"
+    }
+   ],
+   "title": "Backend API (rag-chatbot)",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 4,
+    "y": 0
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "count(kube_pod_status_ready{namespace=\"rag-chatbot\", pod=~\"frontend.*\", condition=\"true\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Frontend (nginx)",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 8,
+    "y": 0
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "count(up{job=~\".*chatbot_backend.*\"} == 1) or vector(0)",
+     "refId": "A"
+    }
+   ],
+   "title": "Redis Sentinel Master",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 12,
+    "y": 0
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "count(kube_pod_status_ready{namespace=\"rag-chatbot\", pod=~\"postgres-ha.*\", condition=\"true\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "PostgreSQL HA Instances",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 16,
+    "y": 0
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "count(kube_pod_status_ready{namespace=\"rag-chatbot\", pod=~\"rerank.*\", condition=\"true\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Rerank Service",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 20,
+    "y": 0
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "count(kube_pod_status_ready{namespace=\"rag-chatbot\", pod=~\"ollama.*\", condition=\"true\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Ollama Runtime",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "amber",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 5
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 0,
+    "y": 4
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"rag-chatbot\"}[1h]))",
+     "refId": "A"
+    }
+   ],
+   "title": "Pod Restarts (rag-chatbot)",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 6,
+    "y": 4
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "sum(kube_pod_container_status_waiting_reason{namespace=\"rag-chatbot\", reason=\"CrashLoopBackOff\"}) or vector(0)",
+     "refId": "A"
+    }
+   ],
+   "title": "CrashLoop Pods",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 12,
+    "y": 4
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "sum(kube_node_status_condition{condition=\"Ready\", status=\"true\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Cluster Node Ready",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 18,
+    "y": 4
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ]
+    }
+   },
+   "targets": [
+    {
+     "expr": "count(kube_pod_info{namespace=\"rag-chatbot\"})",
+     "refId": "A"
+    }
+   ],
+   "title": "Namespace Pod Count",
+   "type": "stat"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "fillOpacity": 12
+     },
+     "unit": "percent"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 0,
+    "y": 13
+   },
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom"
+    }
+   },
+   "targets": [
+    {
+     "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+     "legendFormat": "{{instance}}",
+     "refId": "A"
+    }
+   ],
+   "title": "Node CPU (%)",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "fillOpacity": 12
+     },
+     "unit": "percent"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 8,
+    "y": 13
+   },
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom"
+    }
+   },
+   "targets": [
+    {
+     "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+     "legendFormat": "{{instance}}",
+     "refId": "A"
+    }
+   ],
+   "title": "Node Memory Used (%)",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "fillOpacity": 12
+     },
+     "unit": "milliunits"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 16,
+    "y": 13
+   },
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom"
+    }
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"rag-chatbot\", pod=~\"backend.*\"}[5m])) * 1000",
+     "legendFormat": "{{instance}}",
+     "refId": "A"
+    }
+   ],
+   "title": "Backend Pod CPU (mCPU)",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "fillOpacity": 12
+     },
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 0,
+    "y": 18
+   },
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom"
+    }
+   },
+   "targets": [
+    {
+     "expr": "histogram_quantile(0.95, sum(rate(rag_stage_latency_seconds_bucket{stage=\"retrieval\"}[5m])) by (le))",
+     "refId": "A"
+    }
+   ],
+   "title": "Chat Request Latency (p95 s)",
+   "type": "timeseries"
+  },
+  {
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "fillOpacity": 12
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 8,
+    "y": 18
+   },
+   "options": {
+    "legend": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "displayMode": "table",
+     "placement": "bottom"
+    }
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(rag_gate_decisions_total[5m])) by (decision)",
+     "legendFormat": "{{decision}}",
+     "refId": "A"
+    }
+   ],
+   "title": "RAG Gate Decisions (rate/s)",
+   "type": "timeseries"
+  },
+  {
+   "datasource": {
+    "type": "loki",
+    "uid": "dfxmyb02uggzka"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 8,
+    "x": 16,
+    "y": 18
+   },
+   "options": {
+    "showLabels": true,
+    "showTime": true,
+    "sortOrder": "Descending"
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "loki",
+      "uid": "dfxmyb02uggzka"
+     },
+     "expr": "{namespace=\"rag-chatbot\"}",
+     "queryType": "range",
+     "refId": "A"
+    }
+   ],
+   "title": "rag-chatbot Backend Logs (Loki)",
+   "type": "logs"
+  },
+  {
+   "description": "Requests rejected by the input guardrail engine (v1.1.4) before any LLM call",
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "options": {
+        "0": {
+         "color": "green",
+         "text": "No attacks"
+        }
+       },
+       "type": "value"
+      }
+     ],
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 5
+       },
+       {
+        "color": "red",
+        "value": 20
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 0,
+    "y": 8
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "area",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(increase(guardrail_events_total{action=\"blocked\"}[6h])) or vector(0)",
+     "refId": "A"
+    }
+   ],
+   "title": "Security: Attacks Blocked (6h)",
+   "type": "stat"
+  },
+  {
+   "description": "Toxicity detections \u2014 flagged, refused by LLM, recorded in audit log",
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "thresholds"
+     },
+     "mappings": [
+      {
+       "options": {
+        "0": {
+         "color": "green",
+         "text": "Clean"
+        }
+       },
+       "type": "value"
+      }
+     ],
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 3
+       }
+      ]
+     },
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 6,
+    "x": 6,
+    "y": 8
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "justifyMode": "auto",
+    "orientation": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "textMode": "auto"
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(increase(guardrail_events_total{action=\"flagged\"}[6h])) or vector(0)",
+     "refId": "A"
+    }
+   ],
+   "title": "Security: Abusive Flagged (6h)",
+   "type": "stat"
+  },
+  {
+   "description": "Adversarial probing rate (guardrail detections) against normal chat volume",
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "axisPlacement": "auto",
+      "drawStyle": "line",
+      "fillOpacity": 10,
+      "lineWidth": 2,
+      "showPoints": "never",
+      "spanNulls": true
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "unit": "ops"
+    },
+    "overrides": []
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 12,
+    "x": 12,
+    "y": 8
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(rate(guardrail_events_total[5m])) by (type)",
+     "legendFormat": "security: {{type}}",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(rate(chat_requests_total[5m]))",
+     "legendFormat": "chat traffic",
+     "refId": "B"
+    }
+   ],
+   "title": "Security Event Rate vs Chat Traffic",
+   "type": "timeseries"
+  }
+ ],
+ "refresh": "30s",
+ "schemaVersion": 39,
+ "tags": [
+  "rag-chatbot",
+  "health",
+  "infrastructure"
+ ],
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "timezone": "browser",
+ "title": "RAG Chatbot - Platform & Services Health",
+ "uid": "rag-platform-health",
+ "version": 5
+}
