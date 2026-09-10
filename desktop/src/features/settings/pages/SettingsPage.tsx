@@ -345,7 +345,6 @@ export default function Settings({ role }: { role?: string }) {
             </SectionCard>
 
             {/* ==================== INTEGRATIONS ==================== */}
-            {isAdmin && (
             <SectionCard icon={<Link2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />}
               iconTone="bg-teal-50 dark:bg-teal-950/40"
               title="Integrations" description="Connect external tools and services.">
@@ -367,7 +366,6 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
             </SectionCard>
-            )}
 
             {/* Branding — admin only (logo on login + sidebar) */}
             {isAdmin && (

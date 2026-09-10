@@ -56,11 +56,14 @@ async function tryRefresh(): Promise<boolean> {
 /** fetch that auto-refreshes once on 401 then retries the original request. */
 export async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   let res = await fetch(url, init);
-  if (res.status === 401 && refreshToken) {
-    if (await tryRefresh()) {
+  if (res.status === 401) {
+    if (refreshToken && (await tryRefresh())) {
       const headers = new Headers(init.headers || {});
       if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
       res = await fetch(url, { ...init, headers });
+    }
+    if (res.status === 401 && !url.includes("/api/auth/login")) {
+      window.dispatchEvent(new CustomEvent("ith:session-expired"));
     }
   }
   return res;
