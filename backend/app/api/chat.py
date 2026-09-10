@@ -125,6 +125,65 @@ def _monitoring_answer(kind: str, message: str) -> tuple[str, list[dict]]:
             logger.warning("lgmt query failed: %s", exc)
             parts.append(f"Cluster status query failed: {type(exc).__name__}: {exc}")
 
+    # --- Grafana dashboards-as-knowledge (v1.2.6) ---------------------------
+    # Pulls the administrator-created dashboards via service-account token and
+    # executes their panel PromQL — multi-cluster coverage without hardcoding.
+    if kind == "grafana":
+        try:
+            import re as _re
+            from app.integrations import grafana as gf
+            if not gf.is_configured():
+                parts.append("\nGrafana integration not configured — add a service-account token in Settings → Integrations → Grafana.")
+            else:
+                q = message.lower()
+                dbs = gf.list_dashboards()
+                # v1.2.7 — match by question words; otherwise prefer the RAG Chatbot
+                # dashboards (their panels use plain PromQL, not template variables);
+                # K8S Dashboard panels use $cluster/$node vars → skip those by default.
+                target = None
+                best_score = 0
+                generic_words = {"dashboard", "grafana", "data", "view", "views"}
+                for d in dbs:
+                    t = (d.get("title") or "").lower()
+                    words = [w for w in _re.split(r"\W+", t) if len(w) > 3]
+                    score = sum(1 for w in words if w in q and w not in generic_words)
+                    if score > best_score:
+                        best_score = score
+                        target = d
+                if target is None:
+                    rag_dbs = [d for d in dbs
+                               if (d.get("title") or "").lower().startswith("rag chatbot")]
+                    target = rag_dbs[0] if rag_dbs else (dbs[0] if dbs else None)
+                if target:
+                    dash = gf.get_dashboard(target["uid"])
+                    panels = gf.flatten_panels(dash) if dash else []
+                    parts.append(f"\n**Grafana: {target.get('title')}**")
+                    rendered = 0
+                    for panel in panels:
+                        if rendered >= 3:
+                            break
+                        if "$" in panel.get("expr", ""):
+                            continue  # template-variable panels need user context — skip
+                        try:
+                            res = gf.run_prom_query(panel["expr"])
+                            if res:
+                                parts.append(f"\n*{panel['title']}*\n" + gf.render_prom_results(res, panel.get("legend", "")))
+                                hits.append({"page_id": f"grafana-{target['uid']}",
+                                             "title": panel["title"], "source": "Grafana",
+                                             "relevance": 100,
+                                             "excerpt": f"{len(res)} series",
+                                             "source_url": gf._cfg("base_url") + "/d/" + target["uid"]})
+                                rendered += 1
+                        except Exception as perr:
+                            logger.debug("panel %s failed: %s", panel.get("title"), perr)
+                    if rendered == 0:
+                        parts.append("\n_Panels returned no data right now._")
+                else:
+                    parts.append("\n_No dashboards visible with the configured token._")
+        except Exception as exc:
+            logger.warning("grafana query failed: %s", exc)
+            parts.append(f"Grafana query failed: {type(exc).__name__}: {exc}")
+
     if not parts:
         parts.append("No monitoring data available for this question.")
     return "\n\n".join(parts), hits
@@ -210,8 +269,14 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         _mon_patterns = [
             (r"(inventory|asset|serial number|who (is|has) .*assigned|which (laptop|server|printer))", "inventory"),
             (r"zabbix", "zabbix"),
+            (r"grafana|dashboard", "grafana"),
+            (r"(cpu|memory|ram).*(usage|consum|top|highest|most)|(top|highest|most).*(cpu|memory|ram)|pod.*(cpu|memory)", "top_pods"),
             (r"(which|what).*(device|server|host)s?\s+(are\s+)?(down|up|offline|online|unavailable)", "hosts"),
             (r"(device|server|host|network).*(status|health|up|down|available)", "status"),
+            (r"(ingress|route|external url|domain entry)", "ingress"),
+            (r"(service|svc).*(list|overview|all)|list.*(service|svc)", "services"),
+            (r"(namespaces|namespaces overview|cluster overview|what namespaces)", "namespaces"),
+            (r"(nodes?\s+(list|detail|overview|status)|how many nodes|node spec)", "nodes"),
             (r"(cluster|kubernetes|k8s|pod|node).*(status|health|running|down|restart)", "cluster"),
             (r"(is|are)\s+(the\s+)?(backend|frontend|ollama|redis|postgres|rerank)", "app"),
             (r"(active\s+)?(problems|alerts|incidents)", "problems"),
