@@ -25,6 +25,7 @@ import LoginPage from "@/features/auth/pages/LoginPage";
 import ChatPage from "@/features/chat/pages/ChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import ApiKeysPage from "@/features/apikeys/pages/ApiKeysPage";
+import InventoryPage from "@/features/inventory/pages/InventoryPage";
 import KnowledgePage from "@/features/knowledge/pages/KnowledgePage";
 import TicketsPage from "@/features/tickets/pages/TicketsPage";
 // import DomainsPage from "@/features/domains/pages/DomainsPage"; // retired: merged into KnowledgePage tabs
@@ -168,6 +169,8 @@ export default function App() {
       return shell("tickets", <TicketsPage role={role} userName={userName} onToast={toast.push} />);
     case "domains":
       return shell("articles", <KnowledgePage role={role} userName={userName} perms={perms} initialTab="domains" onToast={toast.push} />);
+    case "inventory":
+      return shell("inventory", <InventoryPage role={role} userName={userName} onToast={toast.push} />);
     case "users":
       return shell("users", <UsersPage />);
     case "apikeys":

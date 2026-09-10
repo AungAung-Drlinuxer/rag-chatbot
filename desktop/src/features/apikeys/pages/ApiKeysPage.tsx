@@ -10,6 +10,8 @@ import {
   Check,
   ShieldAlert,
   RefreshCw,
+  Code2,
+  Terminal,
 } from "lucide-react";
 import { apiFetch, authHeaders, BASE } from "@/shared/api/client";
 
@@ -41,6 +43,9 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
   const [formName, setFormName] = useState("");
   const [formScope, setFormScope] = useState<"chat" | "readonly">("chat");
   const [confirmRevoke, setConfirmRevoke] = useState<ApiKeyRow | null>(null);
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [activeSnippetTab, setActiveSnippetTab] = useState<"curl" | "python" | "powershell">("curl");
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -111,6 +116,10 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
         description="Programmatic access to the chatbot API — generate keys for scripts, integrations and automation."
         actions={
           <>
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setSnippetsOpen(true)}>
+              <Code2 className="mr-1.5 size-3.5 text-blue-600 dark:text-blue-400" />
+              Usage Examples
+            </Button>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={load}>
               <RefreshCw className={`mr-2 size-3.5 ${loading ? "animate-spin" : ""}`} />
               Refresh
@@ -326,6 +335,126 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
               >
                 {busy ? "Revoking…" : "Revoke key"}
               </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Code Snippets & Quick Docs Modal */}
+      {snippetsOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4 backdrop-blur-xs">
+          <Card className="w-full max-w-2xl overflow-hidden rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                  <Terminal className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">API Key Integration & Usage Examples</h3>
+                  <p className="text-[11px] text-muted-foreground">Connect external services, automation scripts, and custom tools</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="rounded-lg text-xs" onClick={() => setSnippetsOpen(false)}>
+                Close
+              </Button>
+            </div>
+
+            <div className="mt-4 flex gap-2 border-b pb-2">
+              {(["curl", "python", "powershell"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveSnippetTab(tab)}
+                  className={[
+                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                    activeSnippetTab === tab
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-muted-foreground hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+                  ].join(" ")}
+                >
+                  {tab === "curl" ? "cURL / Bash" : tab === "python" ? "Python (requests)" : "PowerShell"}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative mt-3">
+              <div className="absolute right-3 top-3 z-10">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 rounded-lg bg-slate-800 text-[10px] text-slate-200 hover:bg-slate-700 hover:text-white dark:bg-slate-800"
+                  onClick={() => {
+                    const snip =
+                      activeSnippetTab === "curl"
+                        ? `curl -X POST https://chat.drlinuxer.com/api/chat/stream \\\n  -H "Authorization: Bearer <YOUR_API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "message": "How do I reset AD password?",\n    "session_id": "api-client-01"\n  }'`
+                        : activeSnippetTab === "python"
+                        ? `import requests, json\n\nAPI_KEY = "<YOUR_API_KEY>"\nURL = "https://chat.drlinuxer.com/api/chat/stream"\n\nheaders = {\n    "Authorization": f"Bearer {API_KEY}",\n    "Content-Type": "application/json"\n}\npayload = {\n    "message": "How do I connect to VPN?",\n    "session_id": "py-client-01"\n}\n\nwith requests.post(URL, headers=headers, json=payload, stream=True) as resp:\n    for line in resp.iter_lines():\n        if line and line.startswith(b"data:"):\n            data = json.loads(line[5:].strip())\n            if "token" in data:\n                print(data["token"], end="", flush=True)\nprint()`
+                        : `$headers = @{\n  "Authorization" = "Bearer <YOUR_API_KEY>"\n  "Content-Type"  = "application/json"\n}\n$body = @{\n  message    = "How do I connect to VPN?"\n  session_id = "pwsh-session-01"\n} | ConvertTo-Json\n\nInvoke-RestMethod -Uri "https://chat.drlinuxer.com/api/chat/stream" -Method Post -Headers $headers -Body $body`;
+                    navigator.clipboard.writeText(snip);
+                    setCopiedSnippet(true);
+                    setTimeout(() => setCopiedSnippet(false), 1600);
+                  }}
+                >
+                  {copiedSnippet ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+                  {copiedSnippet ? "Copied" : "Copy snippet"}
+                </Button>
+              </div>
+
+              <pre className="max-h-[300px] overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-slate-200">
+                {activeSnippetTab === "curl" && (
+`# 1. Ask a question via cURL
+curl -X POST https://chat.drlinuxer.com/api/chat/stream \\
+  -H "Authorization: Bearer <YOUR_API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "message": "How do I reset AD password?",
+    "session_id": "api-client-01"
+  }'`
+                )}
+                {activeSnippetTab === "python" && (
+`import requests, json
+
+API_KEY = "<YOUR_API_KEY>"
+URL = "https://chat.drlinuxer.com/api/chat/stream"
+
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json"
+}
+payload = {
+    "message": "How do I connect to VPN?",
+    "session_id": "py-client-01"
+}
+
+with requests.post(URL, headers=headers, json=payload, stream=True) as resp:
+    for line in resp.iter_lines():
+        if line and line.startswith(b"data:"):
+            data = json.loads(line[5:].strip())
+            if "token" in data:
+                print(data["token"], end="", flush=True)
+print()`
+                )}
+                {activeSnippetTab === "powershell" && (
+`$headers = @{
+  "Authorization" = "Bearer <YOUR_API_KEY>"
+  "Content-Type"  = "application/json"
+}
+$body = @{
+  message    = "How do I connect to VPN?"
+  session_id = "pwsh-session-01"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "https://chat.drlinuxer.com/api/chat/stream" -Method Post -Headers $headers -Body $body`
+                )}
+              </pre>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-[11px] text-muted-foreground dark:border-slate-800 dark:bg-slate-900/40">
+              <span className="font-semibold text-slate-800 dark:text-slate-200">Endpoint Notes:</span>
+              <ul className="mt-1 list-disc pl-4 space-y-0.5 text-[10px]">
+                <li>Headers: <code className="font-mono">Authorization: Bearer ith_...</code></li>
+                <li>Stream format: Server-Sent Events (SSE) with events: <code className="font-mono">stage</code>, <code className="font-mono">token</code>, <code className="font-mono">done</code></li>
+                <li>Rate Limit: 5 requests / min per key (returns <code className="font-mono">HTTP 429 Too Many Requests</code> if exceeded)</li>
+              </ul>
             </div>
           </Card>
         </div>
