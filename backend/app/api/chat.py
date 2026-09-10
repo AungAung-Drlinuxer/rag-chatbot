@@ -87,13 +87,13 @@ def _monitoring_answer(kind: str, message: str) -> tuple[str, list[dict]]:
             kw = m.group(1) if m else ""
             with _SL() as s:
                 if kw:
-                    rows = _s_query = _s.execute(_t(
+                    rows = s.execute(_t(
                         "SELECT name, category, hostname, ip_address, location, assigned_to "
                         "FROM inventory_items WHERE name ILIKE :kw OR hostname ILIKE :kw "
                         "OR ip_address ILIKE :kw OR assigned_to ILIKE :kw OR location ILIKE :kw LIMIT 20"
                     ), {"kw": f"%{kw}%"}).fetchall()
                 else:
-                    rows = _s.execute(_t(
+                    rows = s.execute(_t(
                         "SELECT name, category, hostname, ip_address, location, assigned_to "
                         "FROM inventory_items ORDER BY name LIMIT 20")).fetchall()
             if rows:
