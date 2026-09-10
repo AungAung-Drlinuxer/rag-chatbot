@@ -34,3 +34,4 @@ Thumbs.db
 
 # Local testing/verification scripts & scratch files
 desktop/scripts/verify_*.mjs
+backup_dump/
