@@ -47,6 +47,37 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
     def gen():
         t0 = time.time()
+
+        # v1.1.4 — INPUT GUARDRAILS (prompt injection / overflow / toxicity).
+        # Deterministic screening BEFORE any LLM cost or DB write.
+        guardrail_flag = None
+        try:
+            from app.security.guardrails import check_input
+            verdict = check_input(req.message)
+            if verdict.action in ("blocked", "flagged"):
+                from app.observability.metrics import GUARDRAIL_EVENTS_TOTAL
+                GUARDRAIL_EVENTS_TOTAL.labels(type=verdict.type, action=verdict.action).inc()
+                logger.warning("GUARDRAIL %s (%s) user=%s: %s",
+                               verdict.action, verdict.type, user, verdict.reason)
+                try:
+                    audit("guardrail." + verdict.type, user, detail=verdict.reason[:120])
+                except Exception:
+                    pass
+                if verdict.action == "blocked":
+                    yield _sse("caution", {
+                        "message": ("Your message was blocked by content security policy ("
+                                    f"{verdict.type}). Please rephrase your question."),
+                        "blocked": True, "type": verdict.type})
+                    yield _sse("done", {"message_id": "", "latency_ms": 0,
+                                        "guardrail": verdict.type})
+                    return
+                # flagged (toxic): continue but remember it for the audit trail;
+                # the system prompt handles refusal at generation time.
+                guardrail_flag = verdict.type
+        except Exception as guardrail_err:
+            # Never break the chat on guardrail machinery failure
+            logger.warning("guardrail check failed (%s) — allowing request", guardrail_err)
+
         # Persist the user turn (best-effort; must not break the stream).
         try:
             from app.persistence.database import SessionLocal
@@ -174,6 +205,8 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             "context_truncated": result.context_truncated,
             "max_context_tokens": int(SETTINGS.max_context_tokens),
         }
+        if guardrail_flag:
+            meta["guardrail_flagged"] = guardrail_flag  # toxic-abuse marker for audit/UI
         yield _sse("meta", meta)
 
         if result.decision == DECISION_CAUTION and not result.tool_used:
