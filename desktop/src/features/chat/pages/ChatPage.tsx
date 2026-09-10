@@ -20,6 +20,7 @@ import {
   Check,
   ExternalLink,
   Pencil,
+  RotateCcw,
   Copy,
   Share2,
   Zap
@@ -345,6 +346,34 @@ export default function Chat({
   }
 
   /* ----------------------------------------------------------
+      RETRY — re-run a previous user turn (v1.1.2)
+      Trims messages after the chosen user turn (both the user
+      turn and its assistant answer) and resends the question.
+  ---------------------------------------------------------- */
+  function retryFromMessage(target: Message) {
+    if (isTyping || target.role !== "user") return;
+    const idx = messages.findIndex((m) => m.id === target.id);
+    if (idx < 0) return;
+    const question = target.content.trim();
+    if (!question) return;
+
+    // Drop everything from this user turn onward (it + its answer),
+    // then resend exactly like a fresh send.
+    const kept = messages.slice(0, idx);
+    setMessages(kept);
+    historyRef.current = kept
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    // Reuse the standard send path
+    setInput(question);
+    window.setTimeout(() => {
+      const form = document.querySelector<HTMLFormElement>("form");
+      form?.requestSubmit();
+    }, 60);
+  }
+
+  /* ----------------------------------------------------------
       NEW CHAT
   ---------------------------------------------------------- */
 
@@ -512,6 +541,7 @@ export default function Chat({
                     onNotHelpful={() => submitFeedback(m, -1)}
                     onOpenTicketForm={() => openTicketForm(m)}
                     onEditQuery={(text) => { setInput(text); window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 60); }}
+                    onRetryQuestion={() => retryFromMessage(m)}
                   />
                 ))}
         {/* Stage indicator during retrieval (only shown if bot hasn't started streaming answer text) */}
@@ -1011,6 +1041,7 @@ function MessageBubble({
   onNotHelpful,
   onOpenTicketForm,
   onEditQuery,
+  onRetryQuestion,
   busy = false,
 }: {
   message: Message;
@@ -1018,6 +1049,7 @@ function MessageBubble({
   onNotHelpful: () => void;
   onOpenTicketForm: () => void;
   onEditQuery?: (text: string) => void;
+  onRetryQuestion?: () => void;
   busy?: boolean;
 }) {
   const isUser = message.role === "user";
@@ -1170,16 +1202,21 @@ function MessageBubble({
             {message.timestamp}
           </span>
           {isUser && (
-            <span className="flex items-center gap-1 opacity-0 transition group-hover/msg:opacity-100">
-              <button type="button" title="Edit query"
+            // v1.1.2 — always-visible compact icons (hover-only hid them on touch devices):
+            // Edit query / Copy query / Retry
+            <span className="flex items-center gap-0.5">
+              <button type="button" title="Edit query — load this text into the composer"
                 onClick={() => onEditQuery?.(message.content)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
-                <Pencil className="size-3" /> Edit query
+                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                <Pencil className="size-3.5" />
               </button>
               <button type="button" title="Copy query" onClick={() => copyText(message.content)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
-                {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
-                {copied ? "Copied" : "Copy"}
+                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+              </button>
+              <button type="button" title="Retry — re-run this question" onClick={() => onRetryQuestion?.()}
+                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                <RotateCcw className="size-3.5" />
               </button>
             </span>
           )}
