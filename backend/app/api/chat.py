@@ -684,14 +684,41 @@ def grafana_panel_choices(body: dict, user: str = Depends(get_current_user)) -> 
     """Match a natural-language question to candidate Grafana panels.
 
     Returns a list of choices the frontend renders as a selectable popup.
+    v1.3.7 — guardrail check FIRST: abusive/injected questions get the standard
+    guardrail response instead of a panel popup.
     """
-    from app.integrations import grafana as gf
-    if not gf.is_configured():
-        raise HTTPException(status_code=503, detail="Grafana integration not configured")
+    from app.security.guardrails import check_input
+    from app.observability.metrics import GUARDRAIL_EVENTS_TOTAL
     question = (body.get("question") or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="question required")
+    verdict = check_input(question)
+    if verdict.action in ("blocked", "flagged"):
+        GUARDRAIL_EVENTS_TOTAL.labels(type=verdict.type, action=verdict.action).inc()
+        try:
+            from app.observability.audit import audit
+            audit("guardrail." + verdict.type, user, detail=verdict.reason[:120])
+        except Exception:
+            pass
+        return {"guardrail": {"action": verdict.action, "type": verdict.type,
+                              "message": ("Your message was blocked by content security policy ("
+                                          f"{verdict.type}). Please rephrase your question.")
+                              if verdict.action == "blocked" else
+                              "I can't help with that. If you have an IT question — passwords, VPN, tickets, hardware — I'm happy to assist."}}
+    from app.integrations import grafana as gf
+    if not gf.is_configured():
+        raise HTTPException(status_code=503, detail="Grafana integration not configured")
     matches = gf.match_question_to_panels(question, top_n=6)
+    return {"choices": [
+        {
+            "dashboard_uid": m["dashboard_uid"],
+            "dashboard_title": m["dashboard_title"],
+            "panel_title": m["title"],
+            "expr": m["expr"],
+            "legend": m.get("legend", ""),
+            "score": m["_score"],
+        } for m in matches
+    ]}
     return {"choices": [
         {
             "dashboard_uid": m["dashboard_uid"],

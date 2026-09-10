@@ -211,25 +211,41 @@ def panel_index(force: bool = False) -> list[dict]:
     return idx
 
 
-def match_question_to_panels(question: str, top_n: int = 4) -> list[dict]:
+def _norm(w: str) -> str:
+    """Light stemming: strip plural 's' so 'token' matches 'tokens'."""
+    return w[:-1] if len(w) > 3 and w.endswith("s") else w
+
+
+def match_question_to_panels(question: str, top_n: int = 4, min_score: int = 3) -> list[dict]:
     """Score the question against all panel titles. Returns top matches with score.
 
     Token-overlap scoring, stop-word filtered. Empty result = not a panel question.
+    v1.3.7 — min_score threshold (default 4): a SINGLE generic word overlap
+    (e.g. "chatbot" matching the app's own name) must not trigger the panel flow.
+    Generic app words ("chatbot", "assistant", "pod") only count when paired with
+    at least one other content word.
     """
-    q_words = {w for w in re.split(r"\W+", question.lower()) if len(w) > 2} - _stop_words()
+    q_words = {_norm(w) for w in re.split(r"\W+", question.lower()) if len(w) > 2} - _stop_words()
     if not q_words:
         return []
+    # generic app-name words that appear in nearly every dashboard/panel title —
+    # they cannot alone justify routing to the grafana tool
+    generic_titles = {"chatbot", "assistant", "health", "pod", "pods", "rag"}
     scored: list[dict] = []
     for entry in panel_index():
-        pt_words = {w for w in re.split(r"\W+", (entry.get("title") or "").lower()) if len(w) > 2}
+        pt_words = {_norm(w) for w in re.split(r"\W+", (entry.get("title") or "").lower()) if len(w) > 2}
         overlap = q_words & pt_words
         if not overlap:
             continue
+        # overlap that is ONLY generic words is not a real match
+        meaningful = overlap - generic_titles
+        if not meaningful:
+            continue
         score = len(overlap) * 2 + sum(1 for w in overlap if len(w) > 4)
         # strong bonus: dashboard title words also match (e.g. "node exporter full")
-        dt_words = {w for w in re.split(r"\W+", entry.get("dashboard_title", "").lower()) if len(w) > 2}
+        dt_words = {_norm(w) for w in re.split(r"\W+", entry.get("dashboard_title", "").lower()) if len(w) > 2}
         if q_words & dt_words:
             score += 3
         scored.append({**entry, "_score": score})
     scored.sort(key=lambda x: -x["_score"])
-    return scored[:top_n]
+    return [s for s in scored if s["_score"] >= min_score][:top_n]
