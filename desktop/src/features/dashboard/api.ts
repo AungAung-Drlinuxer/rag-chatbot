@@ -26,6 +26,11 @@ export async function dashRecentTickets(limit = 5) {
   return r.json();
 }
 
+export async function dashGateTrend(days = 7) {
+  const r = await apiFetch(`${BASE}/api/dashboard/gate-trend?days=${days}`, { headers: authHeaders() });
+  return r.json();
+}
+
 export async function dashHealth() {
   const r = await apiFetch(`${BASE}/api/dashboard/health`, { headers: authHeaders() });
   return r.json();

@@ -3,12 +3,18 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
+  BookOpen,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ExternalLink,
   Eye,
+  FileText,
   MessageSquare,
+  Plus,
   RefreshCw,
+  Settings2,
+  ShieldAlert,
   Ticket,
   Users,
   XCircle,
@@ -24,6 +30,7 @@ import {
   dashRecentConversations,
   dashRecentTickets,
   dashHealth,
+  dashGateTrend,
 } from "@/features/dashboard/api";
 
 import { Card } from "@/components/ui/card";
@@ -77,7 +84,7 @@ type HealthItem = {
    MAIN DASHBOARD
 ============================================================ */
 
-export default function Dashboard({ role }: Props) {
+export default function Dashboard({ role, onNavigate }: Props) {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] =
     useState(new Date());
@@ -85,12 +92,13 @@ export default function Dashboard({ role }: Props) {
   const [rangeOpen, setRangeOpen] = useState(false);
 
   // Real API data (v0.12.0)
-  const [stats, setStats] = useState<Record<string, number> | null>(null);
+  const [stats, setStats] = useState<any>(null);
   const [series, setSeries] = useState<{ day: string; total: number; resolved: number; escalated: number }[]>([]);
   const [domainsLive, setDomainsLive] = useState<Domain[] | null>(null);
   const [liveConversations, setLiveConversations] = useState<Conversation[] | null>(null);
   const [liveTickets, setLiveTickets] = useState<RecentTicket[] | null>(null);
   const [liveHealth, setLiveHealth] = useState<HealthItem[] | null>(null);
+  const [gateTrend, setGateTrend] = useState<{ day: string; answered: number; cautioned: number }[]>([]);
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
@@ -98,16 +106,18 @@ export default function Dashboard({ role }: Props) {
 
     async function load() {
       try {
-        const [s, c, d, rc, rt, h] = await Promise.all([
+        const [s, c, d, rc, rt, h, g] = await Promise.all([
           dashStats(),
           dashConversations(7),
           dashDomains(),
           dashRecentConversations(6),
           dashRecentTickets(5),
           dashHealth(),
+          dashGateTrend(7),
         ]);
         if (!mounted) return;
         setStats(s ?? null);
+        if (g?.series?.length) setGateTrend(g.series);
         if (c?.series?.length) setSeries(c.series);
         if (d?.domains?.length) {
           setDomainsLive(d.domains.map((x: { name: string; count: number; percentage: number }) => ({
@@ -158,6 +168,14 @@ export default function Dashboard({ role }: Props) {
     setLoading(true);
     setLastUpdated(new Date());
     setRefreshTick((v) => v + 1);
+  }
+
+  // v1.1.6 — real week-over-week pill text from backend deltas; null = hide pill
+  function deltaPill(key: string): string | null {
+    const d = (stats as any)?.deltas?.[key];
+    if (d == null) return null;
+    const sign = d >= 0 ? "+" : "−";
+    return `${sign}${Math.abs(d)}%`;
   }
 
     return (
@@ -234,9 +252,9 @@ export default function Dashboard({ role }: Props) {
                 }
                 value={stats ? String(stats.total_conversations) : "—"}
                 title="Total Conversations"
-                change="+18.6%"
-                positive
-                description="vs last 7 days"
+                change={deltaPill("total_conversations")}
+                positive={(stats?.deltas?.total_conversations ?? 0) >= 0}
+                description="vs previous 7 days"
                 loading={loading}
               />
 
@@ -246,9 +264,9 @@ export default function Dashboard({ role }: Props) {
                 }
                 value={stats ? String(stats.resolved_by_bot) : "—"}
                 title="Resolved by Bot"
-                change="+22.4%"
-                positive
-                description="vs last 7 days"
+                change={deltaPill("resolved_by_bot")}
+                positive={(stats?.deltas?.resolved_by_bot ?? 0) >= 0}
+                description="vs previous 7 days"
                 loading={loading}
               />
 
@@ -258,9 +276,9 @@ export default function Dashboard({ role }: Props) {
                 }
                 value={stats ? String(stats.escalated_to_tickets) : "—"}
                 title="Escalated to Tickets"
-                change="−8.3%"
-                positive
-                description="vs last 7 days"
+                change={deltaPill("escalated_to_tickets")}
+                positive={(stats?.deltas?.escalated_to_tickets ?? 0) < 0}
+                description="vs previous 7 days"
                 loading={loading}
               />
 
@@ -268,12 +286,53 @@ export default function Dashboard({ role }: Props) {
                 icon={<Users className="size-4" />}
                 value={stats ? String(stats.active_users) : "—"}
                 title="Active Users"
-                change="+12.7%"
-                positive
-                description="vs last 7 days"
+                change={deltaPill("active_users")}
+                positive={(stats?.deltas?.active_users ?? 0) >= 0}
+                description="vs previous 7 days"
                 loading={loading}
               />
 
+              <KpiCard
+                icon={<BookOpen className="size-4" />}
+                value={stats ? String(stats.kb_pages ?? "—") : "—"}
+                title="KB Articles"
+                description="knowledge base size"
+                loading={loading}
+              />
+
+              {role === "admin" && (
+                <KpiCard
+                  icon={<ShieldAlert className="size-4" />}
+                  value={stats ? String(stats.attacks_blocked_7d ?? 0) : "—"}
+                  title="Attacks Blocked (7d)"
+                  description="guardrail: injection + overflow"
+                  loading={loading}
+                />
+              )}
+
+            </section>
+
+            {/* =================================================
+                QUICK ACTIONS (v1.1.6 — RBAC-filtered shortcuts)
+            ================================================= */}
+
+            <section className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-medium text-muted-foreground">Quick actions:</span>
+              <QuickAction label="Ask a question" icon={<MessageSquare className="size-3.5" />} onClick={() => onNavigate?.("chat")} />
+              <QuickAction label="Browse knowledge" icon={<BookOpen className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
+              {(role === "admin" || role === "knowledge") && (
+                <>
+                  <QuickAction label="Sync KB now" icon={<RefreshCw className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
+                  <QuickAction label="Create article" icon={<Plus className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
+                </>
+              )}
+              {role === "admin" && (
+                <>
+                  <QuickAction label="Users" icon={<Users className="size-3.5" />} onClick={() => onNavigate?.("users")} />
+                  <QuickAction label="Audit log" icon={<FileText className="size-3.5" />} onClick={() => onNavigate?.("audits")} />
+                  <QuickAction label="Integrations" icon={<Settings2 className="size-3.5" />} onClick={() => onNavigate?.("settings")} />
+                </>
+              )}
             </section>
 
             {/* =================================================
@@ -404,6 +463,32 @@ export default function Dashboard({ role }: Props) {
               </Card>
 
             </section>
+
+            {/* =================================================
+                CONFIDENCE GATE TREND (v1.1.6 — real meta.decision data)
+            ================================================= */}
+
+            <Card className="rounded-2xl p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Confidence gate trend</h2>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    Answers that passed the 0.75 confidence gate vs cautioned — daily
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                  <Legend label="Answered" className="bg-emerald-500" />
+                  <Legend label="Cautioned" className="bg-amber-500" />
+                </div>
+              </div>
+              {gateTrend.length === 0 ? (
+                <div className="py-10 text-center text-[10px] text-muted-foreground">
+                  No gate data yet — trends appear as users chat.
+                </div>
+              ) : (
+                <GateTrendChart data={gateTrend} />
+              )}
+            </Card>
 
             {/* =================================================
                 LOWER ROW
@@ -643,9 +728,32 @@ export default function Dashboard({ role }: Props) {
                     System health
                   </h2>
 
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                    All systems operational
-                  </span>
+                  {/* v1.1.6 — computed from the ACTUAL health payload (was static green) */}
+                  {(() => {
+                    const allOk = (liveHealth ?? []).length > 0 && (liveHealth ?? []).every((h) => h.status === "Healthy");
+                    return (
+                      <span className={[
+                        "rounded-full px-2.5 py-1 text-[10px] font-medium",
+                        allOk
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+                      ].join(" ")}>
+                        {allOk ? "All systems operational" : "Degraded — check services"}
+                      </span>
+                    );
+                  })()}
+
+                  {/* v1.1.6 — Grafana deep link (deep-dive lives in Grafana, not duplicated here) */}
+                  <a
+                    href="http://10.10.10.18:3000/d/rag-platform-health"
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open full observability in Grafana"
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                  >
+                    <ExternalLink className="size-3" />
+                    Grafana
+                  </a>
 
                 </div>
 
@@ -724,9 +832,10 @@ function KpiCard({
   icon: ReactNode;
   value: string;
   title: string;
-  change: string;
+  /** v1.1.6 — optional: when undefined (no baseline), the change pill is hidden entirely */
+  change?: string | null;
   description: string;
-  positive: boolean;
+  positive?: boolean;
   loading: boolean;
 }) {
   return (
@@ -750,21 +859,25 @@ function KpiCard({
 
           <div className="mt-2 flex items-center gap-1.5 text-[10px]">
 
-            {positive ? (
-              <ArrowUpRight className="size-3 text-emerald-600" />
-            ) : (
-              <ArrowDownRight className="size-3 text-red-600" />
+            {change != null && (
+              positive ? (
+                <ArrowUpRight className="size-3 text-emerald-600" />
+              ) : (
+                <ArrowDownRight className="size-3 text-red-600" />
+              )
             )}
 
-            <span
-              className={
-                positive
-                  ? "font-medium text-emerald-600"
-                  : "font-medium text-red-600"
-              }
-            >
-              {change}
-            </span>
+            {change != null && (
+              <span
+                className={
+                  positive
+                    ? "font-medium text-emerald-600"
+                    : "font-medium text-red-600"
+                }
+              >
+                {change}
+              </span>
+            )}
 
             <span className="text-muted-foreground">
               {description}
@@ -1441,5 +1554,110 @@ function HealthRow({
       </div>
 
     </div>
+  );
+}
+
+/* ============================================================
+   GATE TREND CHART (v1.1.6)
+============================================================ */
+
+function GateTrendChart({
+  data,
+}: {
+  data: { day: string; answered: number; cautioned: number }[];
+}) {
+  const dataMax = Math.max(10, ...data.flatMap((d) => [d.answered, d.cautioned]));
+  const step = Math.max(1, Math.pow(10, Math.floor(Math.log10(dataMax))));
+  const max = Math.ceil((dataMax * 1.15) / step) * step;
+
+  const width = 1000;
+  const height = 200;
+  const left = 36;
+  const right = 12;
+  const top = 10;
+  const bottom = 26;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+
+  function pts(key: "answered" | "cautioned") {
+    return data
+      .map((d, i) => {
+        const x = left + (i / Math.max(1, data.length - 1)) * chartWidth;
+        const y = top + chartHeight - (d[key] / max) * chartHeight;
+        return `${x},${y}`;
+      })
+      .join(" ");
+  }
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 w-full">
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+        <g key={f}>
+          <line
+            x1={left} x2={width - right}
+            y1={top + chartHeight - f * chartHeight}
+            y2={top + chartHeight - f * chartHeight}
+            stroke="currentColor" className="text-slate-200 dark:text-slate-800"
+            strokeWidth="1"
+          />
+          <text
+            x={left - 6}
+            y={top + chartHeight - f * chartHeight + 3}
+            textAnchor="end"
+            className="fill-slate-400 text-[9px]"
+          >
+            {Math.round(f * max)}
+          </text>
+        </g>
+      ))}
+      <polyline
+        points={pts("answered")}
+        fill="none" stroke="#10b981" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      <polyline
+        points={pts("cautioned")}
+        fill="none" stroke="#f59e0b" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      {data.map((d, i) => {
+        const x = left + (i / Math.max(1, data.length - 1)) * chartWidth;
+        return (
+          <text
+            key={d.day}
+            x={x} y={height - 8}
+            textAnchor="middle"
+            className="fill-slate-400 text-[9px]"
+          >
+            {d.day}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ============================================================
+   QUICK ACTION (v1.1.6)
+============================================================ */
+
+function QuickAction({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-950/30 dark:hover:text-blue-300"
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

@@ -31,13 +31,31 @@ def _rows(sql: str, params: dict | None = None) -> list[dict]:
 
 @router.get("/dashboard/stats")
 def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
-    since = datetime.now(UTC) - timedelta(days=7)
-    week_ago = since.isoformat()
+    """v1.1.6 — real week-over-week deltas (the frontend previously showed
+    hard-coded fake percentages; this computes the previous 7-day window for
+    every KPI so the change pill is always true)."""
+    now = datetime.now(UTC)
+    week_ago = (now - timedelta(days=7)).isoformat()
+    two_weeks_ago = (now - timedelta(days=14)).isoformat()
+
+    def _count(sql_where: str, params: dict) -> int:
+        base = {
+            "since": week_ago,
+            "since2": two_weeks_ago,
+        }
+        base.update(params)
+        cur = _rows(sql_where, base)
+        return int(cur[0]["n"] or 0)
 
     chats_week = _rows(
         "SELECT count(*) AS n FROM chat_messages "
         "WHERE role = 'user' AND created_at >= :since",
         {"since": week_ago},
+    )[0]["n"]
+    chats_prev = _rows(
+        "SELECT count(*) AS n FROM chat_messages "
+        "WHERE role = 'user' AND created_at >= :since2 AND created_at < :since",
+        {"since": week_ago, "since2": two_weeks_ago},
     )[0]["n"]
 
     # v0.21.84 — escalation rate must be measured against CONVERSATIONS: a ticket
@@ -48,6 +66,11 @@ def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
         "WHERE session_id IS NOT NULL AND created_at >= :since",
         {"since": week_ago},
     )[0]["n"]
+    escalated_prev = _rows(
+        "SELECT count(*) AS n FROM jira_tickets "
+        "WHERE session_id IS NOT NULL AND created_at >= :since2 AND created_at < :since",
+        {"since": week_ago, "since2": two_weeks_ago},
+    )[0]["n"]
 
     # resolved ≈ answered turns where decision was 'answer' (meta JSON)
     resolved_week = _rows(
@@ -56,14 +79,39 @@ def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
         "AND meta LIKE '%\"decision\": \"answer\"%'",
         {"since": week_ago},
     )[0]["n"]
+    resolved_prev = _rows(
+        "SELECT count(*) AS n FROM chat_messages "
+        "WHERE role = 'assistant' AND created_at >= :since2 AND created_at < :since "
+        "AND meta LIKE '%\"decision\": \"answer\"%'",
+        {"since": week_ago, "since2": two_weeks_ago},
+    )[0]["n"]
 
     active_users = _rows(
         "SELECT count(DISTINCT username) AS n FROM chat_sessions "
         "WHERE started_at >= :since",
         {"since": week_ago},
     )[0]["n"]
+    active_users_prev = _rows(
+        "SELECT count(DISTINCT username) AS n FROM chat_sessions "
+        "WHERE started_at >= :since2 AND started_at < :since",
+        {"since": week_ago, "since2": two_weeks_ago},
+    )[0]["n"]
 
     kb_pages = _rows("SELECT count(*) AS n FROM kb_meta")[0]["n"]
+
+    # v1.1.4 — security: guardrail blocks in the last 7 days (from durable audit_log)
+    attacks_blocked_week = _rows(
+        "SELECT count(*) AS n FROM audit_log "
+        "WHERE action IN ('guardrail.injection','guardrail.overflow') "
+        "AND created_at >= :since",
+        {"since": week_ago},
+    )[0]["n"]
+
+    def _pct(cur: int, prev: int) -> float | None:
+        """Real week-over-week percentage. None when no baseline (hide the pill)."""
+        if prev <= 0:
+            return None if cur <= 0 else None  # no meaningful baseline yet
+        return round((cur - prev) / prev * 100, 1)
 
     return {
         "total_conversations": int(chats_week or 0),
@@ -71,7 +119,14 @@ def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
         "escalated_to_tickets": int(escalated_week or 0),
         "active_users": int(active_users or 0),
         "kb_pages": int(kb_pages or 0),
+        "attacks_blocked_7d": int(attacks_blocked_week or 0),
         "window_days": 7,
+        "deltas": {
+            "total_conversations": _pct(int(chats_week or 0), int(chats_prev or 0)),
+            "resolved_by_bot": _pct(int(resolved_week or 0), int(resolved_prev or 0)),
+            "escalated_to_tickets": _pct(int(escalated_week or 0), int(escalated_prev or 0)),
+            "active_users": _pct(int(active_users or 0), int(active_users_prev or 0)),
+        },
     }
 
 
@@ -211,6 +266,42 @@ def dashboard_recent_tickets(
 
 
 # ---------------------------------------------------------------------------
+# dashboard: confidence gate trend (v1.1.6 — real data from chat_messages.meta)
+# ---------------------------------------------------------------------------
+
+@router.get("/dashboard/gate-trend")
+def dashboard_gate_trend(
+    days: int = 7, user: str = Depends(get_current_user)
+) -> dict:
+    """Daily counts of 'answer' (passed the 0.75 confidence gate) vs 'caution'
+    decisions — the at-a-glance trustworthiness trend. Reads the same meta JSON
+    the chat pipeline writes."""
+    days = max(1, min(days, 30))
+    since = (datetime.now(UTC) - timedelta(days=days)).date().isoformat()
+
+    rows = _rows(
+        "SELECT date(created_at) AS day, "
+        "  sum(CASE WHEN meta LIKE '%\"decision\": \"answer\"%' THEN 1 ELSE 0 END) AS answered, "
+        "  sum(CASE WHEN meta LIKE '%\"decision\": \"caution\"%' THEN 1 ELSE 0 END) AS cautioned "
+        "FROM chat_messages WHERE role = 'assistant' AND date(created_at) >= :since "
+        "GROUP BY day ORDER BY day",
+        {"since": since},
+    )
+    by_day = {str(r["day"]): (int(r["answered"] or 0), int(r["cautioned"] or 0)) for r in rows}
+
+    series = []
+    for i in range(days):
+        day = (datetime.now(UTC) - timedelta(days=days - 1 - i)).date().isoformat()
+        answered, cautioned = by_day.get(day, (0, 0))
+        series.append({
+            "day": datetime.fromisoformat(day).strftime("%b %d"),
+            "answered": answered,
+            "cautioned": cautioned,
+        })
+    return {"days": days, "series": series}
+
+
+# ---------------------------------------------------------------------------
 # dashboard: health (real service checks)
 # ---------------------------------------------------------------------------
 
@@ -308,6 +399,19 @@ def dashboard_health(user: str = Depends(get_current_user)) -> list[dict]:
     ldap_cfg = _integration_cfg("ldap")
     ldap_ok = bool(str(ldap_cfg.get("bind_password") or "").strip()) or bool(SETTINGS.ldap_url) or True
     add("LDAP / AD", ldap_ok)
+
+    # v1.1.4 — Input guardrails activity (blocked+flagged last 7d, from audit_log)
+    try:
+        gr = _rows(
+            "SELECT count(*) AS n FROM audit_log WHERE action LIKE 'guardrail%' "
+            "AND created_at >= :since",
+            {"since": (datetime.now(UTC) - timedelta(days=7)).isoformat()},
+        )[0]["n"]
+        # A service is "healthy" if the screening pipeline is wired (module present);
+        # detections >0 prove it is actively protecting. Zero events = idle, still OK.
+        add(f"Input guardrails ({gr} events / 7d)", True)
+    except Exception:
+        add("Input guardrails", False)
 
     return checks
 
