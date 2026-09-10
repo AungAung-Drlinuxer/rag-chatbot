@@ -149,7 +149,9 @@ def _build_local_ollama():
     from langchain_ollama import ChatOllama
 
     llm = ChatOllama(model=SETTINGS.fallback_llm_model, base_url=SETTINGS.ollama_url,
-                     streaming=True, temperature=0.1)
+                     streaming=True, temperature=0.1,
+                     num_predict=256,   # v1.2.3 — cap local generation (CPU tok/s is slow)
+                     num_ctx=4096)
     prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM_PROMPT), ("human", "{question}")])
     return prompt | llm | StrOutputParser()
 
@@ -264,6 +266,13 @@ def stream_answer(question: str, context: str) -> Iterable[tuple[str, dict | Non
                 steps = getattr(fb, "steps", None)
                 local_llm = steps[-2] if steps and len(steps) >= 2 else None
                 if local_llm is not None:
+                    # v1.2.3 — the 1b CPU model prompt-evals at ~35 tok/s; feeding it
+                    # the full 2191-token RAG briefing cost 26s+ BEFORE the first token.
+                    # Truncate the context to a compact briefing for local generation.
+                    if len(context) > 4_000:
+                        context = context[:4_000] + "\n[context truncated for local model]"
+                    logger.info("local fallback generation: context=%d chars, question=%d chars",
+                                len(context), len(question))
                     yield from _stream_with_usage(local_llm, question, context)
                     return
         except Exception as exc:

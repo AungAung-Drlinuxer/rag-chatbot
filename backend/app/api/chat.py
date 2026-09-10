@@ -169,9 +169,16 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     yield _sse("done", {"message_id": "", "latency_ms": 0,
                                         "guardrail": verdict.type})
                     return
-                # flagged (toxic): continue but remember it for the audit trail;
-                # the system prompt handles refusal at generation time.
-                guardrail_flag = verdict.type
+                # v1.2.3 — flagged (toxic): reply immediately with a polite refusal.
+                # The old path burned a full LLM call (107s on CPU fallback) just to
+                # say "I can't help with that." Deterministic, instant, zero cost.
+                _refusal = ("I can't help with that. If you have an IT question — "
+                            "passwords, VPN, tickets, hardware — I'm happy to assist.")
+                yield _sse("caution", {"message": _refusal, "flagged": True, "type": verdict.type})
+                yield _sse("token", {"token": _refusal})
+                yield _sse("done", {"message_id": "", "latency_ms": int((time.time() - t0) * 1000),
+                                    "guardrail": verdict.type})
+                return
         except Exception as guardrail_err:
             # Never break the chat on guardrail machinery failure
             logger.warning("guardrail check failed (%s) — allowing request", guardrail_err)
