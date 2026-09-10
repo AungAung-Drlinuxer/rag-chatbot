@@ -374,6 +374,31 @@ export default function Chat({
   }
 
   /* ----------------------------------------------------------
+      EDIT-IN-PLACE (v1.3.1) — ChatGPT-style edit of a previous
+      user turn: truncate the thread at that turn and resend the
+      edited question through the standard send path.
+  ---------------------------------------------------------- */
+  function handleEditSubmit(messageId: string, newText: string) {
+    if (isTyping) return;
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0 || !newText.trim()) return;
+
+    // Drop everything from this user turn onward (it + its answer),
+    // then resend with the edited text — exactly like a fresh send.
+    const kept = messages.slice(0, idx);
+    setMessages(kept);
+    historyRef.current = kept
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    setInput(newText.trim());
+    window.setTimeout(() => {
+      const form = document.querySelector<HTMLFormElement>("form");
+      form?.requestSubmit();
+    }, 60);
+  }
+
+  /* ----------------------------------------------------------
       NEW CHAT
   ---------------------------------------------------------- */
 
@@ -540,7 +565,7 @@ export default function Chat({
                     onHelpful={() => submitFeedback(m, 1)}
                     onNotHelpful={() => submitFeedback(m, -1)}
                     onOpenTicketForm={() => openTicketForm(m)}
-                    onEditQuery={(text) => { setInput(text); window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 60); }}
+                    onSubmitEdit={(mid, text) => handleEditSubmit(mid, text)}
                     onRetryQuestion={() => retryFromMessage(m)}
                   />
                 ))}
@@ -1040,7 +1065,7 @@ function MessageBubble({
   onHelpful,
   onNotHelpful,
   onOpenTicketForm,
-  onEditQuery,
+  onSubmitEdit,
   onRetryQuestion,
   busy = false,
 }: {
@@ -1048,7 +1073,8 @@ function MessageBubble({
   onHelpful: () => void;
   onNotHelpful: () => void;
   onOpenTicketForm: () => void;
-  onEditQuery?: (text: string) => void;
+  /** v1.3.1 — in-place edit: submit new text; parent truncates the thread and resends */
+  onSubmitEdit?: (messageId: string, newText: string) => void;
   onRetryQuestion?: () => void;
   busy?: boolean;
 }) {
@@ -1056,6 +1082,8 @@ function MessageBubble({
   const caution = message.decision === "caution";
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState(message.content);
 
   async function copyText(text: string) {
     try {
@@ -1098,9 +1126,56 @@ function MessageBubble({
           ].join(" ")}
         >
           {isUser ? (
+            editing ? (
+              /* v1.3.1 — in-place edit (ChatGPT-style): textarea inside the bubble */
+              <div className="flex flex-col gap-2">
+                <textarea
+                  autoFocus
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (editDraft.trim() && editDraft !== message.content) {
+                        onSubmitEdit?.(message.id, editDraft.trim());
+                      }
+                      setEditing(false);
+                    } else if (e.key === "Escape") {
+                      setEditing(false);
+                      setEditDraft(message.content);
+                    }
+                  }}
+                  rows={Math.min(6, Math.max(2, editDraft.split("\n").length))}
+                  className="w-full resize-none rounded-xl bg-white/95 px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:bg-slate-900/95 dark:text-slate-100"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setEditing(false); setEditDraft(message.content); }}
+                    className="rounded-lg border border-white/40 px-2.5 py-1 text-[10px] font-medium text-white/80 transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!editDraft.trim() || editDraft === message.content}
+                    onClick={() => {
+                      if (editDraft.trim() && editDraft !== message.content) {
+                        onSubmitEdit?.(message.id, editDraft.trim());
+                      }
+                      setEditing(false);
+                    }}
+                    className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    Save &amp; resend
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
               {message.content || "..."}
             </div>
+            )
           ) : (
             <div className="md min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-xs leading-relaxed [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:border [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-slate-700 dark:[&_th]:bg-slate-800/80 dark:[&_th]:text-slate-200 [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-slate-800 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/60 [&_td]:px-4 [&_td]:py-2.5 [&_td]:text-xs [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-slate-50/50 dark:[&_tbody_tr:hover]:bg-slate-800/40">
               {message.content ? (
@@ -1205,8 +1280,8 @@ function MessageBubble({
             // v1.1.2 — always-visible compact icons (hover-only hid them on touch devices):
             // Edit query / Copy query / Retry
             <span className="flex items-center gap-0.5">
-              <button type="button" title="Edit query — load this text into the composer"
-                onClick={() => onEditQuery?.(message.content)}
+              <button type="button" title="Edit query — edit in place and resend"
+                onClick={() => { setEditDraft(message.content); setEditing(true); }}
                 className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
                 <Pencil className="size-3.5" />
               </button>
