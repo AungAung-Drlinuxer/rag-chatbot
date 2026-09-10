@@ -1,8 +1,20 @@
 {
  "panels": [
   {
+   "description": "Live backend pods currently up (instant value, pod-churn immune). Stale/dead pod series from HPA scaling are excluded \u2014 the old panel rendered every historical series as separate red/green tiles.",
    "fieldConfig": {
     "defaults": {
+     "mappings": [
+      {
+       "options": {
+        "0": {
+         "color": "red",
+         "text": "DOWN"
+        }
+       },
+       "type": "value"
+      }
+     ],
      "thresholds": {
       "mode": "absolute",
       "steps": [
@@ -16,32 +28,44 @@
        }
       ]
      },
-     "unit": "short"
+     "unit": "none"
     },
     "overrides": []
    },
    "gridPos": {
     "h": 4,
-    "w": 4,
+    "w": 6,
     "x": 0,
     "y": 0
    },
    "options": {
     "colorMode": "background",
-    "graphMode": "area",
+    "graphMode": "none",
+    "justifyMode": "auto",
+    "orientation": "auto",
     "reduceOptions": {
      "calcs": [
       "lastNotNull"
-     ]
-    }
+     ],
+     "fields": "",
+     "values": false
+    },
+    "textMode": "value_and_name"
    },
    "targets": [
     {
-     "expr": "up{job=~\".*chatbot_backend.*\"}",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "dfxmyazv2ru9sf"
+     },
+     "expr": "sum(up{job=\"prometheus.scrape.chatbot_backend\"} == bool 1)",
+     "instant": true,
+     "legendFormat": "healthy pods",
+     "range": false,
      "refId": "A"
     }
    ],
-   "title": "Backend API (rag-chatbot)",
+   "title": "Backend API (healthy pods)",
    "type": "stat"
   },
   {
@@ -871,5 +895,5 @@
  "timezone": "browser",
  "title": "RAG Chatbot - Platform & Services Health",
  "uid": "rag-platform-health",
- "version": 7
+ "version": 8
 }
