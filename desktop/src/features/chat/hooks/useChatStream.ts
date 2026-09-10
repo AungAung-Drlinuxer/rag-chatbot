@@ -13,6 +13,8 @@ export type StreamHandlers = {
   onStage: (detail: string) => void;
   onApprovalRequest: (data: any) => void;
   onDone: (d: any) => void;
+  /** v1.1.4 — guardrail event: blocked (injection/overflow) or flagged (toxic) */
+  onCaution?: (data: any) => void;
 };
 
 export async function runChatStream(
@@ -36,6 +38,17 @@ export async function runChatStream(
       h.onStage(e.data?.detail || e.data?.stage || "");
     } else if (e.event === "approval_request") {
       h.onApprovalRequest(e.data);
+    } else if (e.event === "caution") {
+      // v1.1.4 guardrail: when blocked=true the backend sends NO tokens and
+      // closes with done{guardrail:...} — surface the policy message to the user
+      // instead of the generic "No answer received" fallback.
+      if (e.data?.blocked) {
+        h.onToken(e.data.message || "Your message was blocked by content security policy.");
+        streamed += e.data.message || "";
+      } else {
+        h.onStage(e.data?.message || e.data?.detail || "Low confidence — showing caution notice");
+      }
+      h.onCaution?.(e.data ?? {});
     } else if (e.event === "done") {
       h.onDone(e.data ?? {});
     }

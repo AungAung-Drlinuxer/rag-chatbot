@@ -12,6 +12,7 @@ import {
   Ticket as TicketIcon,
   Search,
   Shield,
+  ShieldAlert,
   Sparkles,
   Ticket,
   User,
@@ -297,6 +298,17 @@ export default function Chat({
             setApproval({ id: data.approval_id, question: data.question });
             setMessages((prev) => prev.map((m) =>
               m.id === assistantId ? { ...m, content: m.content + "⏸️ **Escalation needs administrator approval.**" } : m));
+          },
+          onCaution: (data) => {
+            // v1.1.4 guardrail: blocked messages already have the policy text
+            // injected via onToken; tag the message so the renderer shows a
+            // security notice instead of the "No answer" fallback.
+            if (data?.blocked) {
+              setMessages((prev) => prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, guardrail: data.type ?? "blocked" }
+                  : m));
+            }
           },
           onDone: (d) => {
             setStage("");
@@ -1067,6 +1079,17 @@ function MessageBubble({
                     <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:300ms]" />
                   </span>
                   <span className="text-[11px] font-medium">Generating answer…</span>
+                </div>
+              ) : (message as any).guardrail ? (
+                <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
+                  <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                  <div className="flex flex-col gap-1">
+                    <div className="font-medium">Blocked by content security policy ({(message as any).guardrail}).</div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Your message triggered the input guardrail (v1.1.4). No data was sent to the AI
+                      provider. Rephrase your question — if you believe this is an error, contact IT.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 text-muted-foreground">

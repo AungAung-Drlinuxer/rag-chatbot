@@ -701,44 +701,27 @@
    "type": "timeseries"
   },
   {
+   "datasource": {
+    "type": "prometheus",
+    "uid": "dfxmyazv2ru9sf"
+   },
    "description": "Prompt-injection / overflow / toxicity detections from the v1.1.4 input guardrail engine",
    "fieldConfig": {
     "defaults": {
      "color": {
-      "mode": "palette-classic"
-     },
-     "custom": {
-      "axisBorderShow": false,
-      "axisColorMode": "text",
-      "axisLabel": "",
-      "axisPlacement": "auto",
-      "fillOpacity": 80,
-      "gradientMode": "none",
-      "hideFrom": {
-       "legend": false,
-       "tooltip": false,
-       "viz": false
-      },
-      "lineWidth": 1,
-      "scaleDistribution": {
-       "type": "linear"
-      },
-      "thresholdsStyle": {
-       "mode": "off"
-      }
+      "mode": "thresholds"
      },
      "thresholds": {
       "mode": "absolute",
       "steps": [
        {
         "color": "green",
-        "value": null
+        "value": 0
        }
       ]
      },
      "unit": "short"
-    },
-    "overrides": []
+    }
    },
    "gridPos": {
     "h": 5,
@@ -748,25 +731,21 @@
    },
    "id": 11,
    "options": {
-    "barWidth": 0.8,
-    "groupWidth": 0.7,
-    "legend": {
-     "calcs": [
-      "sum"
-     ],
-     "displayMode": "table",
-     "placement": "bottom",
-     "showLegend": true
-    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "justifyMode": "auto",
     "orientation": "auto",
-    "showValue": "auto",
-    "stacking": "normal",
-    "tooltip": {
-     "mode": "multi",
-     "sort": "desc"
+    "percentChangeColorMode": "standard",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
     },
-    "xTickLabelRotation": 0,
-    "xTickLabelSpacing": 0
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
    },
    "pluginVersion": "13.2.1",
    "targets": [
@@ -781,7 +760,7 @@
     }
    ],
    "title": "Security Guardrail Events (by type & action)",
-   "type": "barchart"
+   "type": "stat"
   },
   {
    "fieldConfig": {
@@ -812,7 +791,7 @@
     }
    },
    "gridPos": {
-    "h": 8,
+    "h": 4,
     "w": 12,
     "x": 0,
     "y": 14
@@ -853,7 +832,7 @@
     "uid": "dfxmyb02uggzka"
    },
    "gridPos": {
-    "h": 8,
+    "h": 4,
     "w": 12,
     "x": 12,
     "y": 14
@@ -889,6 +868,10 @@
    "type": "logs"
   },
   {
+   "datasource": {
+    "type": "prometheus",
+    "uid": "dfxmyazv2ru9sf"
+   },
    "description": "Requests rejected by the input guardrail engine BEFORE any LLM call (injection, overflow, tool abuse)",
    "fieldConfig": {
     "defaults": {
@@ -911,7 +894,7 @@
       "steps": [
        {
         "color": "green",
-        "value": null
+        "value": 0
        },
        {
         "color": "orange",
@@ -924,14 +907,13 @@
       ]
      },
      "unit": "short"
-    },
-    "overrides": []
+    }
    },
    "gridPos": {
     "h": 5,
     "w": 6,
     "x": 0,
-    "y": 22
+    "y": 18
    },
    "id": 100,
    "options": {
@@ -939,6 +921,7 @@
     "graphMode": "area",
     "justifyMode": "auto",
     "orientation": "auto",
+    "percentChangeColorMode": "standard",
     "reduceOptions": {
      "calcs": [
       "lastNotNull"
@@ -946,8 +929,11 @@
      "fields": "",
      "values": false
     },
-    "textMode": "auto"
+    "showPercentChange": false,
+    "textMode": "auto",
+    "wideLayout": true
    },
+   "pluginVersion": "13.2.1",
    "targets": [
     {
      "datasource": {
@@ -962,6 +948,10 @@
    "type": "stat"
   },
   {
+   "datasource": {
+    "type": "prometheus",
+    "uid": "dfxmyazv2ru9sf"
+   },
    "description": "Rate of guardrail detections over time \u2014 spikes indicate active adversarial probing",
    "fieldConfig": {
     "defaults": {
@@ -969,44 +959,72 @@
       "mode": "palette-classic"
      },
      "custom": {
+      "axisBorderShow": false,
+      "axisCenteredZero": false,
+      "axisColorMode": "text",
+      "axisLabel": "",
       "axisPlacement": "auto",
+      "barAlignment": 0,
+      "barWidthFactor": 0.6,
       "drawStyle": "line",
       "fillOpacity": 10,
+      "gradientMode": "none",
+      "hideFrom": {
+       "legend": false,
+       "tooltip": false,
+       "viz": false
+      },
+      "insertNulls": false,
+      "lineInterpolation": "linear",
       "lineWidth": 2,
+      "pointSize": 5,
+      "scaleDistribution": {
+       "type": "linear"
+      },
       "showPoints": "never",
-      "spanNulls": true
+      "showValues": false,
+      "spanNulls": true,
+      "stacking": {
+       "group": "A",
+       "mode": "none"
+      },
+      "thresholdsStyle": {
+       "mode": "off"
+      }
      },
      "thresholds": {
       "mode": "absolute",
       "steps": [
        {
         "color": "green",
-        "value": null
+        "value": 0
        }
       ]
      },
      "unit": "ops"
-    },
-    "overrides": []
+    }
    },
    "gridPos": {
     "h": 5,
     "w": 9,
     "x": 6,
-    "y": 22
+    "y": 18
    },
    "id": 101,
    "options": {
     "legend": {
+     "calcs": [],
      "displayMode": "list",
      "placement": "bottom",
      "showLegend": true
     },
     "tooltip": {
+     "hideZeros": false,
      "mode": "multi",
      "sort": "desc"
     }
    },
+   "pluginVersion": "13.2.1",
    "targets": [
     {
      "datasource": {
@@ -1040,19 +1058,29 @@
     "h": 5,
     "w": 9,
     "x": 15,
-    "y": 22
+    "y": 18
    },
    "id": 102,
    "options": {
     "dedupStrategy": "none",
+    "displayedFields": [
+     "detected_level"
+    ],
+    "enableInfiniteScrolling": false,
     "enableLogDetails": true,
     "prettifyLogMessage": false,
     "showCommonLabels": false,
+    "showControls": false,
+    "showFieldSelector": false,
     "showLabels": true,
+    "showLevel": true,
     "showTime": true,
     "sortOrder": "Descending",
+    "timestampResolution": "ms",
+    "unwrappedColumns": false,
     "wrapLogMessage": true
    },
+   "pluginVersion": "13.2.1",
    "targets": [
     {
      "datasource": {
@@ -1098,5 +1126,5 @@
  "timezone": "browser",
  "title": "RAG Chatbot - LLM & RAG Observability",
  "uid": "rag-llm-observability",
- "version": 6
+ "version": 9
 }
