@@ -168,7 +168,7 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
-INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama", "openproject", "xwiki", "zabbix"}
+INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama", "openproject", "xwiki", "zabbix", "grafana"}
 
 @router.get("/settings/integrations/{key}")
 def get_integration_settings(key: str, user: str = Depends(get_current_user)) -> dict:
@@ -309,6 +309,11 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
         elif key == "zabbix":
             from app.integrations.zabbix import test_connection as _zb_test
             result = _zb_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("detail", "")
+        elif key == "grafana":
+            from app.integrations.grafana import test_connection as _gf_test
+            result = _gf_test()
             status = 200 if result.get("ok") else 502
             detail = result.get("detail", "")
         else:
