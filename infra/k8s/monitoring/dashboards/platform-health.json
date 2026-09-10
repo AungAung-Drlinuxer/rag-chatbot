@@ -649,7 +649,7 @@
    "type": "logs"
   },
   {
-   "description": "Requests rejected by the input guardrail engine (v1.1.4) before any LLM call",
+   "description": "Exact lifetime blocked requests from audit_log (pod-churn immune)",
    "fieldConfig": {
     "defaults": {
      "color": {
@@ -675,11 +675,11 @@
        },
        {
         "color": "orange",
-        "value": 5
+        "value": 25
        },
        {
         "color": "red",
-        "value": 20
+        "value": 100
        }
       ]
      },
@@ -713,15 +713,15 @@
       "type": "prometheus",
       "uid": "dfxmyazv2ru9sf"
      },
-     "expr": "sum(increase(guardrail_events_total{action=\"blocked\"}[6h])) or vector(0)",
+     "expr": "max(security_events_db_total{action=\"blocked\"})",
      "refId": "A"
     }
    ],
-   "title": "Security: Attacks Blocked (6h)",
+   "title": "Security: Attacks Blocked (lifetime, DB)",
    "type": "stat"
   },
   {
-   "description": "Toxicity detections \u2014 flagged, refused by LLM, recorded in audit log",
+   "description": "Exact lifetime toxicity flags from audit_log",
    "fieldConfig": {
     "defaults": {
      "color": {
@@ -781,11 +781,11 @@
       "type": "prometheus",
       "uid": "dfxmyazv2ru9sf"
      },
-     "expr": "sum(increase(guardrail_events_total{action=\"flagged\"}[6h])) or vector(0)",
+     "expr": "max(security_events_db_total{action=\"flagged\"})",
      "refId": "A"
     }
    ],
-   "title": "Security: Abusive Flagged (6h)",
+   "title": "Security: Abusive Flagged (lifetime, DB)",
    "type": "stat"
   },
   {
@@ -871,5 +871,5 @@
  "timezone": "browser",
  "title": "RAG Chatbot - Platform & Services Health",
  "uid": "rag-platform-health",
- "version": 5
+ "version": 7
 }

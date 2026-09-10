@@ -9,6 +9,9 @@ Tracks:
 from __future__ import annotations
 
 import logging
+import threading
+import time
+
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from fastapi import Response
 
@@ -116,6 +119,60 @@ def record_token_and_cost(model: str, input_tokens: int, output_tokens: int) -> 
         logger.debug("Failed to record tokens/cost metric: %s", e)
 
 
+# --- v1.1.6 — DB-backed security gauges -------------------------------------
+# Per-pod Prometheus counters reset/die on HPA churn, so sum(increase(...[6h]))
+# over 25 churned series inflated "Blocked Attacks" to 996 while the true total
+# was 43. The durable source of truth is the audit_log table — these gauges are
+# refreshed from it every 30s (single process-wide refresh, guarded by a lock)
+# and expose EXACT lifetime counts regardless of pod restarts.
+SECURITY_EVENTS_DB_TOTAL = Gauge(
+    "security_events_db_total",
+    "Exact lifetime guardrail events from the durable audit_log table",
+    ["type", "action"],
+)
+
+_db_gauge_lock = threading.Lock()
+_db_gauge_last_refresh = 0.0
+
+
+def refresh_security_gauges(force: bool = False) -> None:
+    """Reload guardrail event counts from audit_log into gauges. Rate-limited."""
+    global _db_gauge_last_refresh
+    now = time.time()
+    if not force and now - _db_gauge_last_refresh < 30:
+        return
+    with _db_gauge_lock:
+        if now - _db_gauge_last_refresh < 30 and not force:
+            return
+        try:
+            from sqlalchemy import text
+
+            from app.persistence.database import SessionLocal
+            with SessionLocal() as s:
+                rows = s.execute(text(
+                    "SELECT action, count(*) FROM audit_log "
+                    "WHERE action LIKE 'guardrail%' GROUP BY action"
+                )).all()
+            # reset all known series first so deleted rows reflect too
+            for t in ("injection", "overflow", "toxic"):
+                for a in ("blocked", "flagged"):
+                    SECURITY_EVENTS_DB_TOTAL.labels(type=t, action=a).set(0)
+            for action, cnt in rows:
+                # action = 'guardrail.injection' etc.; counter action from type:
+                # injection/overflow => blocked, toxic => flagged
+                t = action.replace("guardrail.", "")
+                a = "flagged" if t == "toxic" else "blocked"
+                SECURITY_EVENTS_DB_TOTAL.labels(type=t, action=a).set(int(cnt))
+            _db_gauge_last_refresh = now
+        except Exception as e:
+            logger.debug("security gauge refresh skipped: %s", e)
+
+
 def metrics_endpoint() -> Response:
     """Endpoint serving prometheus metrics for scraping."""
+    # v1.1.6 — refresh DB-backed security gauges before serving (rate-limited 30s)
+    try:
+        refresh_security_gauges()
+    except Exception:
+        pass
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

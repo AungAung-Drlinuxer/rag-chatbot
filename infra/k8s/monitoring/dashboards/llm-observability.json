@@ -705,7 +705,7 @@
     "type": "prometheus",
     "uid": "dfxmyazv2ru9sf"
    },
-   "description": "Prompt-injection / overflow / toxicity detections from the v1.1.4 input guardrail engine",
+   "description": "Exact lifetime counts by type & action from audit_log",
    "fieldConfig": {
     "defaults": {
      "color": {
@@ -754,12 +754,12 @@
       "type": "prometheus",
       "uid": "dfxmyazv2ru9sf"
      },
-     "expr": "sum(increase(guardrail_events_total[6h])) by (type, action)",
+     "expr": "max by (type, action) (security_events_db_total)",
      "legendFormat": "{{type}} / {{action}}",
      "refId": "A"
     }
    ],
-   "title": "Security Guardrail Events (by type & action)",
+   "title": "Security Guardrail Events (lifetime, DB)",
    "type": "stat"
   },
   {
@@ -872,7 +872,7 @@
     "type": "prometheus",
     "uid": "dfxmyazv2ru9sf"
    },
-   "description": "Requests rejected by the input guardrail engine BEFORE any LLM call (injection, overflow, tool abuse)",
+   "description": "Exact lifetime count of guardrail-blocked requests from the durable audit_log table \u2014 immune to pod restarts/HPA churn (unlike per-pod counters).",
    "fieldConfig": {
     "defaults": {
      "color": {
@@ -894,15 +894,15 @@
       "steps": [
        {
         "color": "green",
-        "value": 0
+        "value": null
        },
        {
         "color": "orange",
-        "value": 5
+        "value": 25
        },
        {
         "color": "red",
-        "value": 20
+        "value": 100
        }
       ]
      },
@@ -940,11 +940,11 @@
       "type": "prometheus",
       "uid": "dfxmyazv2ru9sf"
      },
-     "expr": "sum(increase(guardrail_events_total{action=\"blocked\"}[6h])) or vector(0)",
+     "expr": "max(security_events_db_total{action=\"blocked\"})",
      "refId": "A"
     }
    ],
-   "title": "Blocked Attacks (6h)",
+   "title": "Attacks Blocked (lifetime, DB)",
    "type": "stat"
   },
   {
@@ -1126,5 +1126,5 @@
  "timezone": "browser",
  "title": "RAG Chatbot - LLM & RAG Observability",
  "uid": "rag-llm-observability",
- "version": 9
+ "version": 11
 }
