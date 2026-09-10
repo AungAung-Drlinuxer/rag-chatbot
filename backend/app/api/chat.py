@@ -34,6 +34,102 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _chunk_text(text: str, size: int = 40):
+    """Yield answer text in small chunks (SSE token streaming feel)."""
+    for i in range(0, len(text), size):
+        yield text[i:i + size]
+
+
+def _monitoring_answer(kind: str, message: str) -> tuple[str, list[dict]]:
+    """v1.1.9 — resolve a monitoring NL query against Zabbix and/or the LGTM stack.
+
+    Returns (answer_markdown, hits_for_ui). Failures degrade to a helpful note.
+    """
+    parts: list[str] = []
+    hits: list[dict] = []
+
+    # --- Zabbix side (devices/servers) -------------------------------------
+    if kind in ("zabbix", "hosts", "status", "problems"):
+        try:
+            from app.integrations import zabbix as zb
+            if zb.is_configured():
+                problems = zb.client().problems()
+                summary = zb.summarize_problems(problems)
+                parts.append("**Zabbix — active problems**\n" + summary)
+                hits.append({"page_id": "zabbix-problems", "title": "Zabbix active problems",
+                             "source": "Zabbix", "relevance": 100,
+                             "excerpt": summary[:180], "source_url": None})
+                if kind in ("hosts", "status"):
+                    hosts = zb.client().hosts()
+                    downs = [h for h in hosts if h["available"] == "down"]
+                    ups = [h for h in hosts if h["available"] == "up"]
+                    parts.append(f"\n**Hosts** — {len(ups)} up, {len(downs)} down, "
+                                 f"{len(hosts) - len(ups) - len(downs)} unknown")
+                    for h in downs[:10]:
+                        parts.append(f"- 🔴 {h['host']} ({h['ip']}) — unreachable")
+                    for h in ups[:10]:
+                        parts.append(f"- 🟢 {h['host']} ({h['ip']})")
+            else:
+                parts.append("Zabbix is not configured yet. An administrator can connect it in "
+                             "Settings → Integrations → Zabbix (base URL + API token).")
+        except Exception as exc:
+            logger.warning("zabbix query failed: %s", exc)
+            parts.append(f"Zabbix query failed: {type(exc).__name__}: {exc}")
+
+    # --- IT inventory --------------------------------------------------------
+    if kind == "inventory":
+        try:
+            from sqlalchemy import text as _t
+            from app.persistence.database import SessionLocal as _SL
+            # extract search keyword from the question (last noun-ish token)
+            import re as _re2
+            m = _re2.search(r'(?:for|of|about|assigned to|hosting|on)\s+([a-zA-Z0-9._-]{2,40})', message.lower())
+            kw = m.group(1) if m else ""
+            with _SL() as s:
+                if kw:
+                    rows = _s_query = _s.execute(_t(
+                        "SELECT name, category, hostname, ip_address, location, assigned_to "
+                        "FROM inventory_items WHERE name ILIKE :kw OR hostname ILIKE :kw "
+                        "OR ip_address ILIKE :kw OR assigned_to ILIKE :kw OR location ILIKE :kw LIMIT 20"
+                    ), {"kw": f"%{kw}%"}).fetchall()
+                else:
+                    rows = _s.execute(_t(
+                        "SELECT name, category, hostname, ip_address, location, assigned_to "
+                        "FROM inventory_items ORDER BY name LIMIT 20")).fetchall()
+            if rows:
+                parts.append(f"\n**IT Inventory** — {len(rows)} matching items")
+                for r in rows:
+                    parts.append(
+                        f"- 🖥 **{r[0]}** ({r[1]}) — host: {r[2] or '-'} · IP: {r[3] or '-'} · "
+                        f"location: {r[4] or '-'} · assigned: {r[5] or '-'}")
+                hits.append({"page_id": "inventory", "title": "IT inventory lookup",
+                             "source": "Inventory", "relevance": 100,
+                             "excerpt": f"{len(rows)} items", "source_url": None})
+            else:
+                suffix = f" for '{kw}'" if kw else ""
+                parts.append(f"\nNo inventory items found{suffix}.")
+        except Exception as exc:
+            logger.warning("inventory query failed: %s", exc)
+            parts.append(f"Inventory query failed: {type(exc).__name__}: {exc}")
+
+    # --- Kubernetes / LGTM side --------------------------------------------
+    if kind in ("cluster", "app", "status"):
+        try:
+            from app.integrations.lgmt import cluster_health_summary, summarize_cluster_health
+            h = cluster_health_summary()
+            parts.append("\n**Kubernetes cluster & app status**\n" + summarize_cluster_health(h))
+            hits.append({"page_id": "k8s-cluster", "title": "K8s cluster status",
+                         "source": "LGTM", "relevance": 100,
+                         "excerpt": summarize_cluster_health(h)[:180], "source_url": None})
+        except Exception as exc:
+            logger.warning("lgmt query failed: %s", exc)
+            parts.append(f"Cluster status query failed: {type(exc).__name__}: {exc}")
+
+    if not parts:
+        parts.append("No monitoring data available for this question.")
+    return "\n\n".join(parts), hits
+
+
 @router.post("/api/chat/stream")
 @limit("chat")
 def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> StreamingResponse:
@@ -98,6 +194,46 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         # Stage feedback (v0.16.4): tell the client what the pipeline is doing so the
         # user sees progress instead of silence during retrieval + rerank.
         yield _sse("stage", {"stage": "understanding", "detail": "Analyzing your question"})
+
+        # v1.1.9 — MONITORING NL QUERY TOOL: Zabbix devices/servers + K8s/LGTM app status.
+        # Deterministic intent match; answers real-time data without touching the KB/LLM path
+        # (fast, accurate, rate-limit friendly).
+        import re as _re
+        _msg_l = req.message.lower()
+        _mon_patterns = [
+            (r"(inventory|asset|serial number|who (is|has) .*assigned|which (laptop|server|printer))", "inventory"),
+            (r"zabbix", "zabbix"),
+            (r"(which|what).*(device|server|host)s?\s+(are\s+)?(down|up|offline|online|unavailable)", "hosts"),
+            (r"(device|server|host|network).*(status|health|up|down|available)", "status"),
+            (r"(cluster|kubernetes|k8s|pod|node).*(status|health|running|down|restart)", "cluster"),
+            (r"(is|are)\s+(the\s+)?(backend|frontend|ollama|redis|postgres|rerank)", "app"),
+            (r"(active\s+)?(problems|alerts|incidents)", "problems"),
+        ]
+        _mon_kind = next((kind for pat, kind in _mon_patterns if _re.search(pat, _msg_l)), None)
+        if _mon_kind:
+            yield _sse("stage", {"stage": "tool", "detail": "Querying live monitoring data"})
+            _answer_text, _mon_rows = _monitoring_answer(_mon_kind, req.message)
+            _mid = str(uuid.uuid4())
+            yield _sse("meta", {
+                "domain": "monitoring", "confidence": 0.97, "decision": "answer",
+                "tool_used": "monitoring", "rewritten": "",
+                "hits": _mon_rows, "top_k": 0,
+                "context_chars": len(_answer_text), "context_tokens_estimate": len(_answer_text) // 4,
+                "context_truncated": False, "max_context_tokens": 0,
+            })
+            for _tok in _chunk_text(_answer_text):
+                yield _sse("token", {"token": _tok})
+            try:
+                from app.observability.metrics import CHAT_REQUESTS_TOTAL, CHAT_LATENCY_SECONDS
+                CHAT_REQUESTS_TOTAL.labels(domain="monitoring", decision="answer").inc()
+                CHAT_LATENCY_SECONDS.labels(domain="monitoring", decision="answer").observe(time.time() - t0)
+            except Exception:
+                pass
+            audit("chat.monitoring", user, "monitoring", 0.97, "answer")
+            yield _sse("done", {"message_id": _mid, "latency_ms": int((time.time() - t0) * 1000),
+                                "tool": "monitoring"})
+            return
+
         # v0.21.70 — LangGraph orchestration (retry loop on weak retrieval).
         # Falls back to the linear pipeline if the graph fails for any reason.
         result = None

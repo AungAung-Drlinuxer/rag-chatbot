@@ -63,6 +63,8 @@ app.include_router(admin_ops_router)
 app.include_router(dashboard_router)
 from app.security.api_keys import router as apikeys_router
 app.include_router(apikeys_router)
+from app.api.inventory import router as inventory_router
+app.include_router(inventory_router)
 app.include_router(tickets_router)
 app.include_router(users_router)
 app.include_router(settings_router)

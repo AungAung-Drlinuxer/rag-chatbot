@@ -79,9 +79,16 @@ async def get_caller(request: Request) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.get("")
-def list_keys(user: str = Depends(require_cap("manage_users"))) -> dict:
+def list_keys(user: str = Depends(get_current_user)) -> dict:
+    """v1.1.9 — RBAC: admins see ALL keys; regular users see only their own."""
+    from app.auth.rbac import get_role
+    role = get_role(user)
+    is_admin = role in ("admin", "administrator", "Administrator")
     with SessionLocal() as s:
-        rows = s.query(ApiKey).order_by(ApiKey.created_at.desc()).all()
+        q = s.query(ApiKey).order_by(ApiKey.created_at.desc())
+        if not is_admin:
+            q = q.filter(ApiKey.owner == user)
+        rows = q.all()
         return {"keys": [
             {
                 "id": r.id, "name": r.name, "key_prefix": r.key_prefix,
@@ -93,7 +100,13 @@ def list_keys(user: str = Depends(require_cap("manage_users"))) -> dict:
 
 
 @router.post("")
-def create_key(body: dict, user: str = Depends(require_cap("manage_users"))) -> dict:
+def create_key(body: dict, user: str = Depends(get_current_user)) -> dict:
+    """v1.1.9 — every authenticated user may create keys for themselves;
+    admins may create on behalf of anyone (optional 'owner' in body)."""
+    from app.auth.rbac import get_role
+    role = get_role(user)
+    is_admin = role in ("admin", "administrator", "Administrator")
+    owner = body.get("owner") if (is_admin and body.get("owner")) else user
     name = (body.get("name") or "").strip()[:120]
     scope = body.get("scope", "chat")
     if not name:
@@ -103,28 +116,34 @@ def create_key(body: dict, user: str = Depends(require_cap("manage_users"))) -> 
     raw, key_hash, prefix = generate_key()
     with SessionLocal() as s:
         k = ApiKey(name=name, key_hash=key_hash, key_prefix=prefix,
-                   scope=scope, owner=user, active=True)
+                   scope=scope, owner=owner, active=True)
         s.add(k)
         s.commit()
     # audit
     try:
         from app.observability.audit import audit
-        audit("apikey.create", user, detail=f"{name} scope={scope}")
+        audit("apikey.create", user, detail=f"{name} scope={scope} owner={owner}")
     except Exception:
         pass
     return {
-        "name": name, "scope": scope, "key_prefix": prefix,
+        "name": name, "scope": scope, "key_prefix": prefix, "owner": owner,
         "key": raw,  # shown ONCE
         "note": "Store this key securely — it cannot be retrieved again.",
     }
 
 
 @router.delete("/{key_id}")
-def revoke_key(key_id: int, user: str = Depends(require_cap("manage_users"))) -> dict:
+def revoke_key(key_id: int, user: str = Depends(get_current_user)) -> dict:
+    """RBAC: admins revoke any key; users revoke only their own."""
+    from app.auth.rbac import get_role
+    role = get_role(user)
+    is_admin = role in ("admin", "administrator", "Administrator")
     with SessionLocal() as s:
         row = s.query(ApiKey).filter(ApiKey.id == key_id).first()
         if row is None:
             raise HTTPException(status_code=404, detail="Key not found")
+        if not is_admin and row.owner != user:
+            raise HTTPException(status_code=403, detail="You can only revoke your own keys")
         row.active = False
         s.commit()
     from app.observability.audit import audit

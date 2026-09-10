@@ -168,7 +168,7 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
-INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama", "openproject", "xwiki"}
+INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama", "openproject", "xwiki", "zabbix"}
 
 @router.get("/settings/integrations/{key}")
 def get_integration_settings(key: str, user: str = Depends(get_current_user)) -> dict:
@@ -306,6 +306,11 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
             result = _xw_test()
             status = 200 if result.get("ok") else 502
             detail = result.get("message", "")
+        elif key == "zabbix":
+            from app.integrations.zabbix import test_connection as _zb_test
+            result = _zb_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("detail", "")
         else:
             raise ValueError(f"no test for {key}")
         if status in (200, 201):

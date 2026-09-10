@@ -266,6 +266,28 @@ def dashboard_recent_tickets(
 
 
 # ---------------------------------------------------------------------------
+# monitoring alerts API (v1.1.9 — in-app notification source)
+# ---------------------------------------------------------------------------
+
+@router.get("/monitoring/alerts")
+def monitoring_alerts(
+    limit: int = 20, user: str = Depends(get_current_user)
+) -> dict:
+    """Active monitoring alerts (Zabbix + LGTM) newest first — NotificationBell source."""
+    from app.persistence.models import MonitoringAlert
+    rows = (SessionLocal().query(MonitoringAlert)
+            .filter(MonitoringAlert.status == "active")
+            .order_by(MonitoringAlert.created_at.desc())
+            .limit(max(1, min(limit, 50))).all())
+    return {"alerts": [
+        {
+            "id": r.id, "source": r.source, "severity": r.severity,
+            "name": r.name, "created_at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows
+    ]}
+
+
+# ---------------------------------------------------------------------------
 # dashboard: confidence gate trend (v1.1.6 — real data from chat_messages.meta)
 # ---------------------------------------------------------------------------
 

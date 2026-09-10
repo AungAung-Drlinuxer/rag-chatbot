@@ -24,6 +24,7 @@ import { getMySettings } from "@/features/settings/api";
 import LoginPage from "@/features/auth/pages/LoginPage";
 import ChatPage from "@/features/chat/pages/ChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
+import ApiKeysPage from "@/features/apikeys/pages/ApiKeysPage";
 import KnowledgePage from "@/features/knowledge/pages/KnowledgePage";
 import TicketsPage from "@/features/tickets/pages/TicketsPage";
 // import DomainsPage from "@/features/domains/pages/DomainsPage"; // retired: merged into KnowledgePage tabs
@@ -158,6 +159,8 @@ export default function App() {
       return shell("articles", <KnowledgePage role={role} userName={userName} perms={perms} initialTab="domains" onToast={toast.push} />);
     case "users":
       return shell("users", <UsersPage />);
+    case "apikeys":
+      return shell("apikeys", <ApiKeysPage role={role} userName={userName} onToast={toast.push} />);
     case "history":
       return shell("history", <ConversationHistoryPage />);
     case "audits":
