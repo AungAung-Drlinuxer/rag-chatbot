@@ -105,7 +105,7 @@ def _build_anthropic():
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
-    kwargs: dict = {"model": _cfg("model", SETTINGS.hchat_model), "max_tokens": 1024, "streaming": True}
+    kwargs: dict = {"model": _cfg("model", SETTINGS.hchat_model), "max_tokens": 1024, "streaming": True, "timeout": 15.0}
     if _cfg("base_url", SETTINGS.hchat_base_url):
         kwargs["base_url"] = _cfg("base_url", SETTINGS.hchat_base_url)
     llm = ChatAnthropic(**kwargs)
@@ -133,6 +133,8 @@ def _build_openai():
         max_tokens=SETTINGS.llm_max_tokens,
         temperature=0.4,
         stream_usage=True,           # Ask the provider to include usage on the final chunk.
+        timeout=15.0,                # Fail fast on unresponsive/down provider to trigger fallback quickly
+        max_retries=1,
         # NOTE: do NOT pass `extra_body={"stream_options": ...}` for OpenRouter —
         # that key is rejected by their gateway (`Provider returned error`).
     )
@@ -248,15 +250,11 @@ def stream_answer(question: str, context: str) -> Iterable[tuple[str, dict | Non
     # 1) Primary — external H-Chat (stream the bare LLM so we can read usage_metadata)
     llm = make_llm()
     if llm is not None:
-        for attempt in (1, 2):  # v0.18.5: one retry for transient provider errors (520/empty)
-            try:
-                yield from _stream_with_usage(llm, question, context)
-                return
-            except Exception as exc:
-                if attempt == 1:
-                    logger.warning(f"H-Chat failed (attempt {attempt}: {type(exc).__name__}): {exc}; retrying")
-                    continue
-                logger.warning(f"H-Chat failed (attempt {attempt}: {type(exc).__name__}): {exc}; falling back to local model")
+        try:
+            yield from _stream_with_usage(llm, question, context)
+            return
+        except Exception as exc:
+            logger.warning(f"H-Chat failed ({type(exc).__name__}): {exc}; falling back to local model")
 
     # 2) Fallback — local Ollama (CPU, on-prem)
     if SETTINGS.fallback_enabled:

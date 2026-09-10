@@ -75,6 +75,10 @@ def start_span_with_kind(name: str, kind: str, attrs: dict | None = None):
     return _tracer.start_as_current_span(name, kind=span_kind, attributes=attrs or {})
 
 
+def _null_span():
+    return _null_span_context()
+
+
 class _null_span_context:
     def __init__(self): pass
     def __enter__(self): return self
@@ -116,10 +120,13 @@ class _quiet_span:
             raise
 
     def set_attribute(self, key, value):
-        self._span.set_attribute(key, value)
+        if self._span is not None and hasattr(self._span, "set_attribute"):
+            self._span.set_attribute(key, value)
 
     def __getattr__(self, name):
-        return getattr(self._span, name)
+        if self._span is not None:
+            return getattr(self._span, name)
+        return lambda *a, **k: None
 
 
 def start_quiet_span(name: str, kind: str | None = None, attrs: dict | None = None):
