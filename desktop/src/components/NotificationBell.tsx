@@ -6,7 +6,7 @@ import { Bell } from "lucide-react";
 import { listApprovals } from "@/features/chat/api";
 import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
 
-export type Notice = { id: string; kind: "approval" | "ldap" | "info"; label: string; sub?: string };
+export type Notice = { id: string; kind: "approval" | "ldap" | "monitoring" | "info"; label: string; sub?: string };
 
 export function useNotifications(role: string, enabled: boolean) {
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -36,6 +36,20 @@ export function useNotifications(role: string, enabled: boolean) {
           }
         } catch { /* non-fatal */ }
       }
+      // v1.1.9 — monitoring alerts (Zabbix/LGTM) — everyone sees device/server problems
+      try {
+        const r = await apiFetch(`${BASE}/api/monitoring/alerts?limit=5`, { headers: authHeaders() });
+        if (r.ok) {
+          const d = await r.json();
+          for (const a of (d.alerts ?? []).slice(0, 5)) {
+            out.push({
+              id: "mon-" + a.id, kind: "monitoring",
+              label: a.name,
+              sub: `${a.source === "zabbix" ? "Zabbix" : "LGTM"} · severity ${a.severity}`,
+            });
+          }
+        }
+      } catch { /* non-fatal */ }
       if (alive) setNotices(out);
     }
     poll();
@@ -116,6 +130,7 @@ function NoticeList({ notices, onOpen, onClose }: { notices: Notice[]; onOpen?: 
     onClose();
     if (n.kind === "approval") onOpen?.("tickets");
     else if (n.kind === "ldap") onOpen?.("users");
+    else if (n.kind === "monitoring") onOpen?.("dashboard");
   };
   return (
     <>
@@ -125,7 +140,7 @@ function NoticeList({ notices, onOpen, onClose }: { notices: Notice[]; onOpen?: 
           onClick={() => go(n)}
           className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800"
         >
-          <span className={"mt-1 size-1.5 shrink-0 rounded-full " + (n.kind === "approval" ? "bg-amber-500" : "bg-sky-500")} />
+          <span className={"mt-1 size-1.5 shrink-0 rounded-full " + (n.kind === "approval" ? "bg-amber-500" : n.kind === "monitoring" ? "bg-red-500" : "bg-sky-500")} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium">{n.label}</span>
             <span className="block text-[10px] text-muted-foreground">{n.sub}</span>
