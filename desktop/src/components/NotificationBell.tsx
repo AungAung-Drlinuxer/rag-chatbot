@@ -36,20 +36,6 @@ export function useNotifications(role: string, enabled: boolean) {
           }
         } catch { /* non-fatal */ }
       }
-      // v1.1.9 — monitoring alerts (Zabbix/LGTM) — everyone sees device/server problems
-      try {
-        const r = await apiFetch(`${BASE}/api/monitoring/alerts?limit=5`, { headers: authHeaders() });
-        if (r.ok) {
-          const d = await r.json();
-          for (const a of (d.alerts ?? []).slice(0, 5)) {
-            out.push({
-              id: "mon-" + a.id, kind: "monitoring",
-              label: a.name,
-              sub: `${a.source === "zabbix" ? "Zabbix" : "LGTM"} · severity ${a.severity}`,
-            });
-          }
-        }
-      } catch { /* non-fatal */ }
       if (alive) setNotices(out);
     }
     poll();

@@ -3,7 +3,7 @@ import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader
 import { getIntegrationSettings, putIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
 import type { ProviderModel } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "grafana";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki";
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -92,15 +92,6 @@ const META: Record<IntegrationKey, {
       { key: "spaces", label: "Spaces (comma separated)", placeholder: "Main,IT,Help" },
     ],
   },
-  grafana: {
-    label: "Grafana (Dashboards)",
-    desc: "Connect Grafana with a service-account token so the chatbot pulls data from the administrator-created dashboards — multi-cluster and varied dashboards are covered automatically.",
-    docs: "https://grafana.com/docs/grafana/latest/administration/service-accounts/",
-    fields: [
-      { key: "base_url", label: "Grafana URL", placeholder: "http://10.10.10.18:3000" },
-      { key: "api_token", label: "Service Account Token", placeholder: "glsa_... (Grafana → Administration → Service accounts)", isSecret: true },
-    ],
-  },
 };
 
 export function IntegrationsConfig() {
@@ -183,7 +174,7 @@ export function IntegrationsConfig() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira", "openproject", "xwiki", "grafana", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
+        {(["confluence", "jira", "openproject", "xwiki", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
           <button
             key={k}
             onClick={() => switchTab(k)}

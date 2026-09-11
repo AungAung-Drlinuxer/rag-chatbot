@@ -266,46 +266,6 @@ def dashboard_recent_tickets(
 
 
 # ---------------------------------------------------------------------------
-# monitoring alerts API (v1.1.9 — in-app notification source)
-# ---------------------------------------------------------------------------
-
-@router.get("/monitoring/status")
-def monitoring_status(user: str = Depends(get_current_user)) -> dict:
-    """v1.1.10 — live monitoring widgets data: Zabbix hosts + K8s cluster summary.
-
-    Non-blocking per-source: failures return partial data with an error note.
-    """
-    out: dict = {"cluster": None}
-
-    # --- LGTM cluster health ---
-    try:
-        from app.integrations.lgmt import cluster_health_summary
-        out["cluster"] = cluster_health_summary()
-    except Exception as exc:
-        out["cluster"] = {"error": f"{type(exc).__name__}: {exc}"}
-
-    return out
-
-
-@router.get("/monitoring/alerts")
-def monitoring_alerts(
-    limit: int = 20, user: str = Depends(get_current_user)
-) -> dict:
-    """Active monitoring alerts (Zabbix + LGTM) newest first — NotificationBell source."""
-    from app.persistence.models import MonitoringAlert
-    rows = (SessionLocal().query(MonitoringAlert)
-            .filter(MonitoringAlert.status == "active")
-            .order_by(MonitoringAlert.created_at.desc())
-            .limit(max(1, min(limit, 50))).all())
-    return {"alerts": [
-        {
-            "id": r.id, "source": r.source, "severity": r.severity,
-            "name": r.name, "created_at": r.created_at.isoformat() if r.created_at else None,
-        } for r in rows
-    ]}
-
-
-# ---------------------------------------------------------------------------
 # dashboard: confidence gate trend (v1.1.6 — real data from chat_messages.meta)
 # ---------------------------------------------------------------------------
 

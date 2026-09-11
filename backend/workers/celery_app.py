@@ -19,11 +19,6 @@ celery_app.conf.result_backend_transport_options = transport_options()
 
 celery_app.conf.beat_schedule = {
     "sync-kb": {"task": "workers.sync_tasks.sync_kb", "schedule": crontab(minute="*/30")},
-    # v1.1.9 — monitoring alerts every 5 min (Zabbix + LGTM -> in-app + email)
-    "check-monitoring": {
-        "task": "workers.monitoring_alerts.check_monitoring_alerts",
-        "schedule": crontab(minute="*/5"),
-    },
 }
 celery_app.conf.timezone = "UTC"
 celery_app.conf.task_serializer = "json"

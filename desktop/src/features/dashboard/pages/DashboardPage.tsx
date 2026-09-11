@@ -31,7 +31,6 @@ import {
   dashRecentTickets,
   dashHealth,
   dashGateTrend,
-  dashMonitoringStatus,
 } from "@/features/dashboard/api";
 
 import { Card } from "@/components/ui/card";
@@ -100,7 +99,6 @@ export default function Dashboard({ role, onNavigate }: Props) {
   const [liveTickets, setLiveTickets] = useState<RecentTicket[] | null>(null);
   const [liveHealth, setLiveHealth] = useState<HealthItem[] | null>(null);
   const [gateTrend, setGateTrend] = useState<{ day: string; answered: number; cautioned: number }[]>([]);
-  const [monStatus, setMonStatus] = useState<any>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
@@ -108,7 +106,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
     async function load() {
       try {
-        const [s, c, d, rc, rt, h, g, ms] = await Promise.all([
+        const [s, c, d, rc, rt, h, g] = await Promise.all([
           dashStats(),
           dashConversations(7),
           dashDomains(),
@@ -116,11 +114,9 @@ export default function Dashboard({ role, onNavigate }: Props) {
           dashRecentTickets(5),
           dashHealth(),
           dashGateTrend(7),
-          dashMonitoringStatus(),
         ]);
         if (!mounted) return;
         setStats(s ?? null);
-        if (ms) setMonStatus(ms);
         if (g?.series?.length) setGateTrend(g.series);
         if (c?.series?.length) setSeries(c.series);
         if (d?.domains?.length) {
@@ -337,85 +333,6 @@ export default function Dashboard({ role, onNavigate }: Props) {
                   <QuickAction label="Integrations" icon={<Settings2 className="size-3.5" />} onClick={() => onNavigate?.("settings")} />
                 </>
               )}
-            </section>
-
-            {/* =================================================
-                LIVE MONITORING WIDGETS (v1.1.10 — Zabbix + K8s/LGTM)
-            ================================================= */}
-
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-
-              {/* K8s Cluster Widget */}
-              <Card className="rounded-2xl p-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold">Kubernetes Cluster</h3>
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                    LGTM / Live
-                  </span>
-                </div>
-                {monStatus?.cluster ? (
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-center">
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-                      <div className="text-lg font-semibold text-emerald-600">{monStatus.cluster.nodes_ready ?? "—"}</div>
-                      <div className="text-[9px] text-muted-foreground">Nodes Ready</div>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-                      <div className="text-lg font-semibold text-slate-800 dark:text-slate-200">{monStatus.cluster.pods_running ?? "—"}</div>
-                      <div className="text-[9px] text-muted-foreground">Pods Running</div>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-                      <div className="text-lg font-semibold text-emerald-600">{monStatus.cluster.backend_live_pods ?? "—"}</div>
-                      <div className="text-[9px] text-muted-foreground">Backend Live</div>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/50">
-                      <div className={[
-                        "text-lg font-semibold",
-                        (monStatus.cluster.restarts_1h ?? 0) > 3 ? "text-amber-600" : "text-slate-800 dark:text-slate-200",
-                      ].join(" ")}>
-                        {monStatus.cluster.restarts_1h ?? "—"}
-                      </div>
-                      <div className="text-[9px] text-muted-foreground">Restarts (1h)</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-3 py-6 text-center text-[10px] text-muted-foreground">
-                    Cluster data unavailable.
-                  </div>
-                )}
-              </Card>
-
-              {/* Recent Alerts Widget (LGTM) */}
-              <Card className="rounded-2xl p-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold">Cluster Alerts</h3>
-                  <span className="text-[9px] text-muted-foreground">via monitoring worker</span>
-                </div>
-                {(monStatus?.cluster?.pods_failed ?? 0) > 0 || (monStatus?.cluster?.pods_pending ?? 0) > 0 ? (
-                  <div className="mt-3 space-y-2">
-                    {(monStatus?.cluster?.pods_failed ?? 0) > 0 && (
-                      <div className="flex items-start gap-2 rounded-lg border border-red-100 p-2 dark:border-red-900/50">
-                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-red-500" />
-                        <p className="text-[10px] font-medium text-slate-800 dark:text-slate-200">
-                          {monStatus.cluster.pods_failed} failed pod(s) detected
-                        </p>
-                      </div>
-                    )}
-                    {(monStatus?.cluster?.pods_pending ?? 0) > 0 && (
-                      <div className="flex items-start gap-2 rounded-lg border border-amber-100 p-2 dark:border-amber-900/50">
-                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-amber-500" />
-                        <p className="text-[10px] font-medium text-slate-800 dark:text-slate-200">
-                          {monStatus.cluster.pods_pending} pod(s) pending
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="mt-3 py-6 text-center text-[10px] text-muted-foreground">
-                    No recent alerts — everything is quiet.
-                  </div>
-                )}
-              </Card>
-
             </section>
 
             {/* =================================================

@@ -26,12 +26,6 @@ export async function dashRecentTickets(limit = 5) {
   return r.json();
 }
 
-export async function dashMonitoringStatus() {
-  const r = await apiFetch(`${BASE}/api/monitoring/status`, { headers: authHeaders() });
-  if (!r.ok) return null;
-  return r.json();
-}
-
 export async function dashGateTrend(days = 7) {
   const r = await apiFetch(`${BASE}/api/dashboard/gate-trend?days=${days}`, { headers: authHeaders() });
   return r.json();

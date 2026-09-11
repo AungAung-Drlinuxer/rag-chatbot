@@ -129,43 +129,6 @@ class KbMeta(Base):
     last_synced: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class InventoryItem(Base):
-    """v1.1.9 — IT inventory library for help desk.
-
-    Structured records of hardware/software assets so the chatbot can answer
-    "what server hosts the ERP?", "which laptops are assigned to X?" and
-    support agents can attach inventory context to tickets.
-    """
-    __tablename__ = "inventory_items"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    category: Mapped[str] = mapped_column(String(64), nullable=False)   # server | laptop | network | printer | license | software
-    hostname: Mapped[str | None] = mapped_column(String(255))
-    ip_address: Mapped[str | None] = mapped_column(String(64))
-    location: Mapped[str | None] = mapped_column(String(255))
-    assigned_to: Mapped[str | None] = mapped_column(String(64))         # username
-    serial: Mapped[str | None] = mapped_column(String(255))
-    notes: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[str | None] = mapped_column(String(64))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-
-class MonitoringAlert(Base):
-    """v1.1.9 — Zabbix/LGTM alert rows for in-app notifications.
-
-    Populated by the celery-beat monitoring check; read by the
-    /api/monitoring/alerts endpoint powering the NotificationBell.
-    """
-    __tablename__ = "monitoring_alerts"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    source: Mapped[str] = mapped_column(String(32), nullable=False)       # zabbix | lgtm
-    external_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    severity: Mapped[int] = mapped_column(SmallInteger, default=0)
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), default="active")     # active | resolved
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-
 class ApiKey(Base):
     """v1.1.8 — External API keys for programmatic chat access.
 

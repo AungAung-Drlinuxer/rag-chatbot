@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  BarChart3,
   Trash2,
   ArrowUp,
   Bot,
@@ -42,9 +41,6 @@ import {
   decideApproval,
   uploadAttachment,
   submitFeedback as pushFeedback,
-  grafanaPanelChoices,
-  grafanaPanelData,
-  type GrafanaPanelChoice,
 } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import {
@@ -256,31 +252,6 @@ export default function Chat({
 
     const assistantId = crypto.randomUUID();
 
-    // v1.3.4 — GRAFANA SELECT-FLOW pre-check: if the question matches dashboard
-    // panels, show a selectable popup instead of the KB pipeline.
-    try {
-      const res = await grafanaPanelChoices(question);
-      // v1.3.7 — guardrail response: show the refusal directly
-      if ((res as any).guardrail) {
-        const g = (res as any).guardrail;
-        setMessages((prev) => [
-          ...prev,
-          userMessage,
-          { id: assistantId, role: "assistant", content: g.message,
-            timestamp: currentTime(),
-            ...((g.action === "blocked") ? { guardrail: g.type } : {}) },
-        ] as Message[]);
-        historyRef.current = [...historyRef.current, { role: "user", content }, { role: "assistant", content: g.message }];
-        return;
-      }
-      const choices = (res as any).choices ?? [];
-      if (choices.length > 0) {
-        setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", timestamp: currentTime() }]);
-        setPendingChoices({ forMessageId: assistantId, question, choices });
-        return; // wait for the user to pick a panel
-      }
-    } catch { /* not configured or error — fall through to normal pipeline */ }
-
     setMessages((prev) => [...prev, userMessage]);
     historyRef.current = [...historyRef.current, { role: "user", content }];
     setIsTyping(true);
@@ -372,84 +343,6 @@ export default function Chat({
     } finally {
       setIsTyping(false);
       setStage("");
-    }
-  }
-
-  /* ----------------------------------------------------------
-      GRAFANA SELECT-FLOW (v1.3.4)
-      User asks a dashboard question → backend matches candidate
-      panels → frontend shows a selectable popup → user picks →
-      live data fetched → LLM generates the final narrative.
-  ---------------------------------------------------------- */
-  const [pendingChoices, setPendingChoices] = useState<null | {
-    forMessageId: string;
-    question: string;
-    choices: GrafanaPanelChoice[];
-  }>(null);
-  const [choiceBusy, setChoiceBusy] = useState(false);
-
-  async function handleGrafanaPick(choice: GrafanaPanelChoice) {
-    if (!pendingChoices || choiceBusy) return;
-    setChoiceBusy(true);
-    const assistantId = pendingChoices.forMessageId;
-    try {
-      // 1) fetch the live data for the selected panel
-      const data = await grafanaPanelData(choice);
-
-      // 2) render the data table into the assistant message
-      const table = [
-        `**${data.panel_title}**  _(from: ${data.dashboard_title})_`,
-        "",
-        "| Series | Value |",
-        "|---|---|",
-        ...data.rows.map((row: any) => {
-          const label = Object.entries(row.labels || {})
-            .map(([k, v]) => `${k}=${v}`)
-            .join(", ") || "(value)";
-          return `| ${label} | ${Number(row.value).toLocaleString(undefined, { maximumFractionDigits: 2 })} |`;
-        }),
-      ].join("\n");
-
-      setMessages((prev) => prev.map((m) =>
-        m.id === assistantId ? { ...m, content: table } : m));
-
-      // 3) push the data through the LLM for the final narrative summary
-      //    (append a follow-up streaming message with the data as context)
-      const summaryId = crypto.randomUUID();
-      setMessages((prev) => [...prev, { id: summaryId, role: "assistant", content: "", timestamp: currentTime() }]);
-      setIsTyping(true);
-      setStage("Generating answer from live data…");
-      try {
-        const streamed = await runChatStream(
-          `Based on this live monitoring data, answer the user's question: "${pendingChoices.question}". Data from Grafana panel "${data.panel_title}" (dashboard: ${data.dashboard_title}): ${table}. Summarize the key findings in plain language, mention exact values, and flag anything unusual.`,
-          sessionRef.current,
-          historyRef.current.slice(0, -1),
-          {
-            onMeta: () => {},
-            onToken: (token) => {
-              setMessages((prev) =>
-                prev.map((m) => (m.id === summaryId ? { ...m, content: m.content + token } : m)));
-            },
-            onStage: (detail) => setStage(detail),
-            onApprovalRequest: () => {},
-            onCaution: () => {},
-            onDone: () => setStage(""),
-          },
-        );
-        historyRef.current = [...historyRef.current, { role: "assistant", content: streamed }];
-      } catch {
-        setMessages((prev) => prev.map((m) =>
-          m.id === summaryId ? { ...m, content: m.content || "_(LLM summary unavailable — data table above is the live answer.)_" } : m));
-      } finally {
-        setIsTyping(false);
-        setStage("");
-      }
-    } catch (e: any) {
-      setMessages((prev) => prev.map((m) =>
-        m.id === assistantId ? { ...m, content: `⚠️ ${e?.message || "Panel data fetch failed"}` } : m));
-    } finally {
-      setPendingChoices(null);
-      setChoiceBusy(false);
     }
   }
 
@@ -675,11 +568,6 @@ export default function Chat({
                     onOpenTicketForm={() => openTicketForm(m)}
                     onSubmitEdit={(mid, text) => handleEditSubmit(mid, text)}
                     onRetryQuestion={() => retryFromMessage(m)}
-                    grafanaChoices={
-                      pendingChoices?.forMessageId === m.id ? pendingChoices.choices : undefined
-                    }
-                    grafanaBusy={pendingChoices?.forMessageId === m.id && choiceBusy}
-                    onGrafanaPick={(c) => handleGrafanaPick(c)}
                   />
                 ))}
         {/* Stage indicator during retrieval (only shown if bot hasn't started streaming answer text) */}
@@ -1180,9 +1068,6 @@ function MessageBubble({
   onOpenTicketForm,
   onSubmitEdit,
   onRetryQuestion,
-  grafanaChoices,
-  grafanaBusy = false,
-  onGrafanaPick,
   busy = false,
 }: {
   message: Message;
@@ -1191,10 +1076,6 @@ function MessageBubble({
   onOpenTicketForm: () => void;
   onSubmitEdit?: (messageId: string, newText: string) => void;
   onRetryQuestion?: () => void;
-  /** v1.3.4 — Grafana select-flow: candidate panels for this question */
-  grafanaChoices?: GrafanaPanelChoice[];
-  grafanaBusy?: boolean;
-  onGrafanaPick?: (choice: GrafanaPanelChoice) => void;
   busy?: boolean;
 }) {
   const isUser = message.role === "user";
@@ -1449,40 +1330,6 @@ function MessageBubble({
             </span>
           )}
         </div>
-
-        {/* v1.3.4 — Grafana select-flow: candidate panels the user picks from */}
-        {!isUser && grafanaChoices && grafanaChoices.length > 0 && (
-          <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/30">
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-blue-800 dark:text-blue-300">
-              <BarChart3 className="size-4" />
-              Which dashboard panel should I show? ({grafanaChoices.length} matches)
-            </div>
-            <div className="mt-2.5 grid gap-1.5">
-              {grafanaChoices.map((c, i) => (
-                <button
-                  key={`${c.dashboard_uid}-${c.panel_title}-${i}`}
-                  type="button"
-                  disabled={grafanaBusy}
-                  onClick={() => onGrafanaPick?.(c)}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-left text-[11px] font-medium text-slate-700 shadow-2xs transition hover:border-blue-400 hover:bg-blue-100/60 disabled:opacity-50 dark:border-blue-900/60 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-700 dark:hover:bg-blue-950/40"
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {c.panel_title}
-                    <span className="ml-1.5 text-[9px] font-normal text-muted-foreground">
-                      · {c.dashboard_title}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-semibold text-white">
-                    {grafanaBusy ? "…" : "Select"}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[9px] text-muted-foreground">
-              Live data from your Grafana dashboards — pick one and the assistant will summarize it.
-            </p>
-          </div>
-        )}
 
         {!isUser && message.content && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
