@@ -59,7 +59,7 @@ import {
   getConversationMessages,
   renameConversation,
 } from "@/features/conversations/api";
-import { createTicketApi } from "@/features/tickets/api";
+import { createTicketApi, listActiveDomains } from "@/features/tickets/api";
 import { assignableUsers } from "@/features/users/api";
 
 /* ============================================================
@@ -440,6 +440,11 @@ export default function Chat({
     assignee: string; due_date: string;
   }>(null);
   const [ticketBusy, setTicketBusy] = useState(false);
+  // v1.6.3 — categories come from the live classifier-domain registry so a domain
+  // added by a knowledge manager shows up immediately (was a hardcoded 7-item list)
+  const [ticketDomains, setTicketDomains] = useState<{ key: string; label: string }[]>([
+    { key: "general", label: "General" },
+  ]);
   // v0.21.98 — chat create-ticket mirrors the Tickets page form (native /api/tickets)
   type AssignableUser = { username: string; email: string | null; role: string };
   const [assignable, setAssignable] = useState<AssignableUser[]>([]);
@@ -475,6 +480,23 @@ export default function Chat({
     assignableUsers()
       .then((d) => setAssignable(d?.users ?? []))
       .catch(() => setAssignable([]));
+    // v1.6.3 — live category list (reflects domains added by knowledge managers)
+    listActiveDomains()
+      .then((ds) => {
+        if (!ds.length) return;
+        const hasGeneral = ds.some((x) => x.key === "general");
+        const list = [
+          ...(hasGeneral ? [] : [{ key: "general", label: "General" }]),
+          ...ds.map((x) => ({ key: x.key, label: x.label })),
+        ];
+        setTicketDomains(list);
+        // keep the current selection if it still exists, else fall back to General
+        setTicketForm((f) => (f ? {
+          ...f,
+          domain: list.some((x) => x.key === f.domain) ? f.domain : list[0].key,
+        } : f));
+      })
+      .catch(() => { /* keep fallback list */ });
   }
 
   async function submitTicketForm() {
@@ -492,8 +514,9 @@ export default function Chat({
       });
       chatAlert(`Ticket ${created?.jira_key ?? created?.id ?? ""} created successfully`);
       setTicketForm(null);
-    } catch {
-      chatAlert("Ticket creation failed", "err");
+    } catch (e: any) {
+      // v1.6.3 — surface the real reason (was a generic message that hid 422s)
+      chatAlert(`Ticket creation failed — ${e?.message ?? "unknown error"}`, "err");
     } finally {
       setTicketBusy(false);
     }
@@ -865,13 +888,9 @@ export default function Chat({
                       onChange={(e) => setTicketForm({ ...ticketForm, domain: e.target.value })}
                       className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950"
                     >
-                      <option value="general">General</option>
-                      <option value="network">Network</option>
-                      <option value="database">Database</option>
-                      <option value="kubernetes">Kubernetes</option>
-                      <option value="security">Security</option>
-                      <option value="server">Server</option>
-                      <option value="storage">Storage</option>
+                      {ticketDomains.map((d) => (
+                        <option key={d.key} value={d.key}>{d.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // feature API (governance: endpoints live in features/*/api.ts, not components)
 import {
   listTickets,
+  listActiveDomains,
   createTicketApi,
   ticketComments,
   ticketAddComment,
@@ -97,6 +98,10 @@ export default function Tickets({
   const [busy, setBusy] = useState(false);
   const [listBusy, setListBusy] = useState(false); // Refresh owns its own state — shared busy froze other affordances
 
+  // v1.6.3 — live category list from the classifier-domain registry
+  const [categories, setCategories] = useState<{ key: string; label: string }[]>([
+    { key: "general", label: "General" },
+  ]);
   const [newTicket, setNewTicket] = useState({
     subject: "",
     description: "",
@@ -212,6 +217,17 @@ export default function Tickets({
 
   useEffect(() => {
     assignableUsers().then((d) => setAssignable(d?.users ?? [])).catch(() => {});
+    // v1.6.3 — live categories so new domains appear without a redeploy
+    listActiveDomains()
+      .then((ds) => {
+        if (!ds.length) return;
+        const hasGeneral = ds.some((x) => x.key === "general");
+        setCategories([
+          ...(hasGeneral ? [] : [{ key: "general", label: "General" }]),
+          ...ds.map((x) => ({ key: x.key, label: x.label })),
+        ]);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1288,27 +1304,12 @@ export default function Tickets({
                   }
                   className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
                 >
-                  <option>
-                    General
-                  </option>
-                  <option>
-                    Network
-                  </option>
-                  <option>
-                    Database
-                  </option>
-                  <option>
-                    Kubernetes
-                  </option>
-                  <option>
-                    Security
-                  </option>
-                  <option>
-                    Server
-                  </option>
-                  <option>
-                    Storage
-                  </option>
+                  {/* v1.6.3 — live classifier domains (a new domain appears here immediately) */}
+                  {categories.map((c) => (
+                    <option key={c.key} value={c.label}>
+                      {c.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               {/* v0.20.2 — Assignee / Due date / Attachments */}

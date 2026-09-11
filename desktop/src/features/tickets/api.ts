@@ -1,6 +1,14 @@
 /** Tickets feature API — list/create/update + comments + attachments (mirrors /api/tickets*). */
 import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
 
+/** v1.6.3 — active classifier domains for category dropdowns (non-admin). */
+export async function listActiveDomains(): Promise<{ key: string; label: string; color?: string }[]> {
+  const r = await apiFetch(`${BASE}/api/domains`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json();
+  return d?.domains ?? [];
+}
+
 export async function listTickets(limit = 50) {
   const r = await apiFetch(`${BASE}/api/tickets?limit=${limit}`, { headers: authHeaders() });
   return r.json();

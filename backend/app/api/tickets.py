@@ -21,11 +21,19 @@ logger = logging.getLogger("dashboard")
 router = APIRouter(prefix="/api")
 
 class TicketCreate(BaseModel):
-    summary: str
-    description: str
-    priority: str = "Medium"
+    """v1.6.3 — schema drift fix: the UI sends `subject` (+ optional due_date) but this
+    model only declared `summary`, so every create returned 422 'Field required' and the
+    Create-ticket button silently failed. Accept both; `subject` wins."""
+    subject: str | None = None
+    summary: str | None = None  # legacy alias, kept for backwards compatibility
+    description: str = ""
+    priority: str = "medium"
     domain: str = "general"
     assignee: str | None = None
+    due_date: str | None = None
+
+    def effective_subject(self) -> str:
+        return (self.subject or self.summary or "").strip()
 
 class CommentRequest(BaseModel):
     body: str
@@ -39,6 +47,36 @@ class AttachmentRequest(BaseModel):
     filename: str
     content_type: str
     data_base64: str
+
+
+@router.get("/domains")
+def list_active_domains(user: str = Depends(get_current_user)) -> dict:
+    """v1.6.3 — active classifier domains for ticket category dropdowns.
+
+    Previously the Category select in both the chat ticket dialog and the Tickets
+    page used a HARDCODED 7-item list, so a domain created by a knowledge manager
+    never appeared. This endpoint is readable by any authenticated user (unlike
+    /api/admin/domains which requires manage_domains)."""
+    from app.persistence.models import ClassifierDomain
+    with SessionLocal() as s:
+        rows = (s.query(ClassifierDomain)
+                .filter(ClassifierDomain.is_active.is_(True))
+                .order_by(ClassifierDomain.display_name.asc())
+                .all())
+        return {"domains": [
+            {"key": d.domain_key, "label": d.display_name, "color": d.color or "blue"}
+            for d in rows
+        ]}
+
+
+def _domain_labels() -> dict[str, str]:
+    """v1.6.3 — domain_key → display_name for pretty category labels."""
+    try:
+        from app.persistence.models import ClassifierDomain
+        with SessionLocal() as s:
+            return {d.domain_key: d.display_name for d in s.query(ClassifierDomain).all()}
+    except Exception:
+        return {}
 
 
 def _db() -> Any:
@@ -119,6 +157,7 @@ def list_tickets(
                     s.commit()
         _jira_status_cache[jk] = (time.time(), mapped or (r.get("status") or ""))
 
+    _labels = _domain_labels()  # v1.6.3 — pretty category labels
     out = []
     for r in rows:
         out.append(
@@ -128,7 +167,11 @@ def list_tickets(
                 "description": r.get("description"),
                 "status": ({"created": "open"}.get(r.get("status") or "", r.get("status") or "open")),
                 "priority": (r.get("priority") or "medium"),
-                "category": (r.get("domain") or "general").capitalize(),
+                # v1.6.3 — pretty category label from the classifier registry
+                "category": _labels.get(
+                    (r.get("domain") or "general").lower(),
+                    (r.get("domain") or "general").replace("_", " ").capitalize(),
+                ),
                 "requester": r.get("created_by") or "unknown",
                 "assignee": r.get("assignee"),
                 "due_date": r["due_date"].isoformat() if r.get("due_date") else None,
@@ -155,7 +198,10 @@ def create_ticket(
         from app.integrations.jira import escalate as jira_escalate
         from app.persistence.models import JiraTicket
 
-        summary = req.subject[:120]
+        subj = req.effective_subject()
+        if not subj:
+            raise HTTPException(status_code=400, detail="Ticket subject is required")
+        summary = subj[:120]
         jira_result = jira_escalate(
             summary=summary,
             description=req.description,
@@ -173,7 +219,7 @@ def create_ticket(
             domain=req.domain[:64],
             status="open",
             created_by=user,
-            subject=req.subject[:200],
+            subject=subj[:200],
             description=req.description,
             priority=req.priority[:16],
             assignee=(req.assignee or None),
@@ -185,18 +231,20 @@ def create_ticket(
         # v0.21.92 — alert the requester their ticket is open
         try:
             from app.notifier import notify_ticket_created
-            notify_ticket_created(user, jira_key, req.subject[:120])
+            notify_ticket_created(user, jira_key, subj[:120])
         except Exception:  # noqa: BLE001
             pass
         return {
             "id": jira_key or f"IT-{row.id}",
             "jira_mode": jira_result.get("mode"),
             "jira_link": jira_result.get("link"),
-            "subject": req.subject[:120],
+            "subject": subj[:120],
             "description": req.description,
             "status": "open",
             "priority": req.priority,
-            "category": req.domain.capitalize(),
+            "category": _domain_labels().get(
+                req.domain.lower(), req.domain.replace("_", " ").capitalize()
+            ),
             "requester": user,
             "assignee": row.assignee,
             "due_date": row.due_date.isoformat() if row.due_date else None,
