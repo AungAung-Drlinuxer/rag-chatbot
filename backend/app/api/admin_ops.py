@@ -451,18 +451,31 @@ def admin_list_conversations(
     with SessionLocal() as s:
         from sqlalchemy import text as _t
 
+        # v1.6.0 — derive titles from the first user message when chat_sessions.title is NULL
         sql = (
             "SELECT cs.id, cs.username, cs.title, cs.started_at, "
-            "count(cm.id) AS messages, max(cm.created_at) AS last_at "
+            "count(cm.id) AS messages, max(cm.created_at) AS last_at, "
+            "(SELECT cm2.content FROM chat_messages cm2 "
+            " WHERE cm2.session_id = cs.id AND cm2.role = 'user' "
+            " ORDER BY cm2.created_at ASC LIMIT 1) AS first_user_msg "
             "FROM chat_sessions cs JOIN chat_messages cm ON cm.session_id = cs.id "
             "WHERE (:u = '' OR cs.username = :u) "
             "GROUP BY cs.id, cs.username, cs.title, cs.started_at "
             "ORDER BY max(cm.created_at) DESC LIMIT :lim"
         )
         rows = s.execute(_t(sql), {"u": username, "lim": limit}).mappings().all()
+
+    def _derive_title(title, first_msg):
+        if title:
+            return title
+        text = (first_msg or "").strip()
+        if not text:
+            return "(untitled)"
+        return text[:60] + ("…" if len(text) > 60 else "")
+
     return {"conversations": [
         {"session_id": str(r["id"]), "username": r["username"],
-         "title": r["title"] or "(untitled)", "messages": int(r["messages"]),
+         "title": _derive_title(r["title"], r["first_user_msg"]), "messages": int(r["messages"]),
          "started_at": r["started_at"].isoformat() if r["started_at"] else None,
          "last_at": r["last_at"].isoformat() if r["last_at"] else None}
         for r in rows

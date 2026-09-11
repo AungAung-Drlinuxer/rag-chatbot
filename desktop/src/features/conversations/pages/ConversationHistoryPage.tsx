@@ -53,6 +53,12 @@ function toneFor(name: string): string {
   return AVATAR_TONES[h % AVATAR_TONES.length];
 }
 
+/* v1.6.1 — mask profanity in org-facing titles */
+const _PROFANITY_RE = new RegExp("\\b(f+u+c+k+|sh+i+t+|b+i+t+c+h+|a+s+s+h+o+l+e+|d+a+m+n+)\\b", "gi");
+function maskProfanity(text: string): string {
+  return (text || "").replace(_PROFANITY_RE, (m) => "✱".repeat(Math.min(6, m.length)));
+}
+
 export default function ConversationHistoryPage() {
   const [convs, setConvs] = useState<Conv[]>([]);
   const [users, setUsers] = useState<string[]>([]);
@@ -229,6 +235,7 @@ export default function ConversationHistoryPage() {
                     <tr
                       key={c.session_id}
                       onClick={() => view(c)}
+                      title={c.title}
                       className={[
                         "cursor-pointer border-t border-slate-100 text-[11px] transition",
                         open === c.session_id
@@ -244,7 +251,7 @@ export default function ConversationHistoryPage() {
                           <span className="truncate font-semibold">{c.username}</span>
                         </div>
                       </td>
-                      <td className="truncate px-4 py-2.5">{c.title}</td>
+                      <td className="truncate px-4 py-2.5">{maskProfanity(c.title)}</td>
                       <td className="px-4 py-2.5">{c.messages}</td>
                       <td className="px-4 py-2.5">{fmt(c.last_at)}</td>
                     </tr>
