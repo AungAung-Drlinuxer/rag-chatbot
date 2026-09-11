@@ -29,6 +29,7 @@ type AuditRow = {
 };
 
 const ACTION_TONES: Record<string, string> = {
+  apikey: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   login: "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
   logout: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
   chat: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
@@ -47,6 +48,21 @@ function toneFor(action: string): string {
     if (action.startsWith(k)) return ACTION_TONES[k];
   }
   return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+}
+
+/* v1.6.2 — relative time for hover tooltip */
+function relTimeAgo(ts: string | null): string {
+  if (!ts) return "";
+  const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
+  if (Number.isNaN(d.getTime())) return "";
+  const mins = Math.floor((Date.now() - d.getTime()) / 6e4);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
 }
 
 function fmt(ts: string | null): string {
@@ -147,10 +163,10 @@ export default function AuditsPage() {
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <Activity className="size-3.5 text-sky-600" /> Events (fetched)
+              <Activity className="size-3.5 text-sky-600" /> Events shown
             </div>
-            <div className="mt-1 text-2xl font-bold text-sky-700 dark:text-sky-300">{shown.length}</div>
-            <div className="text-[9.5px] text-muted-foreground">of {total} total in log</div>
+            <div className="mt-1 text-2xl font-bold text-sky-700 dark:text-sky-300">{shown.length.toLocaleString()}</div>
+            <div className="text-[9.5px] text-muted-foreground">of {total.toLocaleString()} total events in log</div>
           </div>
           <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -231,15 +247,27 @@ export default function AuditsPage() {
                 )}
                 {shown.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100 transition hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800/40">
-                    <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{fmt(r.created_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground" title={relTimeAgo(r.created_at)}>{fmt(r.created_at)}</td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold ${toneFor(r.action)}`}>
                         {r.action}
                       </span>
                     </td>
                     <td className="truncate px-4 py-2.5 font-medium" title={r.username ?? ""}>{r.username ?? "—"}</td>
-                    <td className="truncate px-4 py-2.5 text-muted-foreground">{r.domain ?? "—"}</td>
-                    <td className="truncate px-4 py-2.5 text-muted-foreground" title={r.detail ?? ""}>{r.detail ?? "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {r.domain ? (
+                        <span className="truncate text-muted-foreground">{r.domain}</span>
+                      ) : (
+                        <span className="italic text-slate-400 dark:text-slate-500">n/a</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {r.detail ? (
+                        <span className="block truncate text-muted-foreground" title={r.detail}>{r.detail}</span>
+                      ) : (
+                        <span className="italic text-slate-400 dark:text-slate-500">n/a</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-right">
                       {r.decision ? (
                         <span className={["text-[10px] font-semibold",
