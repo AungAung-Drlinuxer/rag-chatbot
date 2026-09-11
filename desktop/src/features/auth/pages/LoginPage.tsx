@@ -1,10 +1,15 @@
 import {
   AlertCircle,
+  BookOpenCheck,
   CheckCircle2,
   Eye,
   EyeOff,
+  Link2,
+  Loader2,
   LockKeyhole,
   LogIn,
+  ShieldCheck,
+  TicketCheck,
   UserRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
@@ -29,8 +34,28 @@ export default function Login({
   onSubmit,
 }: Props) {
   const [showPass, setShowPass] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [fieldErr, setFieldErr] = useState<string | null>(null);
   const branding = useBranding();
   const [backendUp, setBackendUp] = useState<boolean | null>(null);
+
+  // v1.5.1 — client-side validation before hitting the server
+  function handleLocalSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const u = loginUser.trim();
+    if (!u || !loginPass) {
+      setFieldErr(!u
+        ? "Please enter your username."
+        : "Please enter your password.");
+      return;
+    }
+    setFieldErr(null);
+    setSubmitting(true);
+    // App.tsx's onSubmit resets state on completion via re-render; reset after a
+    // generous window in case the parent doesn't unmount (failed login keeps form).
+    window.setTimeout(() => setSubmitting(false), 12000);
+    onSubmit(e);
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -67,20 +92,24 @@ export default function Login({
           </div>
 
           <div className="relative flex min-h-screen w-full flex-col justify-between gap-6 px-12 py-8 xl:px-16">
-            {/* Brand — matches sidebar (v0.21.31) */}
+            {/* Brand — v1.5.1 unified: same gradient mark as sidebar/mobile */}
             <div className="flex items-center gap-3">
               {branding.logo ? (
                 <img src={branding.logo} alt="Company logo"
-                  className="size-11 shrink-0 rounded-full object-contain shadow-[0_4px_12px_rgba(37,99,235,0.35)]" />
+                  className="size-11 shrink-0 rounded-2xl object-contain shadow-[0_4px_12px_rgba(37,99,235,0.35)]" />
               ) : (
-                <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[var(--brand-logo)] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]">
-                  ITH
+                <div
+                  className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
+                  iTH
                 </div>
               )}
 
               <div>
                 <div className="text-sm font-bold tracking-tight">
                   {branding.appName || "IT Help Chatbot"}
+                </div>
+                <div className="text-[10px] font-medium text-muted-foreground">
+                  AI-powered IT support
                 </div>
               </div>
             </div>
@@ -112,7 +141,7 @@ export default function Login({
                   - width/height attributes set -> browser reserves space before
                     the file downloads (no CLS), and retina screens stay sharp
                   - fetchpriority=high + decoding async for faster login paint */}
-              <div className="my-4 flex max-h-[420px] w-full shrink-0 items-center justify-center px-1 sm:px-2">
+              <div className="my-4 flex max-h-[420px] w-full shrink-0 items-center justify-center rounded-2xl px-1 dark:bg-white/[0.04] sm:px-2">
                 <img
                   src="/login-illustration.jpg"
                   width={1280}
@@ -130,22 +159,11 @@ export default function Login({
                 />
               </div>
 
-              {/* Product capabilities */}
-              <div className="mt-4 grid w-full max-w-3xl gap-3 sm:grid-cols-3">
-                <FeatureCard
-                  title="Grounded"
-                  description="Answers use internal knowledge."
-                />
-
-                <FeatureCard
-                  title="Traceable"
-                  description="Sources remain visible."
-                />
-
-                <FeatureCard
-                  title="Actionable"
-                  description="Escalate when needed."
-                />
+              {/* Product capabilities — v1.5.1 icon chips */}
+              <div className="mt-4 grid w-full max-w-3xl gap-2.5 sm:grid-cols-3">
+                <FeatureCard icon={<BookOpenCheck className="size-4" />} title="Grounded" description="Answers use internal knowledge." />
+                <FeatureCard icon={<Link2 className="size-4" />} title="Traceable" description="Sources remain visible." />
+                <FeatureCard icon={<TicketCheck className="size-4" />} title="Actionable" description="Escalate when needed." />
               </div>
             </div>
 
@@ -167,7 +185,7 @@ export default function Login({
           <div className="w-full max-w-[400px]">
             {/* Mobile brand */}
             <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
+              <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-[13px] font-extrabold text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
                 i
               </div>
 
@@ -198,7 +216,7 @@ export default function Login({
                 </p>
               </div>
 
-              <form onSubmit={onSubmit} className="space-y-5">
+              <form onSubmit={handleLocalSubmit} className="space-y-5">
                 {/* Username */}
                 <div>
                   <label
@@ -265,7 +283,16 @@ export default function Login({
                   </div>
                 </div>
 
-                {/* Error */}
+                {/* Error — client-side first, then server */}
+                {!loginErr && fieldErr && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                  >
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    <span>{fieldErr}</span>
+                  </div>
+                )}
                 {loginErr && (
                   <div
                     role="alert"
@@ -277,13 +304,23 @@ export default function Login({
                   </div>
                 )}
 
-                {/* Submit */}
+                {/* Submit — v1.5.1 loading + disabled states */}
                 <button
                   type="submit"
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-4 focus:ring-primary/20 active:scale-[0.99]"
+                  disabled={submitting || !loginUser.trim() || !loginPass}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-4 focus:ring-primary/20 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <LogIn className="size-4" />
-                  Sign in
+                  {submitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Signing in…
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="size-4" />
+                      Sign in
+                    </>
+                  )}
                 </button>
 
                 {/* Dev fallback */}
@@ -317,9 +354,10 @@ export default function Login({
               </div>
             </div>
 
-            {/* Bottom legal/status */}
-            <div className="mt-5 text-center text-xs text-muted-foreground">
-              Authorized corporate users only
+            {/* Bottom legal/status — v1.5.1 */}
+            <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+              <ShieldCheck className="size-3.5 text-emerald-500" />
+              Authorized corporate users only · SSO & RBAC protected
             </div>
           </div>
         </main>
@@ -329,20 +367,23 @@ export default function Login({
 }
 
 function FeatureCard({
+  icon,
   title,
   description,
 }: {
+  icon: React.ReactNode;
   title: string;
   description: string;
 }) {
   return (
-    <div className="rounded-xl border bg-white/80 px-3.5 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/50">
-      <div className="flex items-center gap-1.5">
-        <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-        <span className="text-[12px] font-semibold leading-4">{title}</span>
+    <div className="flex items-start gap-2.5 rounded-xl border bg-white/80 px-3.5 py-3 backdrop-blur-sm transition hover:border-primary/30 dark:border-slate-800 dark:bg-slate-900/50">
+      <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+        {icon}
       </div>
-
-      <p className="mt-1 pl-3 text-[10.5px] leading-4 text-muted-foreground">{description}</p>
+      <div className="min-w-0">
+        <span className="text-[12px] font-semibold leading-4">{title}</span>
+        <p className="mt-0.5 text-[10.5px] leading-4 text-muted-foreground">{description}</p>
+      </div>
     </div>
   );
 }
