@@ -1,4 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+
+/** v1.5.8 — relative time for last-used display */
+function relTimeAgo(iso: string): string {
+  const d = new Date(iso.includes("Z") || iso.includes("+") ? iso : iso + "Z");
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 6e4);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
 import { PageShell, PageHeader } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +60,16 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
   const [confirmPurge, setConfirmPurge] = useState<ApiKeyRow | null>(null);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [activeSnippetTab, setActiveSnippetTab] = useState<"curl" | "python" | "powershell">("curl");
+  // v1.5.8 — key status filter
+  const [statusTab, setStatusTab] = useState<"all" | "active" | "revoked">("all");
+  // v1.5.8 — prefix copy feedback
+  const [copiedPrefix, setCopiedPrefix] = useState<number | null>(null);
+  const filteredKeys = useMemo(() => {
+    const all = keys ?? [];
+    if (statusTab === "active") return all.filter((k) => k.active);
+    if (statusTab === "revoked") return all.filter((k) => !k.active);
+    return all;
+  }, [keys, statusTab]);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   const load = () => {
@@ -200,10 +224,31 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">
                 {isAdmin ? "All keys" : "Your keys"}
+                <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                  ({filteredKeys.length})
+                </span>
               </h2>
-              <span className="text-[10px] text-muted-foreground">
-                {keys?.length ?? 0} key{(keys?.length ?? 0) === 1 ? "" : "s"}
-              </span>
+              {/* v1.5.8 — status filter tabs */}
+              <div className="flex items-center gap-1">
+                {([["all", "All"], ["active", "Active"], ["revoked", "Revoked"]] as const).map(([val, label]) => {
+                  const n = val === "all" ? (keys?.length ?? 0) : (keys ?? []).filter((k) => (val === "active" ? k.active : !k.active)).length;
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setStatusTab(val)}
+                      className={[
+                        "rounded-lg px-2.5 py-1 text-[10px] font-medium transition",
+                        statusTab === val
+                          ? "bg-slate-900 text-white dark:bg-slate-700"
+                          : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
+                      ].join(" ")}
+                    >
+                      {label} {n > 0 && <span className="opacity-60">{n}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {loading ? (
@@ -218,7 +263,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
               </div>
             ) : (
               <div className="divide-y">
-                {(keys ?? []).map((k) => (
+                {filteredKeys.map((k) => (
                   <div key={k.id} className="flex items-center gap-3 px-5 py-3.5">
                     <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800">
                       <KeyRound className="size-4" />
@@ -230,7 +275,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                         </span>
                         <span
                           className={[
-                            "rounded-full px-2 py-0.5 text-[9px] font-medium uppercase",
+                            "rounded-full px-2 py-0.5 text-[9px] font-medium capitalize",
                             k.scope === "chat"
                               ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                               : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
@@ -238,7 +283,13 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                         >
                           {k.scope}
                         </span>
-                        {!k.active && (
+                        {/* v1.5.8 — explicit status badges for both states */}
+                        {k.active ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            <span className="size-1.5 rounded-full bg-emerald-500" />
+                            active
+                          </span>
+                        ) : (
                           <span className="rounded-full bg-red-50 px-2 py-0.5 text-[9px] font-medium text-red-600 dark:bg-red-950/40 dark:text-red-400">
                             revoked
                           </span>
@@ -246,14 +297,34 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span className="font-mono">{k.key_prefix}</span>
+                        <button
+                          type="button"
+                          title="Copy key prefix"
+                          onClick={() => {
+                            navigator.clipboard.writeText(k.key_prefix);
+                            setCopiedPrefix(k.id);
+                            window.setTimeout(() => setCopiedPrefix(null), 1500);
+                          }}
+                          className="rounded p-0.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                        >
+                          {copiedPrefix === k.id ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
+                        </button>
                         <span>·</span>
                         <span>
                           {k.created_at
                             ? new Date(k.created_at.includes("Z") || k.created_at.includes("+") ? k.created_at : k.created_at + "Z").toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
                             : ""}
                         </span>
-                        {k.last_used_at && <span>· used</span>}
-                        {isAdmin && <span>· owner: {k.owner}</span>}
+                        {k.last_used_at ? (
+                          <span title={new Date(k.last_used_at.includes("Z") || k.last_used_at.includes("+") ? k.last_used_at : k.last_used_at + "Z").toLocaleString()}>· used {relTimeAgo(k.last_used_at)}</span>
+                        ) : (
+                          <span className="italic">· never used</span>
+                        )}
+                        {isAdmin && (
+                          <span className="inline-flex items-center gap-1">
+                            · <span className="rounded bg-slate-100 px-1 py-px text-[9px] font-medium dark:bg-slate-800">{k.owner}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                     {k.active && (isAdmin || k.owner === userName) && (
