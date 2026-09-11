@@ -322,7 +322,13 @@ export default function Users() {
               <StatCard icon={<UsersIcon className="size-5" />} title="Total users" value={totalUsers} description="All system users" />
               <StatCard icon={<UserCheck className="size-5" />} title="Active" value={activeUsers} description="Enabled accounts" positive />
               <StatCard icon={<UserX className="size-5" />} title="Inactive" value={inactiveUsers} description="Disabled accounts" />
-              <StatCard icon={<Shield className="size-5" />} title="Locked" value={lockedUsers} description="Require admin action" warning />
+              <StatCard
+                icon={<Shield className="size-5" />}
+                title="Locked"
+                value={lockedUsers}
+                description={lockedUsers > 0 ? "Require admin action" : "No locked accounts"}
+                warning={lockedUsers > 0}
+              />
             </div>
 
             {/* USERS TABLE */}
@@ -484,17 +490,47 @@ function UserRow({ user, onSelect, onToggle }: { user: User; onSelect: () => voi
       <td className="px-4 py-3">
         <button type="button" onClick={onSelect} className="flex items-center gap-3 text-left">
           <Avatar name={user.name} />
-          <div className="min-w-0">
-            <div className="truncate text-[11px] font-semibold hover:text-sky-600" title={user.name}>{user.name}</div>
-            <div className="truncate text-[10px] text-muted-foreground">@{user.username}</div>
+          <div className="min-w-0 flex items-center gap-1.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <div className="truncate text-[11px] font-semibold hover:text-sky-600" title={user.name}>{user.name}</div>
+                {user.username.endsWith("-svc") && (
+                  <span
+                    title="Service account — used by system components, not a human user"
+                    className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                  >
+                    system
+                  </span>
+                )}
+              </div>
+              <div className="truncate text-[10px] text-muted-foreground">@{user.username}</div>
+            </div>
           </div>
         </button>
       </td>
-      <td className="px-4 py-3"><span className="text-[10px]" title={user.department}>{user.department || "—"}</span></td>
+      <td className="px-4 py-3">
+        {user.department && user.department !== "—" ? (
+          <span className="text-[10px]" title={user.department}>{user.department}</span>
+        ) : (
+          <span className="text-[10px] italic text-slate-400 dark:text-slate-500" title="No department assigned">No department</span>
+        )}
+      </td>
       <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
       <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
-      <td className="px-4 py-3"><span className="text-[10px] text-muted-foreground" title={user.lastLogin}>{formatDateTime(user.lastLogin)}</span></td>
-      <td className="px-4 py-3"><span className="text-[10px] text-muted-foreground" title={user.joined}>{formatDate(user.joined)}</span></td>
+      <td className="px-4 py-3">
+        {user.lastLogin && user.lastLogin !== "—" ? (
+          <span className="text-[10px] text-muted-foreground" title={user.lastLogin}>{formatDateTime(user.lastLogin)}</span>
+        ) : (
+          <span className="text-[10px] italic text-slate-400 dark:text-slate-500" title="This user has never signed in">Never logged in</span>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        {user.joined && user.joined !== "—" ? (
+          <span className="text-[10px] text-muted-foreground" title={user.joined}>{formatDate(user.joined)}</span>
+        ) : (
+          <span className="text-[10px] italic text-slate-400 dark:text-slate-500" title="Provisioned via directory sync">AD sync</span>
+        )}
+      </td>
       <td className="px-3 py-3">
         <div className="flex justify-end gap-0.5">
           <button type="button" onClick={onSelect} title="View user"
@@ -530,9 +566,10 @@ function Avatar({ name }: { name: string }) {
 }
 
 function RoleBadge({ role }: { role: UserRole }) {
+  // v1.5.6 — distinct role colors: Administrator=violet, IT Support=sky, KM=teal, User=slate
   const styles: Record<UserRole, string> = {
-    Administrator: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300",
-    "IT Support": "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/30 dark:text-cyan-300",
+    Administrator: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
+    "IT Support": "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300",
     "Knowledge Manager": "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-300",
     User: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
   };
