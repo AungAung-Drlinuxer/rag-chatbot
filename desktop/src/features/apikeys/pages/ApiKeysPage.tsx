@@ -194,28 +194,41 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
             </div>
           </div>
 
-          {/* Created-once panel */}
+          {/* Created-once panel — v1.5.9: once copied, the raw key is hidden permanently */}
           {created && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                  Key "{created.name}" created — copy it now, it will not be shown again.
-                </p>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(created.key).catch(() => {});
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1600);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
-                >
-                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  {copied ? "Copied" : "Copy key"}
-                </button>
+                {copied ? (
+                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    Key "{created.name}" copied to clipboard — it is now hidden and cannot be retrieved again.
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    Key "{created.name}" created — copy it now, it will not be shown again.
+                  </p>
+                )}
+                {!copied && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(created.key).catch(() => {});
+                      setCopied(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
+                  >
+                    <Copy className="size-3.5" />
+                    Copy key
+                  </button>
+                )}
               </div>
-              <code className="mt-2 block select-all rounded-lg bg-slate-900 px-3 py-2 font-mono text-[11px] text-emerald-300">
-                {created.key}
-              </code>
+              {!copied ? (
+                <code className="mt-2 block select-all rounded-lg bg-slate-900 px-3 py-2 font-mono text-[11px] text-emerald-300">
+                  {created.key}
+                </code>
+              ) : (
+                <code className="mt-2 block select-none rounded-lg bg-slate-900 px-3 py-2 font-mono text-[11px] text-emerald-300/60">
+                  {"•".repeat(40)}
+                </code>
+              )}
             </div>
           )}
 
