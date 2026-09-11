@@ -10,12 +10,18 @@ export function StatCard({
   value,
   description,
   accent = "slate",
+  onClick,
+  title,
 }: {
   icon: ReactNode;
   label: string;
   value: number;
   description: string;
   accent?: "slate" | "blue" | "amber" | "emerald";
+  /** v1.5.5 — optional click-to-filter */
+  onClick?: () => void;
+  /** v1.5.5 — tooltip */
+  title?: string;
 }) {
   const colors = {
     slate: "bg-slate-100 text-slate-600 dark:bg-slate-900",
@@ -25,7 +31,15 @@ export function StatCard({
   };
 
   return (
-    <Card className="rounded-2xl p-4">
+    <Card
+      onClick={onClick}
+      title={title}
+      className={[
+        "rounded-2xl p-4",
+        onClick ? "cursor-pointer transition hover:border-blue-300 hover:shadow-sm" : "",
+      ].join(" ")}
+      role={onClick ? "button" : undefined}
+    >
       <div className="flex items-start justify-between">
         <div>
           <div className="text-[11px] font-medium text-muted-foreground">

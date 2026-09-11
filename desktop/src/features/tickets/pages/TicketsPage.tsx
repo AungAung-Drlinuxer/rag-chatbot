@@ -470,7 +470,7 @@ export default function Tickets({
       }
     />
 
-          <div className="mx-auto grid max-w-[1400px] grid-cols-1 items-start gap-5 p-5 lg:p-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="mx-auto grid max-w-[1400px] grid-cols-1 items-start gap-5 p-5 lg:p-8 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-6">
 
             {/* =================================================
@@ -495,6 +495,8 @@ export default function Tickets({
                 value={stats.open}
                 description="Require attention"
                 accent="blue"
+                title="Show open tickets only"
+                onClick={() => setStatusFilter("open")}
               />
 
               <StatCard
@@ -503,8 +505,9 @@ export default function Tickets({
                 }
                 label="Pending"
                 value={stats.pending}
-                description="Waiting for action"
+                description="Waiting for requester action"
                 accent="amber"
+                title="Tickets awaiting the requester to reply or confirm a fix"
               />
 
               <StatCard
@@ -796,7 +799,13 @@ export default function Tickets({
                                         •
                                       </span>
 
-                                      <span>
+                                      <span
+                                        className={
+                                          ticket.assignee
+                                            ? ""
+                                            : "italic text-slate-400 dark:text-slate-500 border-b border-dashed border-slate-300 dark:border-slate-600"
+                                        }
+                                      >
                                         {ticket.assignee ??
                                           "Unassigned"}
                                       </span>
@@ -842,7 +851,12 @@ export default function Tickets({
                                   }
                                 </td>
 
-                                <td className="truncate px-3 py-4 text-muted-foreground">
+                                <td className={[
+                                  "truncate px-3 py-4",
+                                  (Date.now() - new Date(ticket.updated_at.endsWith("Z") ? ticket.updated_at : ticket.updated_at + "Z").getTime()) > 7 * 864e5
+                                    ? "font-medium text-amber-600 dark:text-amber-400"
+                                    : "text-muted-foreground",
+                                ].join(" ")}>
                                   {relTime(
                                     ticket.updated_at
                                   )}
