@@ -501,9 +501,6 @@ export default function Knowledge({
             </button>
           </div>
 
-          <div className="text-xs text-muted-foreground hidden sm:block">
-            {activeTab === "articles" ? "Full-width documents view & search" : "Configure AI classifiers & ticketing routing"}
-          </div>
         </div>
 
         {/* ==============================================================
@@ -534,14 +531,14 @@ export default function Knowledge({
                       className="h-10 w-full rounded-xl border border-[var(--border)] bg-white pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:bg-slate-900"
                     />
                   </div>
-                  <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl px-4 text-xs">
+                  <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl bg-blue-600 px-5 text-xs text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:text-white dark:disabled:bg-blue-950">
                     Search
                   </Button>
                 </form>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--border)]/60">
-                <span className="text-[11px] font-semibold text-slate-400 mr-1">Filter Domain:</span>
+              <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pt-3 border-t border-[var(--border)]/60 [scrollbar-width:thin]">
+                <span className="text-[11px] font-semibold text-slate-400 mr-1 shrink-0">Filter Domain:</span>
                 {chips.map((domain) => {
                   const active = domain === chip;
                   const label = domain === "all" ? "All Domains" : metaFor(domain).label;
@@ -554,7 +551,7 @@ export default function Knowledge({
                         setPage(1);
                       }}
                       className={[
-                        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
+                        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition shrink-0",
                         active
                           ? "border-blue-600 bg-blue-600 text-white shadow-xs"
                           : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
@@ -677,24 +674,56 @@ export default function Knowledge({
                     <p className="text-[11px] text-muted-foreground">
                       Showing {(page - 1) * 8 + 1} to {Math.min(page * 8, items.length)} of {items.length} articles
                     </p>
-                    <div className="flex gap-1.5">
+                    {/* v1.5.4 — numbered pagination with ellipsis */}
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs rounded-lg"
+                        className="h-7 w-7 p-0 text-xs rounded-lg"
                         disabled={page === 1}
                         onClick={() => setPage(page - 1)}
                       >
-                        Previous
+                        ‹
                       </Button>
+                      {(() => {
+                        const totalPages = Math.ceil(items.length / 8);
+                        const nums: (number | "…")[] = [];
+                        if (totalPages <= 7) {
+                          for (let i = 1; i <= totalPages; i++) nums.push(i);
+                        } else {
+                          nums.push(1);
+                          if (page > 3) nums.push("…");
+                          for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) nums.push(i);
+                          if (page < totalPages - 2) nums.push("…");
+                          nums.push(totalPages);
+                        }
+                        return nums.map((n, i) =>
+                          n === "…" ? (
+                            <span key={`e${i}`} className="px-1 text-xs text-muted-foreground">…</span>
+                          ) : (
+                            <button
+                              key={n}
+                              onClick={() => setPage(n)}
+                              className={[
+                                "h-7 min-w-7 rounded-lg px-2 text-xs font-medium transition",
+                                n === page
+                                  ? "bg-blue-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+                              ].join(" ")}
+                            >
+                              {n}
+                            </button>
+                          )
+                        );
+                      })()}
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs rounded-lg"
+                        className="h-7 w-7 p-0 text-xs rounded-lg"
                         disabled={page * 8 >= items.length}
                         onClick={() => setPage(page + 1)}
                       >
-                        Next
+                        ›
                       </Button>
                     </div>
                   </div>

@@ -132,6 +132,16 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
   const [description, setDescription] = useState("");
   const [jiraProject, setJiraProject] = useState("");
   const [keywordsText, setKeywordsText] = useState("");
+  // v1.5.4 — per-domain keyword chip expansion
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  function toggleExpanded(id: number) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   const [selectedIcon, setSelectedIcon] = useState("BookOpen");
   const [selectedColor, setSelectedColor] = useState("blue");
   const [customIcon, setCustomIcon] = useState<string | null>(null);
@@ -580,9 +590,9 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                     <p className="text-xs text-slate-500 dark:text-slate-400">{d.description}</p>
                   )}
 
-                  {/* Keywords badge preview */}
+                  {/* Keywords badge preview — v1.5.4 collapsible (first 8, +N more) */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {d.keywords.map((kw, i) => (
+                    {(expanded.has(d.id) ? d.keywords : d.keywords.slice(0, 8)).map((kw, i) => (
                       <span
                         key={i}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
@@ -591,6 +601,15 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                         {kw}
                       </span>
                     ))}
+                    {d.keywords.length > 8 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(d.id)}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-900/60"
+                      >
+                        {expanded.has(d.id) ? "Show less" : `+${d.keywords.length - 8} more`}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
