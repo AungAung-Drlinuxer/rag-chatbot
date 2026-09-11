@@ -139,13 +139,21 @@ export default function Settings({ role }: { role?: string }) {
   const [confidenceGate, setConfidenceGate] = useState(true);
 
   // Real DOM side-effects (visual only, server DB is the source of truth)
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
+    useEffect(() => {
+      applyThemeNow(darkMode, compact, animations);
+    }, [darkMode, compact, animations]);
 
   function applyThemeNow(dark: boolean, compact: boolean, anim: boolean) {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
     document.documentElement.dataset.compact = compact ? "1" : "0";
+    // v1.6.2 — THEME STABILITY: persist to localStorage so the pre-paint boot
+    // script in index.html restores the saved theme instantly on next load
+    // (previously nothing wrote "ith.dark", so reload always snapped to light)
+    try {
+      window.localStorage.setItem("ith.dark", dark ? "1" : "0");
+      window.localStorage.setItem("ith.compact", compact ? "1" : "0");
+      window.localStorage.setItem("ith.animations", anim ? "1" : "0");
+    } catch { /* storage may be unavailable in private mode */ }
     document.documentElement.classList.toggle("animations-off", !anim);
   }
 
@@ -218,19 +226,21 @@ export default function Settings({ role }: { role?: string }) {
     };
     try {
       await putUserSettings(payload);
-      // Apply the just-saved theme immediately (synchronous DOM update)
-      applyThemeNow(!!darkMode, !!compact, animations);
-      setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
-    } catch (err: any) {
-      setSaveError(err?.message || "Save failed");
-      // v0.21.83 — persist RAG runtime knobs too (single Save = everything)
+      // v1.6.2 — BUGFIX: putRuntime previously ran only in the catch branch, so RAG
+      // runtime knobs (top_k / confidence threshold) were never persisted when the
+      // settings save succeeded. Save them on the success path now.
       try {
         await putRuntime({
           retrieval_top_k: Number(topK) || 5,
           confidence_gate_threshold: Number(similarityThreshold) || 0.75,
         });
       } catch { /* non-admin: user prefs already saved */ }
+      // Apply the just-saved theme immediately (synchronous DOM update)
+      applyThemeNow(!!darkMode, !!compact, animations);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      setSaveError(err?.message || "Save failed");
     } finally { setSaving(false); }
   }
 
@@ -325,7 +335,10 @@ export default function Settings({ role }: { role?: string }) {
                   <div className="flex rounded-xl border border-[var(--border)] bg-muted/40 p-1">
                     {(["light", "dark"] as const).map((option) => (
                       <button key={option} type="button"
-                        onClick={() => setDarkMode(option === "dark")}
+                        onClick={() => {
+                          setDarkMode(option === "dark");
+                          applyThemeNow(option === "dark", compact, animations);
+                        }}
                         className={`rounded-lg px-3.5 py-1.5 text-xs font-medium capitalize transition ${
                           (option === "dark") === darkMode
                             ? "bg-background text-foreground shadow-xs font-semibold"
@@ -336,7 +349,7 @@ export default function Settings({ role }: { role?: string }) {
                   </div>
                 </div>
                 <div className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
-                  <ToggleRow checked={compact} onChange={setCompact} title="Compact mode"
+                  <ToggleRow checked={compact} onChange={(v) => { setCompact(v); applyThemeNow(darkMode, v, animations); }} title="Compact mode"
                     description="Reduce space between elements." />
                   <ToggleRow checked={animations} onChange={setAnimations} title="Animations"
                     description="Interface transitions and motion." />
