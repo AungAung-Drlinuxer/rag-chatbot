@@ -67,7 +67,7 @@ import { assignableUsers } from "@/features/users/api";
 ============================================================ */
 
 export default function Chat({
-  userName: _userName,
+  userName,
   role,
   displayRole: _displayRole,
   perms: _perms,
@@ -555,7 +555,9 @@ export default function Chat({
         <div ref={messagesContainerRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="mx-auto max-w-[1000px] px-4 py-6 lg:px-8">
             {messages.length === 0 ? (
-              <EmptyChat onSuggestion={(q) => { setInput(q); }} />
+              <div className="flex min-h-full flex-col justify-center">
+                <EmptyChat userName={userName} onSuggestion={(q) => { setInput(q); window.setTimeout(() => { const form = document.querySelector<HTMLFormElement>("form"); form?.requestSubmit(); }, 60); }} />
+              </div>
             ) : (
               <div className="space-y-7">
                 {messages.map((m) => (
@@ -752,15 +754,16 @@ export default function Chat({
                   type="submit"
                   disabled={!input.trim() || isTyping}
                   aria-label="Send message"
-                  className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                  title="Send (Enter)"
+                  className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
                 >
                   <ArrowUp className="size-4" />
                 </button>
               </div>
             </form>
 
-            <div className="mt-1.5 text-center text-[10px] text-slate-400">
-              AI-generated answers may require verification. Sensitive information is protected by RBAC.
+            <div className="mt-1 text-center text-[9.5px] text-slate-400 dark:text-slate-500">
+              Answers are AI-generated — verify before acting. Access is RBAC-protected.
             </div>
           </div>
         </div>

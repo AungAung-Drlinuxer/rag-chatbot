@@ -107,9 +107,9 @@ export default function PageSidebar({
         /* Rail mode: top brand avatar or expand button */
         <div className="flex flex-col items-center justify-center gap-2 border-b py-3 dark:border-slate-800">
           {branding.logo ? (
-            <img src={branding.logo} alt="Logo" className="size-8 rounded-lg object-contain" />
+            <img src={branding.logo} alt="Logo" className="size-8 rounded-xl object-contain" />
           ) : (
-            <div className="grid size-8 place-items-center rounded-lg bg-blue-600 text-xs font-bold text-white">iTH</div>
+            <div className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-[11px] font-extrabold text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)]">iTH</div>
           )}
           {onToggleCollapsed && (
             <button
@@ -129,7 +129,7 @@ export default function PageSidebar({
             {branding.logo ? (
               <img src={branding.logo} alt="Company logo" className="size-8 shrink-0 rounded-xl object-contain" />
             ) : (
-              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-xs font-bold text-white shadow-xs">iTH</div>
+              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-[11px] font-extrabold text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)]">iTH</div>
             )}
             <div className="min-w-0">
               <div className="text-xs font-semibold text-slate-100 truncate">{branding.appName || "IT Help Chatbot"}</div>

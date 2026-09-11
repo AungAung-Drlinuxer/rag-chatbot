@@ -47,21 +47,27 @@ const SUGGESTIONS = [
   },
 ];
 
-export function EmptyChat({ onSuggestion }: { onSuggestion: (question: string) => void }) {
+export function EmptyChat({ onSuggestion, userName }: { onSuggestion: (question: string) => void; userName?: string }) {
   const chipFor = (key: string) => DOMAIN_ICONS[key] ?? DOMAIN_ICONS.general;
 
+  // v1.5.2 — time-based personalized greeting (Perplexity-style)
+  const h = new Date().getHours();
+  const timeGreeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const firstName = (userName || "").split(/[@.\s]/)[0];
+  const greeting = firstName ? `${timeGreeting}, ${firstName}` : timeGreeting;
+
   return (
-    <div className="mx-auto w-full max-w-2xl py-6 sm:py-10">
+    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center py-6 sm:py-10">
       {/* ============ GREETING HEADER (Clean, modern, Perplexity/ChatGPT style) ============ */}
       <div className="mb-6 text-center sm:mb-8">
-        <div className="mx-auto mb-3.5 grid size-12 place-items-center rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-600/20">
+        <div className="mx-auto mb-3.5 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-white shadow-md shadow-blue-600/20">
           <Bot className="size-6" strokeWidth={2} />
         </div>
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
-          How can I help you today?
+          {greeting} 👋
         </h1>
         <p className="mx-auto mt-1.5 max-w-md text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
-          Ask any IT question. Answers are grounded in internal Confluence KB, Jira runbooks, and system docs.
+          Ask any IT question — answers are grounded in your internal knowledge base.
         </p>
       </div>
 
