@@ -1,6 +1,8 @@
 import {
   Activity,
   ArrowDownRight,
+  Download,
+  Printer,
   ArrowUpRight,
   BarChart3,
   BookOpen,
@@ -209,11 +211,12 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 <button
                   type="button"
                   onClick={() => setRangeOpen((v) => !v)}
-                  className="flex h-9 items-center gap-2 rounded-xl border bg-white px-3 text-xs font-medium hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"
+                  title="Reporting window"
+                  className="flex h-8 items-center gap-2 rounded-lg border bg-white px-2.5 text-[10px] font-medium transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"
                 >
                   <CalendarDays className="size-3.5" />
                   {range === "7d" ? "Last 7 days" : range === "30d" ? "Last 30 days" : "Last 90 days"}
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
+                  <ChevronDown className={`size-3 text-muted-foreground transition ${rangeOpen ? "rotate-180" : ""}`} />
                 </button>
                 {rangeOpen && (
                   <div className="absolute right-0 top-11 z-20 w-44 rounded-xl border bg-white p-1 shadow-lg dark:bg-slate-900">
@@ -259,9 +262,8 @@ export default function Dashboard({ role, onNavigate }: Props) {
               />
 
               <KpiCard
-                icon={
-                  <CheckCircle2 className="size-4" />
-                }
+                tone="emerald"
+                icon={<CheckCircle2 className="size-4" />}
                 value={stats ? String(stats.resolved_by_bot) : "—"}
                 title="Resolved by Bot"
                 change={deltaPill("resolved_by_bot")}
@@ -271,18 +273,19 @@ export default function Dashboard({ role, onNavigate }: Props) {
               />
 
               <KpiCard
-                icon={
-                  <Ticket className="size-4" />
-                }
+                tone="orange"
+                icon={<Ticket className="size-4" />}
                 value={stats ? String(stats.escalated_to_tickets) : "—"}
                 title="Escalated to Tickets"
-                change={deltaPill("escalated_to_tickets")}
+                /* v1.5.3 — hide the delta when zero escalations: "−100%" confuses users */
+                change={stats?.escalated_to_tickets === 0 ? null : deltaPill("escalated_to_tickets")}
                 positive={(stats?.deltas?.escalated_to_tickets ?? 0) < 0}
-                description="vs previous 7 days"
+                description={stats?.escalated_to_tickets === 0 ? "no escalations this week" : "vs previous 7 days"}
                 loading={loading}
               />
 
               <KpiCard
+                tone="sky"
                 icon={<Users className="size-4" />}
                 value={stats ? String(stats.active_users) : "—"}
                 title="Active Users"
@@ -293,6 +296,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
               />
 
               <KpiCard
+                tone="violet"
                 icon={<BookOpen className="size-4" />}
                 value={stats ? String(stats.kb_pages ?? "—") : "—"}
                 title="KB Articles"
@@ -302,6 +306,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {role === "admin" && (
                 <KpiCard
+                  tone="rose"
                   icon={<ShieldAlert className="size-4" />}
                   value={stats ? String(stats.attacks_blocked_7d ?? 0) : "—"}
                   title="Attacks Blocked (7d)"
@@ -539,8 +544,8 @@ export default function Dashboard({ role, onNavigate }: Props) {
                           </span>
                         </div>
 
-                        <p className="truncate text-xs" title={conversation.question}>
-                          {conversation.question}
+                        <p className="truncate text-xs" title={maskProfanity(conversation.question)}>
+                          {maskProfanity(conversation.question)}
                         </p>
 
                         <button
@@ -633,8 +638,8 @@ export default function Dashboard({ role, onNavigate }: Props) {
                               {conversation.user}
                             </td>
 
-                            <td className="max-w-[190px] truncate px-4 py-3 text-[10px]">
-                              {conversation.question}
+                            <td className="max-w-[190px] truncate px-4 py-3 text-[10px]" title={maskProfanity(conversation.question)}>
+                              {maskProfanity(conversation.question)}
                             </td>
 
                             <td className="px-4 py-3">
@@ -820,6 +825,15 @@ export default function Dashboard({ role, onNavigate }: Props) {
    KPI CARD
 ============================================================ */
 
+/* v1.5.3 — mask profanity in dashboard tables (org-facing surfaces) */
+const _PROFANITY_RE = new RegExp(
+  "\\b(f+u+c+k+|sh+i+t+|b+i+t+c+h+|a+s+s+h+o+l+e+|d+a+m+n+)\\b",
+  "gi"
+);
+function maskProfanity(text: string): string {
+  return (text || "").replace(_PROFANITY_RE, (m) => "✱".repeat(Math.min(6, m.length)));
+}
+
 function KpiCard({
   icon,
   value,
@@ -828,16 +842,25 @@ function KpiCard({
   description,
   positive,
   loading,
+  tone = "sky",
 }: {
   icon: ReactNode;
   value: string;
   title: string;
-  /** v1.1.6 — optional: when undefined (no baseline), the change pill is hidden entirely */
   change?: string | null;
   description: string;
   positive?: boolean;
   loading: boolean;
+  /** v1.5.3 — semantic color for the icon tile */
+  tone?: "sky" | "emerald" | "orange" | "violet" | "rose";
 }) {
+  const toneCls: Record<string, string> = {
+    sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400",
+    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+    orange: "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400",
+    rose: "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400",
+    violet: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400",
+  };
   return (
     <Card className="relative overflow-hidden rounded-2xl p-4">
 
@@ -887,15 +910,14 @@ function KpiCard({
 
         </div>
 
-        <div className="grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300">
+        <div className={`grid size-10 place-items-center rounded-xl ${toneCls[tone]}`}>
           {icon}
         </div>
 
       </div>
 
-      {/* Small decorative chart */}
-
-      <div className="absolute bottom-4 right-4 opacity-90">
+      {/* Small decorative sparkline */}
+      <div className="absolute bottom-3 right-3 opacity-60">
         <MiniSparkline />
       </div>
 
@@ -959,9 +981,11 @@ function ConversationChart({
   data: { day: string; total: number; resolved: number; escalated: number }[];
 }) {
   // v0.21.84 — dynamic Y scale (was hardcoded 400): nearest "nice" ceiling
+  // v1.5.3 — headroom reduced to 10% and "nice" step aligned to data magnitude
+  // (a single spike no longer visually dwarfs the rest of the week)
   const dataMax = Math.max(10, ...data.flatMap((d) => [d.total, d.resolved, d.escalated]));
   const step = Math.max(1, Math.pow(10, Math.floor(Math.log10(dataMax))));
-  const max = Math.ceil((dataMax * 1.15) / step) * step;
+  const max = Math.ceil((dataMax * 1.1) / step) * step;
 
   const width = 620;
   const height = 240;
@@ -1150,6 +1174,16 @@ function DonutChart({ stats }: { stats: Record<string, number> | null }) {
   const dash =
     (percentage / 100) *
     circumference;
+
+  // v1.5.3 — no conversations yet → calm empty state instead of a 0% donut
+  if (total === 0) {
+    return (
+      <div className="flex size-44 flex-col items-center justify-center gap-1 rounded-full border-2 border-dashed border-slate-200 dark:border-slate-800">
+        <span className="text-2xl font-semibold text-muted-foreground">—</span>
+        <span className="text-[10px] text-muted-foreground">No data yet</span>
+      </div>
+    );
+  }
 
   return (
     <div className="relative size-44">
@@ -1388,10 +1422,12 @@ function DashboardReportButtons({ stats, conversations, tickets, domains }: {
 
   return (
     <>
-      <Button variant="outline" size="sm" className="rounded-xl" onClick={exportCsv}>
+      <Button variant="outline" size="sm" className="rounded-xl" onClick={exportCsv} title="Download all dashboard data as CSV">
+        <Download className="mr-1.5 size-3.5" />
         Export CSV
       </Button>
-      <Button size="sm" className="rounded-xl bg-sky-700 hover:bg-sky-600" onClick={printReport}>
+      <Button size="sm" className="rounded-xl bg-sky-700 hover:bg-sky-600" onClick={printReport} title="Open a printable report in a new tab">
+        <Printer className="mr-1.5 size-3.5" />
         Report
       </Button>
     </>
@@ -1436,17 +1472,19 @@ function ResultBadge({
 }: {
   result: Conversation["result"];
 }) {
-  const resolved =
-    result === "Resolved";
-
+  // v1.5.3 — three-way badge colors: Resolved=emerald, Cautioned=amber, Escalated=orange
+  const styles: Record<string, string> = {
+    Resolved:
+      "rounded-md border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
+    Cautioned:
+      "rounded-md border-amber-200 bg-amber-50 text-[10px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
+    Escalated:
+      "rounded-md border-orange-200 bg-orange-50 text-[10px] text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300",
+  };
   return (
     <Badge
       variant="outline"
-      className={
-        resolved
-          ? "rounded-md border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-          : "rounded-md border-orange-200 bg-orange-50 text-[10px] text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300"
-      }
+      className={styles[result] ?? styles.Escalated}
     >
       {result}
     </Badge>
