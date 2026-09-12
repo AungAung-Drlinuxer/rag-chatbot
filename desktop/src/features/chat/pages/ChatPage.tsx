@@ -636,18 +636,20 @@ export default function Chat({
                     onRetryQuestion={() => retryFromMessage(m)}
                   />
                 ))}
-        {/* v1.6.14 — the RAG pipeline tracker moved to the right panel (below
-            Knowledge sources) so the chat stream stays unobstructed; it also
-            keeps a compact inline pill while tokens stream. */}
-        {isTyping && pipeline.streaming && (
-          <RagPipelineStatus
-            active
-            stage={stage}
-            streaming
-            telemetry={pipeline.telemetry}
-            elapsedMs={pipeline.elapsed}
-          />
-        )}
+                {/* v1.6.18 — RAG pipeline card lives in the reply area (collapsible
+                    hide/show) so users see + trace stage timings next to the answer. */}
+                {(isTyping || pipeline.elapsed > 0) && (
+                  <div className="mx-auto w-full max-w-3xl px-1 pb-2">
+                    <RagPipelineStatus
+                      active={isTyping}
+                      stage={stage}
+                      streaming={pipeline.streaming}
+                      telemetry={pipeline.telemetry}
+                      elapsedMs={pipeline.elapsed}
+                      variant="card"
+                    />
+                  </div>
+                )}
                 {chatNote && (
                   <div className="mx-auto w-fit rounded-full border bg-white px-3 py-1.5 text-[10px] font-medium shadow-sm dark:border-slate-700 dark:bg-slate-900">
                     {chatNote}
@@ -845,20 +847,6 @@ export default function Chat({
               <SourceCard key={`${source.page_id}-${index}`} source={source} index={index + 1} />
             ))}
           </div>
-          {/* v1.6.15 — live RAG pipeline tracker. Stays visible after the answer
-              finishes so users can trace how long each stage took (per-stage ms
-              + total elapsed). Only hidden when nothing has run yet. */}
-          {(isTyping || pipeline.elapsed > 0) && (
-            <div className="border-t p-4">
-              <RagPipelineStatus
-                active={isTyping}
-                stage={stage}
-                streaming={false}
-                telemetry={pipeline.telemetry}
-                elapsedMs={pipeline.elapsed}
-              />
-            </div>
-          )}
           <div className="border-t p-4">
             <div className="rounded-xl bg-[var(--muted)] p-3">
               <div className="flex items-center gap-2">

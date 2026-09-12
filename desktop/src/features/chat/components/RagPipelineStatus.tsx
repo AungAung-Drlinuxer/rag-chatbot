@@ -16,6 +16,7 @@
  *   (used by the demo button in the EmptyChat and by unit tests).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Card } from "@/components/ui/card";
 
 /* ------------------------------------------------------------------ */
 /* Stage model                                                        */
@@ -120,6 +121,8 @@ export type RagPipelineStatusProps = {
   simulate?: boolean;
   /** Fires when the simulation finishes (so parents can reset state). */
   onSimulateDone?: () => void;
+  /** v1.6.18 — render the full card with hide/show toggle (chat reply area). */
+  variant?: "panel" | "card";
 };
 
 /* ------------------------------------------------------------------ */
@@ -136,8 +139,10 @@ export default function RagPipelineStatus({
   onSimulateDone,
 }: RagPipelineStatusProps) {
   const [demoStage, setDemoStage] = useState<StageKey | null>(null);
-  const [hovered, setHovered] = useState<StageKey | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // v1.6.18 — hide/show toggles for the card variant (chat reply area)
+  const [open, setOpen] = useState(true);
+  const [tableOpen, setTableOpen] = useState(true);
 
   /* ---- simulation mode: walk the steps every 900ms ------------------ */
   useEffect(() => {
@@ -210,123 +215,206 @@ export default function RagPipelineStatus({
     );
   }
 
-  /* ---- full step tracker -------------------------------------------- */
+  /* ---- full step tracker ------------------------------------------------ */
   return (
-    <div
+    <Card
       data-testid="rag-pipeline-tracker"
-      className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 shadow-xs backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80"
+      className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
     >
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-          RAG pipeline
-        </span>
-        {elapsedMs > 0 && (
+      {/* ---- header: title + total-time badge ---- */}
+      <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-5">
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 place-items-center rounded-2xl bg-blue-50 text-lg dark:bg-blue-950/60">
+            ✨
+          </span>
+          <div>
+            <h3 className="text-[15px] font-semibold text-slate-900 dark:text-slate-100">
+              RAG Pipeline
+            </h3>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              Query processing and response generation
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
           <span
             data-testid="rag-pipeline-elapsed"
-            className="font-mono text-[10px] text-slate-400 dark:text-slate-500"
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-right dark:border-slate-800 dark:bg-slate-800/60"
           >
-            {(elapsedMs / 1000).toFixed(1)}s
+            <span className="block text-[9px] uppercase tracking-wide text-slate-400">
+              Total time
+            </span>
+            <span className="block font-mono text-[13px] font-semibold text-slate-700 tabular-nums dark:text-slate-200">
+              {(elapsedMs / 1000).toFixed(1)}s
+            </span>
           </span>
-        )}
+          {/* hide / show toggle (collapse the card body) */}
+          <button
+            type="button"
+            data-testid="rag-pipeline-toggle"
+            onClick={() => setOpen((v) => !v)}
+            className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600 dark:border-slate-800 dark:hover:bg-slate-800"
+            title={open ? "Hide pipeline details" : "Show pipeline details"}
+            aria-expanded={open}
+          >
+            {open ? "▾" : "▸"}
+          </button>
+        </div>
       </div>
 
-      {/* v1.6.15 - vertical rows for the narrow 300px sidebar:
-          no truncation, no overlap; each stage shows icon + label + ms. */}
-      <ol className="divide-y divide-slate-100 dark:divide-slate-800">
-        {STEPS.map((step, idx) => {
-          const isActive = idx === activeIdx;
-          const isDone = activeIdx > idx;
-          const ms = telemetry?.[step.key];
+      {open && (
+        <>
+          {/* ---- horizontal bubbles with arrows + ms pills ---- */}
+          <div className="flex items-start px-5 pb-2">
+            {STEPS.map((step, idx) => {
+              const isActive = idx === activeIdx;
+              const isDone = activeIdx > idx;
+              const ms = telemetry?.[step.key];
+              return (
+                <div key={step.key} className="flex min-w-0 flex-1 items-start">
+                  {idx > 0 && (
+                    <span
+                      aria-hidden
+                      className={`mx-1 mt-4 h-0.5 flex-1 ${
+                        isDone || isActive
+                          ? "bg-blue-400 dark:bg-blue-500"
+                          : "bg-slate-200 dark:bg-slate-700"
+                      }`}
+                    />
+                  )}
+                  <div className="flex min-w-0 flex-col items-center gap-1.5">
+                    <span
+                      className={`grid size-11 place-items-center rounded-full text-lg text-white transition-all ${
+                        isActive
+                          ? "animate-pulse bg-blue-600 shadow-lg shadow-blue-500/40"
+                          : isDone
+                            ? "bg-emerald-500"
+                            : "bg-slate-300 dark:bg-slate-700"
+                      }`}
+                    >
+                      {step.icon}
+                    </span>
+                    <span
+                      className={`max-w-[86px] text-center text-[11px] font-semibold leading-tight ${
+                        isActive
+                          ? "text-blue-600 dark:text-blue-400"
+                          : isDone
+                            ? "text-slate-700 dark:text-slate-300"
+                            : "text-slate-400 dark:text-slate-500"
+                      }`}
+                    >
+                      {step.label}
+                    </span>
+                    <span
+                      className={`rounded-lg px-2 py-0.5 font-mono text-[10px] tabular-nums ${
+                        ms != null
+                          ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                          : "bg-slate-50 text-slate-300 dark:bg-slate-800/50 dark:text-slate-600"
+                      }`}
+                    >
+                      {ms != null ? `${ms}ms` : "—"}
+                    </span>
+                    <span
+                      className={`text-[9px] font-medium ${
+                        isActive
+                          ? "text-blue-600 dark:text-blue-400"
+                          : isDone
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-slate-400 dark:text-slate-500"
+                      }`}
+                    >
+                      {isActive ? "◐ In progress" : isDone ? "✓ Completed" : "○ Pending"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-          return (
-            <li key={step.key}>
-              <button
-                type="button"
-                onMouseEnter={() => setHovered(step.key)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(step.key)}
-                onBlur={() => setHovered(null)}
-                className={`flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors outline-none ${
-                  isActive
-                    ? "bg-blue-50 dark:bg-blue-950/50"
-                    : hovered === step.key
-                      ? "bg-slate-50 dark:bg-slate-900"
-                      : ""
-                }`}
-                aria-current={isActive ? "step" : undefined}
-                title={step.description}
-              >
-                <span
-                  className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] transition-all ${
-                    isActive
-                      ? "animate-pulse border-blue-500 bg-blue-600 text-white shadow-md shadow-blue-500/30"
-                      : isDone
-                        ? "border-emerald-400 bg-emerald-500 text-white"
-                        : "border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
-                  }`}
-                >
-                  {isDone ? "✓" : step.icon}
-                </span>
-                <span
-                  className={`flex-1 truncate text-[11px] font-medium ${
-                    isActive
-                      ? "text-blue-700 dark:text-blue-400"
-                      : isDone
-                        ? "text-emerald-700 dark:text-emerald-400"
-                        : "text-slate-500 dark:text-slate-500"
-                  }`}
-                >
-                  {step.label}
-                </span>
-                {ms != null && (
-                  <span
-                    className={`shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] tabular-nums dark:bg-slate-800 ${
-                      isDone || isActive
-                        ? "text-slate-600 dark:text-slate-300"
-                        : "text-slate-300 dark:text-slate-600"
-                    }`}
-                  >
-                    {ms}ms
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+          {/* ---- collapsible detail table ---- */}
+          <div className="mx-5 mb-5 mt-2 rounded-xl border border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setTableOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3"
+            >
+              <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                Pipeline Steps
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {STEPS.length} steps {tableOpen ? "▾" : "▸"}
+              </span>
+            </button>
+            {tableOpen && (
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {STEPS.map((step, idx) => {
+                  const isActive = idx === activeIdx;
+                  const isDone = activeIdx > idx;
+                  const ms = telemetry?.[step.key];
+                  return (
+                    <li
+                      key={step.key}
+                      className="flex items-center gap-3 px-4 py-2.5"
+                    >
+                      <span
+                        className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${
+                          isActive
+                            ? "bg-blue-600"
+                            : isDone
+                              ? "bg-emerald-500"
+                              : "bg-slate-300 dark:bg-slate-700"
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span
+                        className={`grid size-8 shrink-0 place-items-center rounded-xl text-sm ${
+                          isActive
+                            ? "bg-blue-50 dark:bg-blue-950/60"
+                            : "bg-slate-100 dark:bg-slate-800"
+                        }`}
+                      >
+                        {step.icon}
+                      </span>
+                      <span className="w-28 shrink-0 text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                        {step.label}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-slate-400 dark:text-slate-500">
+                        {step.description}
+                      </span>
+                      <span className="w-14 shrink-0 text-right font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+                        {ms != null ? `${ms}ms` : "—"}
+                      </span>
+                      <span
+                        className={`w-24 shrink-0 rounded-full px-2 py-0.5 text-center text-[10px] font-medium ${
+                          isActive
+                            ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                            : isDone
+                              ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                              : "bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-500"
+                        }`}
+                      >
+                        {isActive ? "◐ In progress" : isDone ? "✓ Completed" : "○ Pending"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
 
-      {/* hover detail card — interactive telemetry inspection */}
-      {hovered && (
-        <div
-          data-testid="rag-pipeline-detail"
-          className="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[10px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400"
-        >
-          <span className="mr-1 font-semibold text-slate-600 dark:text-slate-300">
-            {STEPS.find((s) => s.key === hovered)?.icon}{" "}
-            {STEPS.find((s) => s.key === hovered)?.label}:
-          </span>
-          {STEPS.find((s) => s.key === hovered)?.description}
-          {telemetry?.[hovered] != null && (
-            <span className="ml-1 font-mono text-slate-400">
-              ({telemetry[hovered]}ms)
-            </span>
+          {/* ---- live stage detail footer ---- */}
+          {stage && !simulate && (
+            <div className="mx-5 mb-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
+              <span className="text-blue-500">ℹ</span>
+              <span className="truncate">{stage}</span>
+            </div>
           )}
-        </div>
+        </>
       )}
-
-      {/* live stage detail line */}
-      {stage && !simulate && (
-        <div className="mt-1.5 truncate text-center text-[9px] italic text-slate-400 dark:text-slate-500">
-          {stage}
-        </div>
-      )}
-    </div>
+    </Card>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* useStageTelemetry — hook for ChatPage to wire SSE stages to ms      */
-/* ------------------------------------------------------------------ */
 
 export function useStageTelemetry() {
   const [telemetry, setTelemetry] = useState<StageTelemetry>({});
