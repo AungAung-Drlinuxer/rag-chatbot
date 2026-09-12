@@ -16,8 +16,10 @@ import {
   X,
   Sparkles,
   ChevronRight,
+  RefreshCw,
+  CloudDownload,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PageShell, PageHeader } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
@@ -482,7 +484,101 @@ export default function Tickets({
     onToast(`Ticket created in ${newTicket.destination === "openproject" ? "OpenProject" : "Jira"}`);
   }
 
-  // v1.6.9 — header Sync button: pull upstream Jira/OpenProject tickets into the board
+/* v1.6.20 — consolidated Sync dropdown (professional, low-noise header):
+   one trigger button; a small popover lists Jira + OpenProject targets with
+   their last-run state. Closes on outside click / Esc / selection. */
+function SyncMenu({
+  busy,
+  onSync,
+}: {
+  busy: "" | "jira" | "openproject";
+  onSync: (src: "jira" | "openproject") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const items: { key: "jira" | "openproject"; label: string; desc: string }[] = [
+    { key: "jira", label: "Jira", desc: "Pull issues & JSM requests" },
+    { key: "openproject", label: "OpenProject", desc: "Pull work packages" },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        size="sm"
+        variant="outline"
+        className="rounded-xl"
+        disabled={busy !== ""}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="Import latest tickets from connected trackers"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <RefreshCw className={`mr-2 size-4 ${busy !== "" ? "animate-spin" : ""}`} />
+        {busy === "jira"
+          ? "Syncing Jira…"
+          : busy === "openproject"
+            ? "Syncing OpenProject…"
+            : "Sync"}
+        <ChevronDown className={`ml-1.5 size-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </Button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900"
+        >
+          <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Sync from external tracker
+            </p>
+          </div>
+          {items.map((it) => (
+            <button
+              key={it.key}
+              role="menuitem"
+              disabled={busy !== ""}
+              onClick={() => {
+                setOpen(false);
+                onSync(it.key);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800/60"
+            >
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+                <CloudDownload className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
+                  {it.label}
+                </span>
+                <span className="block text-[10px] text-slate-400">{it.desc}</span>
+              </span>
+              <ChevronRight className="size-3.5 shrink-0 text-slate-300" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// v1.6.9/v1.6.20 — sync state + handler (used by SyncMenu in the header)
   const [syncBusy, setSyncBusy] = useState<"" | "jira" | "openproject">("");
   async function syncTickets(source: "jira" | "openproject") {
     setSyncBusy(source);
@@ -516,31 +612,12 @@ export default function Tickets({
       description="Track and manage IT support requests"
       actions={
         <div className="flex items-center gap-2">
+          {/* v1.6.20 — consolidated sync menu: one button instead of two separate ones */}
           {(role === "admin" || role === "agent") && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-xl"
-              disabled={syncBusy !== ""}
-              title={syncBusy === "jira" ? "Syncing from Jira…" : "Pull latest tickets from Jira into the board"}
-              onClick={() => syncTickets("jira")}
-            >
-              <RefreshIcon className={`mr-2 size-4 ${syncBusy === "jira" ? "animate-spin" : ""}`} />
-              {syncBusy === "jira" ? "Syncing…" : "Sync Jira"}
-            </Button>
-          )}
-          {(role === "admin" || role === "agent") && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-xl"
-              disabled={syncBusy !== ""}
-              title={syncBusy === "openproject" ? "Syncing from OpenProject…" : "Pull latest work packages from OpenProject into the board"}
-              onClick={() => syncTickets("openproject")}
-            >
-              <RefreshIcon className={`mr-2 size-4 ${syncBusy === "openproject" ? "animate-spin" : ""}`} />
-              {syncBusy === "openproject" ? "Syncing…" : "Sync OpenProject"}
-            </Button>
+            <SyncMenu
+              busy={syncBusy}
+              onSync={syncTickets}
+            />
           )}
           <Button size="sm" className="rounded-xl" onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 size-4" />
@@ -715,31 +792,29 @@ export default function Tickets({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* v1.6.20 — compact icon toolbar (was 3 heavy labelled buttons) */}
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={exportCsv}
                     disabled={!filteredTickets.length}
-                    className="flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium hover:bg-muted disabled:opacity-40"
-                    title="Download ticket report (CSV)"
+                    className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    title="Export CSV"
                   >
-                    <Download className="size-3.5" />
-                    Export CSV
+                    <Download className="size-4" />
                   </button>
                   <button
                     type="button"
                     onClick={printReport}
                     disabled={!filteredTickets.length}
-                    className="flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
-                    title="Print / save as PDF"
+                    className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    title="Print report"
                   >
-                    <Printer className="size-3.5" />
-                    Report
+                    <Printer className="size-4" />
                   </button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-lg"
+                  <span aria-hidden className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
+                  <button
+                    type="button"
                     onClick={async () => {
                       setQuery("");
                       setListBusy(true);
@@ -756,10 +831,11 @@ export default function Tickets({
                       }
                     }}
                     disabled={listBusy}
+                    className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    title="Refresh list"
                   >
-                    <RefreshIcon className={listBusy ? "animate-spin" : ""} />
-                    {listBusy ? "Refreshing…" : "Refresh"}
-                  </Button>
+                    <RefreshIcon className={`size-4 ${listBusy ? "animate-spin" : ""}`} />
+                  </button>
                 </div>
               </div>
 
@@ -1231,10 +1307,10 @@ export default function Tickets({
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="mt-6 flex flex-wrap gap-2 border-t pt-4">
+                    {/* v1.6.20 — Actions: professional compact icon+label row */}
+                    <div className="mt-6 border-t pt-4">
                       {canManage ? (
-                        <>
+                        <div className="grid grid-cols-2 gap-2">
                           <Button variant="outline" size="sm" className="rounded-xl text-xs"
                             onClick={() => setEditFields({
                               subject: selected.subject,
@@ -1247,15 +1323,17 @@ export default function Tickets({
                             Edit
                           </Button>
 
-                          <Button variant="outline" size="sm" className="rounded-xl text-xs"
+                          <Button
+                            variant={statusOpen ? "default" : "outline"}
+                            size="sm"
+                            className="rounded-xl text-xs"
                             onClick={() => setStatusOpen((v) => !v)}
                             aria-expanded={statusOpen}
                           >
                             <ChevronDown className={"mr-1.5 size-3.5 transition-transform " + (statusOpen ? "rotate-180" : "")} />
-                            Update status
+                            {statusOpen ? "Close status" : "Update status"}
                           </Button>
-
-                        </>
+                        </div>
                       ) : null}
                     </div>
                   </div>
