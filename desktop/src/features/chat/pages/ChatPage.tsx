@@ -54,6 +54,7 @@ import {
   EmptyChat,
   Row,
 } from "@/features/chat/components/chat-parts";
+import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
 import {
   listConversations,
   getConversationMessages,
@@ -97,6 +98,8 @@ export default function Chat({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [stage, setStage] = useState("");
+  // v1.6.12 — RAG pipeline live tracker (per-stage telemetry + streaming pill)
+  const pipeline = useStageTelemetry();
   const [approval, setApproval] = useState<{ id: string; question: string } | null>(null);
   // v0.21.72 — admin polls the approval queue so requests from OTHER users surface too
   useEffect(() => {
@@ -255,6 +258,7 @@ export default function Chat({
     setMessages((prev) => [...prev, userMessage]);
     historyRef.current = [...historyRef.current, { role: "user", content }];
     setIsTyping(true);
+    pipeline.begin();
     setMessages((prev) => [
       ...prev,
       { id: assistantId, role: "assistant", content: "", timestamp: currentTime() },
@@ -290,11 +294,15 @@ export default function Chat({
               ),
             ),
           onToken: (token) => {
+            pipeline.onFirstToken();
             setMessages((prev) =>
               prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + token } : m))
             );
           },
-          onStage: (detail) => setStage(detail),
+          onStage: (detail) => {
+            setStage(detail);
+            pipeline.onStage(detail);
+          },
           onApprovalRequest: (data) => {
             setStage("");
             setApproval({ id: data.approval_id, question: data.question });
@@ -314,6 +322,7 @@ export default function Chat({
           },
           onDone: (d) => {
             setStage("");
+            pipeline.finish();
             if (d.usage || d.latency_ms || d.message_id) {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -627,21 +636,18 @@ export default function Chat({
                     onRetryQuestion={() => retryFromMessage(m)}
                   />
                 ))}
-        {/* Stage indicator during retrieval (only shown if bot hasn't started streaming answer text) */}
-        {isTyping && stage && messages[messages.length - 1]?.role !== "assistant" && (
-          <div className="flex items-center gap-3">
-            <div className="grid size-9 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
-              <Bot className="size-5" />
-            </div>
-            <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-500 shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-              <span className="flex gap-1">
-                <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:0ms]" />
-                <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:150ms]" />
-                <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:300ms]" />
-              </span>
-              <span className="ml-1 text-[11px] font-medium">{stage}</span>
-            </div>
-          </div>
+        {/* v1.6.12 — RAG pipeline live step tracker (replaces the 3-dot bubble).
+            Shows the 5 real backend stages with per-stage telemetry while the
+            request runs, then collapses to a compact streaming pill once the
+            answer starts. Interactive: hover any step for what it does. */}
+        {isTyping && (
+          <RagPipelineStatus
+            active
+            stage={stage}
+            streaming={pipeline.streaming}
+            telemetry={pipeline.telemetry}
+            elapsedMs={pipeline.elapsed}
+          />
         )}
                 {chatNote && (
                   <div className="mx-auto w-fit rounded-full border bg-white px-3 py-1.5 text-[10px] font-medium shadow-sm dark:border-slate-700 dark:bg-slate-900">
