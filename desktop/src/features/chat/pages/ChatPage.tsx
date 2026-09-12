@@ -636,15 +636,14 @@ export default function Chat({
                     onRetryQuestion={() => retryFromMessage(m)}
                   />
                 ))}
-        {/* v1.6.12 — RAG pipeline live step tracker (replaces the 3-dot bubble).
-            Shows the 5 real backend stages with per-stage telemetry while the
-            request runs, then collapses to a compact streaming pill once the
-            answer starts. Interactive: hover any step for what it does. */}
-        {isTyping && (
+        {/* v1.6.14 — the RAG pipeline tracker moved to the right panel (below
+            Knowledge sources) so the chat stream stays unobstructed; it also
+            keeps a compact inline pill while tokens stream. */}
+        {isTyping && pipeline.streaming && (
           <RagPipelineStatus
             active
             stage={stage}
-            streaming={pipeline.streaming}
+            streaming
             telemetry={pipeline.telemetry}
             elapsedMs={pipeline.elapsed}
           />
@@ -845,6 +844,20 @@ export default function Chat({
               <SourceCard key={`${source.page_id}-${index}`} source={source} index={index + 1} />
             ))}
           </div>
+          {/* v1.6.14 — live RAG pipeline tracker (stage progress + per-stage
+              telemetry) so users can see exactly where their question is and
+              how long each stage took — below the Knowledge sources list. */}
+          {isTyping && (
+            <div className="border-t p-4">
+              <RagPipelineStatus
+                active
+                stage={stage}
+                streaming={false}
+                telemetry={pipeline.telemetry}
+                elapsedMs={pipeline.elapsed}
+              />
+            </div>
+          )}
           <div className="border-t p-4">
             <div className="rounded-xl bg-[var(--muted)] p-3">
               <div className="flex items-center gap-2">
