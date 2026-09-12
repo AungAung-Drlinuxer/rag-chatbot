@@ -16,7 +16,7 @@
  *   (used by the demo button in the EmptyChat and by unit tests).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card } from "@/components/ui/card";
+
 
 /* ------------------------------------------------------------------ */
 /* Stage model                                                        */
@@ -111,7 +111,7 @@ export type RagPipelineStatusProps = {
   active: boolean;
   /** Latest backend stage detail string (from the SSE `stage` event). */
   stage: string;
-  /** True once tokens start arriving (tracker shrinks to a pill). */
+  /** True once tokens start arriving. */
   streaming?: boolean;
   /** Optional per-stage elapsed-time telemetry collected by the parent. */
   telemetry?: StageTelemetry;
@@ -122,7 +122,9 @@ export type RagPipelineStatusProps = {
   /** Fires when the simulation finishes (so parents can reset state). */
   onSimulateDone?: () => void;
   /** v1.6.18 — render the full card with hide/show toggle (chat reply area). */
-  variant?: "panel" | "card";
+  variant?: "panel" | "card" | "inline";
+  /** Initial open state */
+  defaultOpen?: boolean;
 };
 
 /* ------------------------------------------------------------------ */
@@ -137,12 +139,13 @@ export default function RagPipelineStatus({
   elapsedMs = 0,
   simulate = false,
   onSimulateDone,
+  defaultOpen = false,
 }: RagPipelineStatusProps) {
   const [demoStage, setDemoStage] = useState<StageKey | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // v1.6.18 — hide/show toggles for the card variant (chat reply area)
-  const [open, setOpen] = useState(true);
-  const [tableOpen, setTableOpen] = useState(true);
+  // v1.6.19 — collapsed by default once completed, or configurable via defaultOpen
+  const [open, setOpen] = useState(active ? true : defaultOpen);
+  const [tableOpen, setTableOpen] = useState(false);
 
   /* ---- simulation mode: walk the steps every 900ms ------------------ */
   useEffect(() => {
@@ -217,76 +220,99 @@ export default function RagPipelineStatus({
 
   /* ---- full step tracker ------------------------------------------------ */
   return (
-    <Card
+    <div
       data-testid="rag-pipeline-tracker"
-      className="overflow-hidden border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 text-slate-800 shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100"
     >
-      {/* ---- header: title + total-time badge ---- */}
-      <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-5">
-        <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-2xl bg-blue-50 text-lg dark:bg-blue-950/60">
-            ✨
+      {/* ---- header: title + compact telemetry chips + toggle ---- */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
+        className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 select-none hover:bg-slate-50/80 dark:hover:bg-slate-800/50"
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className={`grid size-7 shrink-0 place-items-center rounded-xl text-xs ${
+              active
+                ? "animate-pulse bg-blue-100 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400"
+                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            }`}
+          >
+            {active ? "⚡" : "✨"}
           </span>
-          <div>
-            <h3 className="text-[15px] font-semibold text-slate-900 dark:text-slate-100">
-              RAG Pipeline
-            </h3>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">
-              Query processing and response generation
-            </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                RAG Pipeline
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${
+                  active
+                    ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                    : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                }`}
+              >
+                {active ? (streaming ? "Generating" : "Tracing") : "Completed"}
+              </span>
+            </div>
+            {!open && (
+              <p className="mt-0.5 truncate text-[10px] text-slate-500 dark:text-slate-400">
+                {active
+                  ? stage || "Processing query pipeline..."
+                  : "Click to inspect step-by-step execution metrics"}
+              </p>
+            )}
           </div>
         </div>
+
         <div className="flex items-center gap-2">
-          <span
-            data-testid="rag-pipeline-elapsed"
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-right dark:border-slate-800 dark:bg-slate-800/60"
-          >
-            <span className="block text-[9px] uppercase tracking-wide text-slate-400">
-              Total time
-            </span>
-            <span className="block font-mono text-[13px] font-semibold text-slate-700 tabular-nums dark:text-slate-200">
+          {elapsedMs > 0 && (
+            <span
+              data-testid="rag-pipeline-elapsed"
+              className="flex items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-700 tabular-nums dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200"
+            >
+              <span className="text-[9px] font-normal uppercase text-slate-400">Time</span>
               {(elapsedMs / 1000).toFixed(1)}s
             </span>
+          )}
+          <span className="grid size-6 place-items-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            {open ? "▲" : "▼"}
           </span>
-          {/* hide / show toggle (collapse the card body) */}
-          <button
-            type="button"
-            data-testid="rag-pipeline-toggle"
-            onClick={() => setOpen((v) => !v)}
-            className="grid size-8 place-items-center rounded-lg border border-slate-200 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600 dark:border-slate-800 dark:hover:bg-slate-800"
-            title={open ? "Hide pipeline details" : "Show pipeline details"}
-            aria-expanded={open}
-          >
-            {open ? "▾" : "▸"}
-          </button>
         </div>
       </div>
 
       {open && (
-        <>
-          {/* ---- horizontal bubbles with arrows + ms pills ---- */}
-          <div className="flex items-start px-5 pb-2">
+        <div className="border-t border-slate-100 p-4 dark:border-slate-800/80">
+          {/* ---- horizontal bubbles with status & duration ---- */}
+          <div className="flex items-start overflow-x-auto pb-3 pt-1">
             {STEPS.map((step, idx) => {
-              const isActive = idx === activeIdx;
-              const isDone = activeIdx > idx;
+              const isActive = active && idx === activeIdx;
+              const isDone = active ? activeIdx > idx : (telemetry?.[step.key] != null || idx <= lastMeasured);
               const ms = telemetry?.[step.key];
               return (
-                <div key={step.key} className="flex min-w-0 flex-1 items-start">
+                <div key={step.key} className="flex min-w-[90px] flex-1 items-start">
                   {idx > 0 && (
                     <span
                       aria-hidden
-                      className={`mx-1 mt-4 h-0.5 flex-1 ${
+                      className={`mx-1 mt-4 h-0.5 flex-1 shrink-0 ${
                         isDone || isActive
-                          ? "bg-blue-400 dark:bg-blue-500"
+                          ? "bg-blue-500/80 dark:bg-blue-500/70"
                           : "bg-slate-200 dark:bg-slate-700"
                       }`}
                     />
                   )}
-                  <div className="flex min-w-0 flex-col items-center gap-1.5">
+                  <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
                     <span
-                      className={`grid size-11 place-items-center rounded-full text-lg text-white transition-all ${
+                      className={`grid size-9 place-items-center rounded-full text-sm text-white shadow-xs transition-all ${
                         isActive
-                          ? "animate-pulse bg-blue-600 shadow-lg shadow-blue-500/40"
+                          ? "animate-pulse bg-blue-600 shadow-blue-500/30"
                           : isDone
                             ? "bg-emerald-500"
                             : "bg-slate-300 dark:bg-slate-700"
@@ -295,18 +321,18 @@ export default function RagPipelineStatus({
                       {step.icon}
                     </span>
                     <span
-                      className={`max-w-[86px] text-center text-[11px] font-semibold leading-tight ${
+                      className={`max-w-[85px] truncate text-[11px] font-medium ${
                         isActive
-                          ? "text-blue-600 dark:text-blue-400"
+                          ? "font-semibold text-blue-600 dark:text-blue-400"
                           : isDone
-                            ? "text-slate-700 dark:text-slate-300"
+                            ? "text-slate-700 dark:text-slate-200"
                             : "text-slate-400 dark:text-slate-500"
                       }`}
                     >
                       {step.label}
                     </span>
                     <span
-                      className={`rounded-lg px-2 py-0.5 font-mono text-[10px] tabular-nums ${
+                      className={`rounded-md px-1.5 py-0.2 font-mono text-[9px] tabular-nums ${
                         ms != null
                           ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                           : "bg-slate-50 text-slate-300 dark:bg-slate-800/50 dark:text-slate-600"
@@ -323,7 +349,7 @@ export default function RagPipelineStatus({
                             : "text-slate-400 dark:text-slate-500"
                       }`}
                     >
-                      {isActive ? "◐ In progress" : isDone ? "✓ Completed" : "○ Pending"}
+                      {isActive ? "◐ Running" : isDone ? "✓ Done" : "○ Pending"}
                     </span>
                   </div>
                 </div>
@@ -332,32 +358,32 @@ export default function RagPipelineStatus({
           </div>
 
           {/* ---- collapsible detail table ---- */}
-          <div className="mx-5 mb-5 mt-2 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="mt-2 rounded-xl border border-slate-200/80 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/40">
             <button
               type="button"
               onClick={() => setTableOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-3"
+              className="flex w-full items-center justify-between px-3.5 py-2 text-left"
             >
-              <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
-                Pipeline Steps
+              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                Detailed Telemetry Breakdown
               </span>
-              <span className="text-[10px] text-slate-400">
-                {STEPS.length} steps {tableOpen ? "▾" : "▸"}
+              <span className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                {tableOpen ? "Hide Breakdown ▲" : "Show Breakdown ▼"}
               </span>
             </button>
             {tableOpen && (
-              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              <ul className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800/60 dark:border-slate-800/60">
                 {STEPS.map((step, idx) => {
-                  const isActive = idx === activeIdx;
-                  const isDone = activeIdx > idx;
+                  const isActive = active && idx === activeIdx;
+                  const isDone = active ? activeIdx > idx : (telemetry?.[step.key] != null || idx <= lastMeasured);
                   const ms = telemetry?.[step.key];
                   return (
                     <li
                       key={step.key}
-                      className="flex items-center gap-3 px-4 py-2.5"
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-xs"
                     >
                       <span
-                        className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white ${
+                        className={`grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${
                           isActive
                             ? "bg-blue-600"
                             : isDone
@@ -367,34 +393,25 @@ export default function RagPipelineStatus({
                       >
                         {idx + 1}
                       </span>
-                      <span
-                        className={`grid size-8 shrink-0 place-items-center rounded-xl text-sm ${
-                          isActive
-                            ? "bg-blue-50 dark:bg-blue-950/60"
-                            : "bg-slate-100 dark:bg-slate-800"
-                        }`}
-                      >
-                        {step.icon}
-                      </span>
-                      <span className="w-28 shrink-0 text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                      <span className="w-24 shrink-0 font-medium text-slate-800 dark:text-slate-200">
                         {step.label}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-[11px] text-slate-400 dark:text-slate-500">
+                      <span className="min-w-0 flex-1 truncate text-[10px] text-slate-400 dark:text-slate-500">
                         {step.description}
                       </span>
-                      <span className="w-14 shrink-0 text-right font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+                      <span className="w-14 shrink-0 text-right font-mono text-[10px] tabular-nums text-slate-600 dark:text-slate-300">
                         {ms != null ? `${ms}ms` : "—"}
                       </span>
                       <span
-                        className={`w-24 shrink-0 rounded-full px-2 py-0.5 text-center text-[10px] font-medium ${
+                        className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-[9px] font-medium ${
                           isActive
                             ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
                             : isDone
                               ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
-                              : "bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-500"
+                              : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
                         }`}
                       >
-                        {isActive ? "◐ In progress" : isDone ? "✓ Completed" : "○ Pending"}
+                        {isActive ? "◐ Running" : isDone ? "✓ Done" : "○ Pending"}
                       </span>
                     </li>
                   );
@@ -403,16 +420,16 @@ export default function RagPipelineStatus({
             )}
           </div>
 
-          {/* ---- live stage detail footer ---- */}
-          {stage && !simulate && (
-            <div className="mx-5 mb-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-[10px] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
-              <span className="text-blue-500">ℹ</span>
+          {/* ---- live stage detail line ---- */}
+          {stage && !simulate && active && (
+            <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-blue-50/60 px-3 py-1.5 text-[10px] text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              <span className="size-1.5 animate-ping rounded-full bg-blue-600" />
               <span className="truncate">{stage}</span>
             </div>
           )}
-        </>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -420,6 +437,8 @@ export function useStageTelemetry() {
   const [telemetry, setTelemetry] = useState<StageTelemetry>({});
   const [elapsed, setElapsed] = useState(0);
   const [streaming, setStreaming] = useState(false);
+  const telemetryRef = useRef<StageTelemetry>({});
+  const elapsedRef = useRef<number>(0);
   const startedAt = useRef<number>(0);
   const stageAt = useRef<number>(0);
   const prevStage = useRef<StageKey | null>(null);
@@ -429,13 +448,12 @@ export function useStageTelemetry() {
     startedAt.current = performance.now();
     stageAt.current = startedAt.current;
     prevStage.current = null;
+    telemetryRef.current = {};
+    elapsedRef.current = 0;
     setTelemetry({});
     setElapsed(0);
     setStreaming(false);
     if (pollRef.current) clearInterval(pollRef.current);
-    // v1.6.13 — poll every 150ms: show a live "running…" duration for the
-    // stage that is currently executing (the one AFTER the last completed
-    // label), so the active row's ms counts up in real time.
     pollRef.current = setInterval(() => {
       const now = performance.now();
       const lastDone = prevStage.current;
@@ -444,51 +462,62 @@ export function useStageTelemetry() {
         const running = STEPS[idx + 1];
         if (running) {
           const runMs = Math.max(1, Math.round(now - stageAt.current));
+          telemetryRef.current = { ...telemetryRef.current, [running.key]: runMs };
           setTelemetry((t) => ({ ...t, [running.key]: runMs }));
         }
       } else {
-        // before the first label completes, "understanding" is running
         const runMs = Math.max(1, Math.round(now - stageAt.current));
+        telemetryRef.current = { ...telemetryRef.current, understanding: runMs };
         setTelemetry((t) => ({ ...t, understanding: runMs }));
       }
-      setElapsed(Math.round(now - startedAt.current));
+      const el = Math.round(now - startedAt.current);
+      elapsedRef.current = el;
+      setElapsed(el);
     }, 150);
   };
 
   const onStage = (detail: string, stageKey?: string) => {
-    // v1.6.16 — the backend now sends an exact canonical stage key with every
-    // stage event; fall back to detail matching for older payloads. Unknown
-    // keys (aliases/typos) are ignored so the 5 canonical rows stay exact.
     const now = performance.now();
     const completed = stageKey && STEPS.some((s) => s.key === stageKey)
       ? (stageKey as StageKey)
       : matchStageKey(detail);
     if (completed) {
       const runMs = Math.max(1, Math.round(now - stageAt.current));
+      telemetryRef.current = { ...telemetryRef.current, [completed]: runMs };
       setTelemetry((t) => ({ ...t, [completed]: runMs }));
     }
     stageAt.current = now;
     prevStage.current = completed;
-    setElapsed(Math.round(now - startedAt.current));
+    const el = Math.round(now - startedAt.current);
+    elapsedRef.current = el;
+    setElapsed(el);
   };
 
   const onFirstToken = () => {
-    // tokens start → whatever was running since the last label is "generating"
     const now = performance.now();
     const runMs = Math.max(1, Math.round(now - stageAt.current));
+    telemetryRef.current = { ...telemetryRef.current, generate: runMs };
     setTelemetry((t) => ({ ...t, generate: runMs }));
     prevStage.current = null;
     setStreaming(true);
-    setElapsed(Math.round(now - startedAt.current));
+    const el = Math.round(now - startedAt.current);
+    elapsedRef.current = el;
+    setElapsed(el);
   };
 
-  const finish = () => {
+  const finish = (): { stages: StageTelemetry; totalMs: number } => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
-    setElapsed(Math.round(performance.now() - startedAt.current));
+    const finalElapsed = Math.round(performance.now() - startedAt.current);
+    elapsedRef.current = finalElapsed;
+    setElapsed(finalElapsed);
+    return {
+      stages: { ...telemetryRef.current },
+      totalMs: finalElapsed,
+    };
   };
 
-  return { telemetry, elapsed, streaming, begin, onStage, onFirstToken, finish };
+  return { telemetry, elapsed, streaming, telemetryRef, elapsedRef, begin, onStage, onFirstToken, finish };
 }

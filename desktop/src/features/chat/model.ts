@@ -11,6 +11,11 @@ export type Source = {
   url?: string | null;
 };
 
+export type RagTrace = {
+  stages: Record<string, number>;
+  totalMs: number;
+};
+
 export type Message = {
   id: string;
   role: MsgRole;
@@ -24,6 +29,7 @@ export type Message = {
   latencyMs?: number;
   serverId?: string;  // v0.21.90 — DB row id from the done event (feedback target)
   feedback?: 1 | -1;  // v0.21.90 — recorded rating (button state)
+  ragTrace?: RagTrace;
 };
 
 export type Conv = { session_id: string; title?: string; updated_at?: string; is_pinned?: boolean };

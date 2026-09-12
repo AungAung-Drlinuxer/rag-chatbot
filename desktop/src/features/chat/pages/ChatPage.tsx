@@ -204,6 +204,7 @@ export default function Chat({
         topK: m.meta?.top_k,
         usage: m.meta?.usage,
         latencyMs: m.meta?.latency_ms,
+        ragTrace: m.meta?.rag_trace || (m.meta?.latency_ms ? { stages: {}, totalMs: m.meta.latency_ms } : undefined),
         serverId: m.message_id || undefined,  // feedback target (v0.21.90)
         sources: (m.meta?.hits ?? []).map((h: any) => ({
           page_id: h.page_id ?? null,
@@ -322,16 +323,26 @@ export default function Chat({
           },
           onDone: (d) => {
             setStage("");
-            pipeline.finish();
-            if (d.usage || d.latency_ms || d.message_id) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, usage: d.usage ?? m.usage, latencyMs: d.latency_ms ?? m.latencyMs, serverId: d.message_id ?? m.serverId }
-                    : m,
-                ),
-              );
-            }
+            const finalTrace = pipeline.finish();
+            const traceSnapshot = {
+              stages: finalTrace.stages && Object.keys(finalTrace.stages).length > 0
+                ? { ...finalTrace.stages }
+                : { ...pipeline.telemetryRef.current },
+              totalMs: finalTrace.totalMs || pipeline.elapsedRef.current || d.latency_ms || 0,
+            };
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      usage: d.usage ?? m.usage,
+                      latencyMs: d.latency_ms ?? m.latencyMs,
+                      serverId: d.message_id ?? m.serverId,
+                      ragTrace: traceSnapshot,
+                    }
+                  : m,
+              ),
+            );
           },
         },
       );
@@ -636,17 +647,16 @@ export default function Chat({
                     onRetryQuestion={() => retryFromMessage(m)}
                   />
                 ))}
-                {/* v1.6.18 — RAG pipeline card lives in the reply area (collapsible
-                    hide/show) so users see + trace stage timings next to the answer. */}
-                {(isTyping || pipeline.elapsed > 0) && (
+                {/* In-flight RAG execution status shown ONLY while actively generating before message persists */}
+                {isTyping && (
                   <div className="mx-auto w-full max-w-3xl px-1 pb-2">
                     <RagPipelineStatus
-                      active={isTyping}
+                      active={true}
                       stage={stage}
                       streaming={pipeline.streaming}
                       telemetry={pipeline.telemetry}
                       elapsedMs={pipeline.elapsed}
-                      variant="card"
+                      defaultOpen={true}
                     />
                   </div>
                 )}
@@ -1312,7 +1322,7 @@ function MessageBubble({
               <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="size-3.5 text-blue-600 dark:text-blue-400" />
-                  Sources & Referenced Documents
+                  Sources &amp; Referenced Documents
                 </span>
                 <span className="text-[10px] font-normal text-muted-foreground">
                   {message.sources!.length} reference{message.sources!.length > 1 ? "s" : ""}
@@ -1355,6 +1365,19 @@ function MessageBubble({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Persisted RAG Execution Pipeline Trace inside Assistant Message Bubble */}
+          {!isUser && message.ragTrace && (
+            <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
+              <RagPipelineStatus
+                active={false}
+                stage=""
+                telemetry={message.ragTrace.stages}
+                elapsedMs={message.ragTrace.totalMs}
+                defaultOpen={false}
+              />
             </div>
           )}
         </div>
