@@ -46,5 +46,8 @@ data:
     masterauth ${REDIS_PASSWORD}
     requirepass ${REDIS_PASSWORD}
     replica-announce-ip $(POD_IP)
+  # v1.6.8 — allchannels: celery pidbox/kombu needs pubsub channel access;
+  # without it Redis revokes channels implicitly (resetchannels) and the
+  # celery-worker crash-loops with "No permissions to access a channel".
   users.acl: |
-    user default on >${REDIS_PASSWORD} ~* +@all
+    user default on >${REDIS_PASSWORD} ~* +@all allchannels
