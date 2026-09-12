@@ -27,10 +27,10 @@ MAX_MESSAGE_HARD = 32_000          # absolute reject regardless of config
 # --- Prompt-injection heuristics (English; deterministic regex) ---------------
 _INJECTION_PATTERNS: list[tuple[str, str]] = [
     (r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)", "instruction_override"),
-    (r"disregard\s+(all\s+)?(previous|your|the)\s+(instructions|rules|training)", "instruction_override"),
+    (r"disregard\s+(all\s+)?(?:previous\s+|your\s+|the\s+)+(instructions|rules|training|guidelines|policies)", "instruction_override"),
     (r"you\s+are\s+now\s+(dan|developer\s+mode|unfiltered|jailbreak)", "role_hijack"),
     (r"system\s+p(rompt|essage)\s*[:=]", "system_prompt_probe"),
-    (r"(print|show|reveal|repeat|output)\s+(your\s+|the\s+)?(full\s+)?system\s+prompt", "system_prompt_probe"),
+    (r"(print|show|reveal|repeat|output|display)\s+(me\s+)?(your\s+|the\s+|this\s+)?(full\s+|entire\s+|complete\s+|original\s+)?system\s+prompt", "system_prompt_probe"),
     (r"(your\s+)?(initial|original|secret)\s+(instructions|prompt)", "system_prompt_probe"),
     (r"act\s+as\s+an?\s+(unrestricted|uncensored|amoral|evil)", "role_hijack"),
     (r"developer\s+mode\s+enabled", "role_hijack"),
@@ -38,7 +38,7 @@ _INJECTION_PATTERNS: list[tuple[str, str]] = [
     (r"(execute|run)\s+(this\s+)?(sql|shell|command)\s*[:：]", "tool_abuse"),
     (r"select\s+\*\s+from\s+(users|pg_|sys\.)", "tool_abuse"),
     (r"document\.location|exfil|steal\s+.*cookie|fetch\(['\"]http", "data_exfiltration"),
-    (r"pretend\s+(you\s+are|to\s+be)\s+.{0,30}(no\s+restrictions|without\s+rules)", "role_hijack"),
+    (r"pretend\s+(you\s+are|to\s+be)\s+.{0,40}((with\s+|having\s+)?no\s+(restrictions|limits|rules|filters)|without\s+(any\s+)?(rules|limits|restrictions|filters)|unrestricted|uncensored|amoral|evil)", "role_hijack"),
     (r"from\s+now\s+on\s+(you\s+will|you\s+are)", "instruction_override"),
 ]
 
