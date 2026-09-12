@@ -14,6 +14,35 @@ export async function listTickets(limit = 50) {
   return r.json();
 }
 
+/** v1.6.9 — pull upstream tickets into the local mirror (admin/agent only). */
+export async function syncJiraTickets(): Promise<{ ok: boolean; created: number; updated: number; total: number; message?: string }> {
+  const r = await apiFetch(`${BASE}/api/tickets/jira/sync`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try { detail = (await r.json())?.detail || detail; } catch { /* non-json */ }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+export async function syncOpenProjectTickets(): Promise<{ ok: boolean; created: number; updated: number; total: number; message?: string }> {
+  const r = await apiFetch(`${BASE}/api/tickets/openproject/sync`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try { detail = (await r.json())?.detail || detail; } catch { /* non-json */ }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
 export async function listTicketDestinations(): Promise<
   { key: string; label: string; configured: boolean }[]
 > {

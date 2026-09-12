@@ -36,6 +36,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   listTickets,
   listTicketDestinations,
+  syncJiraTickets,
+  syncOpenProjectTickets,
   listActiveDomains,
   createTicketApi,
   ticketComments,
@@ -480,6 +482,31 @@ export default function Tickets({
     onToast(`Ticket created in ${newTicket.destination === "openproject" ? "OpenProject" : "Jira"}`);
   }
 
+  // v1.6.9 — header Sync button: pull upstream Jira/OpenProject tickets into the board
+  const [syncBusy, setSyncBusy] = useState<"" | "jira" | "openproject">("");
+  async function syncTickets(source: "jira" | "openproject") {
+    setSyncBusy(source);
+    try {
+      const res = source === "jira"
+        ? await syncJiraTickets()
+        : await syncOpenProjectTickets();
+      if (res.total === 0) {
+        onToast(source === "jira"
+          ? "No tickets returned — check Jira in Settings → Integrations"
+          : "No work packages returned — check OpenProject in Settings → Integrations", "err");
+        return;
+      }
+      onToast(`Synced ${res.total} tickets (${res.created} new, ${res.updated} updated)`);
+      const fresh = await listTickets(100);
+      setTickets(fresh?.tickets ?? []);
+      setSelected(null);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Sync failed", "err");
+    } finally {
+      setSyncBusy("");
+    }
+  }
+
     return (
     <PageShell>
       <PageHeader
@@ -488,10 +515,38 @@ export default function Tickets({
       title="Tickets"
       description="Track and manage IT support requests"
       actions={
-        <Button size="sm" className="rounded-xl" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 size-4" />
-          Create ticket
-        </Button>
+        <div className="flex items-center gap-2">
+          {(role === "admin" || role === "agent") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              disabled={syncBusy !== ""}
+              title={syncBusy === "jira" ? "Syncing from Jira…" : "Pull latest tickets from Jira into the board"}
+              onClick={() => syncTickets("jira")}
+            >
+              <RefreshIcon className={`mr-2 size-4 ${syncBusy === "jira" ? "animate-spin" : ""}`} />
+              {syncBusy === "jira" ? "Syncing…" : "Sync Jira"}
+            </Button>
+          )}
+          {(role === "admin" || role === "agent") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              disabled={syncBusy !== ""}
+              title={syncBusy === "openproject" ? "Syncing from OpenProject…" : "Pull latest work packages from OpenProject into the board"}
+              onClick={() => syncTickets("openproject")}
+            >
+              <RefreshIcon className={`mr-2 size-4 ${syncBusy === "openproject" ? "animate-spin" : ""}`} />
+              {syncBusy === "openproject" ? "Syncing…" : "Sync OpenProject"}
+            </Button>
+          )}
+          <Button size="sm" className="rounded-xl" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 size-4" />
+            Create ticket
+          </Button>
+        </div>
       }
     />
 
