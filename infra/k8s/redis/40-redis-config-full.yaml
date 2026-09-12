@@ -1,0 +1,50 @@
+# redis-config ConfigMap v1.6.8 — full 3-key restore
+#
+# Root cause (2026-09-12): while fixing the sentinel CrashLoop earlier, the
+# `redis-config` ConfigMap was re-applied with ONLY the `sentinel.conf` key,
+# dropping `redis.conf` and `users.acl`. The redis-data StatefulSet mounts all
+# three keys, so every data pod stuck in Init:0/1 with:
+#   MountVolume.SetUp failed for volume "acl":      configmap references
+#                                                   non-existent config key: users.acl
+#   MountVolume.SetUp failed for volume "conf-readonly": ... key: redis.conf
+#
+# Second fix in this file: redis.conf must end with a TRAILING NEWLINE — the
+# init container appends `replicaof ...` with >>, and without the newline the
+# line concatenates onto `replica-announce-ip $(POD_IP)` (FATAL config error).
+#
+# NOTE: this file is rendered by CI/apply with $REDIS_PASSWORD substituted.
+# Do NOT commit a real password here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: rag-chatbot
+data:
+  sentinel.conf: |
+    bind 0.0.0.0
+    port 26379
+    supervised no
+    daemonize no
+
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+
+    # Master set — three sentinels, 2 votes = quorum
+    sentinel monitor mymaster redis-data-0.redis-data-headless.rag-chatbot.svc.cluster.local 6379 2
+    sentinel auth-pass mymaster ${REDIS_PASSWORD}
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel failover-timeout mymaster 60000
+    sentinel parallel-syncs mymaster 1
+  redis.conf: |
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    daemonize no
+    appendonly yes
+    save ""
+    dir /data
+    masterauth ${REDIS_PASSWORD}
+    requirepass ${REDIS_PASSWORD}
+    replica-announce-ip $(POD_IP)
+  users.acl: |
+    user default on >${REDIS_PASSWORD} ~* +@all

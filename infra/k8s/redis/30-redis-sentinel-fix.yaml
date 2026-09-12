@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-sentinel
+  namespace: rag-chatbot
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: sentinel
+      app.kubernetes.io/name: redis
+  serviceName: redis-sentinel-headless
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: sentinel
+        app.kubernetes.io/name: redis
+    spec:
+      # v1.6.5 fix — sentinels crashed at boot when CoreDNS was not yet ready
+      # (worker node restart). Redis resolves `sentinel monitor` hostnames ONCE
+      # at startup and FATAL-exits on failure. The init wait loop retries until
+      # DNS is live so the server never boots into a FATAL config error.
+      initContainers:
+        - name: sentinel-config-init
+          image: redis:7.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              cp /readonly-config/sentinel.conf /conf/sentinel.conf
+              chmod 644 /conf/sentinel.conf
+              echo "Waiting for master hostname DNS to resolve..."
+              i=0
+              until getent hosts redis-data-0.redis-data-headless.rag-chatbot.svc.cluster.local >/dev/null 2>&1; do
+                i=$((i+1))
+                if [ "$i" -ge 60 ]; then
+                  echo "DNS still unresolved after 120s - continuing anyway"
+                  break
+                fi
+                sleep 2
+              done
+              echo "DNS check done"
+          volumeMounts:
+            - mountPath: /conf
+              name: conf
+            - mountPath: /readonly-config
+              name: readonly-config
+      containers:
+        - name: sentinel
+          image: redis:7.4
+          imagePullPolicy: IfNotPresent
+          command: ["redis-server", "/conf/sentinel.conf", "--sentinel"]
+          ports:
+            - containerPort: 26379
+              name: sentinel
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-p", "26379", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /conf
+              name: conf
+      volumes:
+        - name: conf
+          emptyDir: {}
+        - name: readonly-config
+          configMap:
+            name: redis-config
+            items:
+              - key: sentinel.conf
+                path: sentinel.conf
