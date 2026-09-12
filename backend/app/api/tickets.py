@@ -34,6 +34,9 @@ class TicketCreate(BaseModel):
     # v1.6.4 — where the ticket must be created. Per user policy there is no
     # "internal only" option: every manual ticket must exist in Jira or OpenProject.
     destination: str = "jira"  # jira | openproject
+    # v1.6.8 — chat session the request came from (chat dialog only); used to
+    # drop the "ticket created" notice into the user's chat history.
+    session_id: str | None = None
 
     def effective_subject(self) -> str:
         return (self.subject or self.summary or "").strip()
@@ -283,6 +286,22 @@ def create_ticket(
             notify_ticket_created(user, ext_key, subj[:120])
         except Exception:  # noqa: BLE001
             pass
+        # v1.6.8 — drop the creation notice into the user's chat history so the
+        # chatbox shows it after reload too (chat dialog only; best-effort).
+        if req.session_id:
+            try:
+                from app.persistence.models import ChatMessage
+                notice = (
+                    f"✅ Ticket {ext_key} created in "
+                    f"{'OpenProject' if destination == 'openproject' else 'Jira'}."
+                    + (f" Follow: {ext_link}" if ext_link else "")
+                    + " The IT team will follow up."
+                )
+                s.add(ChatMessage(session_id=req.session_id, role="assistant",
+                                  content=notice))
+                s.commit()
+            except Exception:  # noqa: BLE001
+                pass
         return {
             "id": ext_key,
             "destination": destination,
@@ -621,6 +640,52 @@ def openproject_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
                 ), {"k": t["ticket_id"], "dm": "general", "st": t["status"],
                     "cb": "openproject-sync", "sj": t["title"], "ds": t["body"],
                     "pr": "medium", "asg": t["assignee"]})
+                created += 1
+        s.commit()
+    return {"ok": True, "created": created, "updated": updated, "total": len(tickets)}
+
+
+# === v1.6.8 — Jira ticket sync (pull upstream -> local mirror) ================
+@router.post("/tickets/jira/sync")
+def jira_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
+    """Pull Jira issues/requests into jira_tickets (jira_key='<KEY>').
+
+    Idempotent like the OpenProject sync: existing keys are updated in place,
+    new ones inserted with created_by='jira-sync'. Admin/agent-triggered from
+    Settings -> Integrations -> Jira.
+    """
+    from app.integrations.jira import fetch_all_tickets
+
+    tickets = fetch_all_tickets()
+    if not tickets:
+        return {"ok": True, "created": 0, "updated": 0, "total": 0,
+                "message": "No tickets returned — check Jira config in Settings"}
+
+    created = updated = 0
+    with SessionLocal() as s:
+        for t in tickets:
+            key = t["jira_key"]  # store the real Jira key (ITHD-xx), not the jira- prefix
+            existing = s.execute(
+                text("SELECT id FROM jira_tickets WHERE jira_key = :k"),
+                {"k": key},
+            ).first()
+            if existing:
+                s.execute(text(
+                    "UPDATE jira_tickets SET status=:st, subject=:sj, description=:ds, "
+                    "assignee=:asg WHERE jira_key=:k"
+                ), {"st": t["status"], "sj": t["title"], "ds": t["body"],
+                    "asg": t["assignee"] or None, "k": key})
+                updated += 1
+            else:
+                s.execute(text(
+                    "INSERT INTO jira_tickets (jira_key, domain, status, created_by, "
+                    "created_at, subject, description, priority, assignee) "
+                    "VALUES (:k, :dm, :st, :cb, COALESCE(:ca, NOW()), :sj, :ds, :pr, :asg)"
+                ), {"k": key, "dm": "general", "st": t["status"],
+                    "cb": "jira-sync", "ca": t.get("created_at"),
+                    "sj": t["title"], "ds": t["body"],
+                    "pr": t.get("priority") or "medium",
+                    "asg": t["assignee"] or None})
                 created += 1
         s.commit()
     return {"ok": True, "created": created, "updated": updated, "total": len(tickets)}

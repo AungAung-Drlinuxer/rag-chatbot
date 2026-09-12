@@ -525,8 +525,26 @@ export default function Chat({
         assignee: ticketForm.assignee || null,
         due_date: ticketForm.due_date || null,
         destination: ticketForm.destination,
+        session_id: sessionRef.current ?? null,
       });
-      chatAlert(`${created?.id ?? "Ticket"} created in ${ticketForm.destination === "openproject" ? "OpenProject" : "Jira"}`);
+      const destLabel = ticketForm.destination === "openproject" ? "OpenProject" : "Jira";
+      const ticketId = created?.id ?? "";
+      const link = created?.jira_link ?? "";
+      chatAlert(`${ticketId || "Ticket"} created in ${destLabel}`);
+      // v1.6.8 — reflect the creation in the chat itself (assistant info message);
+      // the backend also persisted it, so it survives reload.
+      const infoLine = link
+        ? `✅ Ticket ${ticketId} created in ${destLabel}.\nYou can follow it here: ${link}\nThe IT team will follow up.`
+        : `✅ Ticket ${ticketId} created in ${destLabel}. The IT team will follow up.`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: infoLine,
+          timestamp: currentTime(),
+        },
+      ]);
       setTicketForm(null);
     } catch (e: any) {
       // v1.6.3 — surface the real reason (was a generic message that hid 422s)

@@ -205,6 +205,104 @@ STATUS_TRANSITIONS: dict[str, list[str]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# v1.6.8 — Jira -> platform ticket sync (pull)
+# ---------------------------------------------------------------------------
+def fetch_all_tickets(max_results: int = 200) -> list[dict]:
+    """Pull tickets from Jira so the Tickets board mirrors upstream.
+
+    Strategy:
+      1. JSM: GET /rest/servicedeskapi/request?limit=... (customer requests)
+      2. Issue REST: GET /rest/api/3/search?jql=project=<key> ORDER BY created DESC
+    Returns normalized dicts like openproject.fetch_work_packages():
+      {ticket_id ('jira-<KEY>'), title, body, status, priority, assignee,
+       source_url, created_at, source='jira'}
+    """
+    import httpx
+
+    cfg = _jira_cfg()
+    base = (cfg["base_url"] or "").rstrip("/")
+    if not (base and cfg["email"] and cfg["api_token"]):
+        return []
+
+    headers = {"Authorization": _auth_header(), "Accept": "application/json"}
+    out: list[dict] = []
+
+    # 1) JSM customer requests (service desk portal)
+    try:
+        with httpx.Client(timeout=30, headers=headers) as client:
+            r = client.get(f"{base}/rest/servicedeskapi/request",
+                           params={"limit": min(max_results, 100)})
+            if r.status_code == 200:
+                for req_ in r.json().get("values", []):
+                    key = req_.get("issueKey") or req_.get("key") or ""
+                    if not key:
+                        continue
+                    fields = req_.get("requestFieldValues") or {}
+                    status_name = ((req_.get("currentStatus") or {}).get("status")) or ""
+                    links = (req_.get("_links") or {})
+                    out.append({
+                        "ticket_id": f"jira-{key}",
+                        "jira_key": key,
+                        "title": fields.get("summary") or f"{key} request",
+                        "body": fields.get("description") or "",
+                        "status": (status_name or "open").lower(),
+                        "priority": "medium",
+                        "assignee": "",
+                        "source_url": links.get("agent") or f"{base}/browse/{key}",
+                        "created_at": req_.get("createdDate", {}).get("iso8601")
+                                      if isinstance(req_.get("createdDate"), dict) else None,
+                        "source": "jira",
+                    })
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("JSM request pull failed: %s", exc)
+
+    # 2) Issue REST search (covers non-JSM issues in the project)
+    try:
+        jql = f"project = {cfg['project']} ORDER BY created DESC"
+        with httpx.Client(timeout=30, headers=headers) as client:
+            r = client.get(f"{base}/rest/api/3/search/jql",
+                           params={"jql": jql, "maxResults": min(max_results, 100),
+                                   "fields": "summary,description,status,priority,assignee,created"},
+                           )
+            if r.status_code == 200:
+                for issue in r.json().get("issues", []):
+                    key = issue.get("key", "")
+                    f = issue.get("fields", {})
+                    status_name = ((f.get("status") or {}).get("name")) or "open"
+                    prio = ((f.get("priority") or {}).get("name")) or "medium"
+                    assignee = ((f.get("assignee") or {}) or {}).get("displayName") or ""
+                    out.append({
+                        "ticket_id": f"jira-{key}",
+                        "jira_key": key,
+                        "title": f.get("summary") or f"{key} issue",
+                        "body": (f.get("description") or "") if isinstance(f.get("description"), str) else "",
+                        "status": status_name.lower(),
+                        "priority": (prio or "medium").lower(),
+                        "assignee": assignee,
+                        "source_url": f"{base}/browse/{key}",
+                        "created_at": f.get("created"),
+                        "source": "jira",
+                    })
+            else:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "jira issue search HTTP %s: %s", r.status_code, r.text[:120])
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("jira issue search failed: %s", exc)
+
+    # dedupe by ticket_id (JSM + REST can overlap on the same key)
+    seen, dedup = set(), []
+    for t in out:
+        if t["ticket_id"] in seen:
+            continue
+        seen.add(t["ticket_id"])
+        dedup.append(t)
+    return dedup[:max_results]
+
+
 def transition_issue(issue_key: str, status: str) -> dict:
     """Move a Jira issue to a new status. Returns {ok, detail}."""
     cfg = _jira_cfg()

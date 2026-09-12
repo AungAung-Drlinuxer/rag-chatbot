@@ -27,6 +27,7 @@ export async function createTicketApi(body: {
   subject: string; description: string; domain: string; priority: string;
   assignee?: string | null; due_date?: string | null;
   destination?: string;
+  session_id?: string | null;
 }) {
   const r = await apiFetch(`${BASE}/api/tickets`, {
     method: "POST",
