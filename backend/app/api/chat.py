@@ -139,13 +139,29 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 from app.orchestration.orchestrator import RAGOrchestrationResult
 
                 g: dict = {}
+                # v1.6.16 — node name → canonical frontend stage key so the
+                # pipeline tracker can time each stage exactly.
+                _NODE_STAGE = {
+                    "classify": "understanding",
+                    "rewrite": "rewrite",
+                    "retrieve": "retrieve",
+                    "gate": "rerank",
+                    "context": "generate",
+                    "tools": "generate",
+                }
+                # aliases for the post-graph chat.py-emitted events
+                def _canon_stage(s: str) -> str:
+                    return {"retrieval": "retrieve", "generating": "generate"}.get(s, s)
                 for ev in run_rag_graph_stream(req.message, history=req.context,
                                                top_k=req.top_k, user=user,
                                                thread_id=session_id):
                     if isinstance(ev, tuple) and ev[0] == "__FINAL__":
                         g = ev[1]
+                    elif isinstance(ev, tuple) and len(ev) == 2:
+                        yield _sse("stage", {"stage": _NODE_STAGE.get(ev[0], "graph"),
+                                             "detail": ev[1]})
                     else:
-                        yield _sse("stage", {"stage": "graph", "detail": ev})
+                        yield _sse("stage", {"stage": "graph", "detail": str(ev)})
                 graph_pending = bool(g.get("pending_approval"))
                 graph_thread = req.session_id
                 result = RAGOrchestrationResult(
@@ -168,7 +184,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     result.docs = []
                     result.sources = []
                     result.confidence = max(result.confidence, 0.95)
-                yield _sse("stage", {"stage": "retrieval",
+                yield _sse("stage", {"stage": _canon_stage("retrieval"),
                                      "detail": ("Ticket status lookup (live)"
                                                 if result.tool_used == "tickets"
                                                 else f"LangGraph pass {g['retries']} — confidence {g['confidence']:.0%}")})
@@ -211,7 +227,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 yield _sse("done", {"message_id": str(_uuid.uuid4()),
                                     "latency_ms": int((time.time() - t0) * 1000)})
                 return
-        yield _sse("stage", {"stage": "generating", "detail": "Generating answer"})
+        yield _sse("stage", {"stage": _canon_stage("generating"), "detail": "Generating answer"})
 
         # Domain-scoped access (Phase 9): non-admin users only see their allowed domains.
         role = get_role(user)

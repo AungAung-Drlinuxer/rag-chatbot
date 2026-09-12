@@ -36,7 +36,7 @@ describe("runChatStream", () => {
     const out = await runChatStream("q", "s", [], h);
     expect(out).toBe("VPN restart your adapter.");
     expect(h.onMeta).toHaveBeenCalledWith(expect.objectContaining({ domain: "network" }));
-    expect(h.onStage).toHaveBeenCalledWith("reranking");
+    expect(h.onStage).toHaveBeenCalledWith("reranking", "");
     expect(h.onToken).toHaveBeenCalledTimes(3);
     expect(h.onDone).toHaveBeenCalledWith(expect.objectContaining({ message_id: "m-1" }));
     expect(h.onApprovalRequest).not.toHaveBeenCalled();

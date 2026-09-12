@@ -232,7 +232,7 @@ export default function RagPipelineStatus({
 
       {/* v1.6.15 - vertical rows for the narrow 300px sidebar:
           no truncation, no overlap; each stage shows icon + label + ms. */}
-      <ol className="space-y-1.5">
+      <ol className="divide-y divide-slate-100 dark:divide-slate-800">
         {STEPS.map((step, idx) => {
           const isActive = idx === activeIdx;
           const isDone = activeIdx > idx;
@@ -246,7 +246,7 @@ export default function RagPipelineStatus({
                 onMouseLeave={() => setHovered(null)}
                 onFocus={() => setHovered(step.key)}
                 onBlur={() => setHovered(null)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors outline-none ${
+                className={`flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors outline-none ${
                   isActive
                     ? "bg-blue-50 dark:bg-blue-950/50"
                     : hovered === step.key
@@ -257,7 +257,7 @@ export default function RagPipelineStatus({
                 title={step.description}
               >
                 <span
-                  className={`grid size-6 shrink-0 place-items-center rounded-full border text-[11px] transition-all ${
+                  className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] transition-all ${
                     isActive
                       ? "animate-pulse border-blue-500 bg-blue-600 text-white shadow-md shadow-blue-500/30"
                       : isDone
@@ -268,7 +268,7 @@ export default function RagPipelineStatus({
                   {isDone ? "✓" : step.icon}
                 </span>
                 <span
-                  className={`flex-1 truncate text-[10px] font-medium ${
+                  className={`flex-1 truncate text-[11px] font-medium ${
                     isActive
                       ? "text-blue-700 dark:text-blue-400"
                       : isDone
@@ -280,9 +280,9 @@ export default function RagPipelineStatus({
                 </span>
                 {ms != null && (
                   <span
-                    className={`shrink-0 font-mono text-[9px] ${
+                    className={`shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] tabular-nums dark:bg-slate-800 ${
                       isDone || isActive
-                        ? "text-slate-500 dark:text-slate-400"
+                        ? "text-slate-600 dark:text-slate-300"
                         : "text-slate-300 dark:text-slate-600"
                     }`}
                   >
@@ -335,6 +335,7 @@ export function useStageTelemetry() {
   const startedAt = useRef<number>(0);
   const stageAt = useRef<number>(0);
   const prevStage = useRef<StageKey | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const begin = () => {
     startedAt.current = performance.now();
@@ -343,35 +344,61 @@ export function useStageTelemetry() {
     setTelemetry({});
     setElapsed(0);
     setStreaming(false);
+    if (pollRef.current) clearInterval(pollRef.current);
+    // v1.6.13 — poll every 150ms: show a live "running…" duration for the
+    // stage that is currently executing (the one AFTER the last completed
+    // label), so the active row's ms counts up in real time.
+    pollRef.current = setInterval(() => {
+      const now = performance.now();
+      const lastDone = prevStage.current;
+      if (lastDone) {
+        const idx = STEPS.findIndex((s) => s.key === lastDone);
+        const running = STEPS[idx + 1];
+        if (running) {
+          const runMs = Math.max(1, Math.round(now - stageAt.current));
+          setTelemetry((t) => ({ ...t, [running.key]: runMs }));
+        }
+      } else {
+        // before the first label completes, "understanding" is running
+        const runMs = Math.max(1, Math.round(now - stageAt.current));
+        setTelemetry((t) => ({ ...t, understanding: runMs }));
+      }
+      setElapsed(Math.round(now - startedAt.current));
+    }, 150);
   };
 
-  /** Call on every `stage` SSE event (detail = backend human string). */
-  const onStage = (detail: string) => {
+  const onStage = (detail: string, stageKey?: string) => {
+    // v1.6.16 — the backend now sends an exact canonical stage key with every
+    // stage event; fall back to detail matching for older payloads. Unknown
+    // keys (aliases/typos) are ignored so the 5 canonical rows stay exact.
     const now = performance.now();
-    // record duration of the stage we are leaving
-    if (prevStage.current) {
-      const key = prevStage.current;
-      setTelemetry((t) => ({ ...t, [key]: Math.round(now - stageAt.current) }));
+    const completed = stageKey && STEPS.some((s) => s.key === stageKey)
+      ? (stageKey as StageKey)
+      : matchStageKey(detail);
+    if (completed) {
+      const runMs = Math.max(1, Math.round(now - stageAt.current));
+      setTelemetry((t) => ({ ...t, [completed]: runMs }));
     }
     stageAt.current = now;
-    prevStage.current = matchStageKey(detail);
+    prevStage.current = completed;
     setElapsed(Math.round(now - startedAt.current));
   };
 
-  /** Call on first `token` event — pipeline is now generating. */
   const onFirstToken = () => {
+    // tokens start → whatever was running since the last label is "generating"
     const now = performance.now();
-    if (prevStage.current) {
-      const key = prevStage.current;
-      setTelemetry((t) => ({ ...t, [key]: Math.round(now - stageAt.current) }));
-      prevStage.current = null;
-    }
+    const runMs = Math.max(1, Math.round(now - stageAt.current));
+    setTelemetry((t) => ({ ...t, generate: runMs }));
+    prevStage.current = null;
     setStreaming(true);
     setElapsed(Math.round(now - startedAt.current));
   };
 
-  /** Call on `done`. */
   const finish = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     setElapsed(Math.round(performance.now() - startedAt.current));
   };
 

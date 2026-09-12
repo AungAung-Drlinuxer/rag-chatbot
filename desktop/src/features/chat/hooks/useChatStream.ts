@@ -10,7 +10,7 @@ import { streamChat } from "@/features/chat/api";
 export type StreamHandlers = {
   onMeta: (meta: any) => void;
   onToken: (token: string) => void;
-  onStage: (detail: string) => void;
+  onStage: (detail: string, stageKey?: string) => void;
   onApprovalRequest: (data: any) => void;
   onDone: (d: any) => void;
   /** v1.1.4 — guardrail event: blocked (injection/overflow) or flagged (toxic) */
@@ -35,7 +35,9 @@ export async function runChatStream(
       streamed += token;
       h.onToken(token);
     } else if (e.event === "stage") {
-      h.onStage(e.data?.detail || e.data?.stage || "");
+      // v1.6.16 — pass the canonical stage key + human detail so the
+      // pipeline tracker can time each stage exactly.
+      h.onStage(e.data?.detail || e.data?.stage || "", e.data?.stage || "");
     } else if (e.event === "approval_request") {
       h.onApprovalRequest(e.data);
     } else if (e.event === "caution") {

@@ -299,9 +299,9 @@ export default function Chat({
               prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + token } : m))
             );
           },
-          onStage: (detail) => {
+          onStage: (detail, stageKey) => {
             setStage(detail);
-            pipeline.onStage(detail);
+            pipeline.onStage(detail, stageKey);
           },
           onApprovalRequest: (data) => {
             setStage("");

@@ -438,7 +438,9 @@ def run_rag_graph_stream(query: str, history: list[dict] | None = None,
         for node in chunk:
             label = STAGE_LABELS.get(node)
             if label:
-                yield label
+                # v1.6.16 — yield (node_name, label) so chat.py can send an exact
+                # canonical stage key; detail text alone is ambiguous for timing.
+                yield (node, label)
         # accumulate last state — values may be tuples (e.g. __interrupt__), skip those
         for n in chunk:
             upd = chunk[n]
