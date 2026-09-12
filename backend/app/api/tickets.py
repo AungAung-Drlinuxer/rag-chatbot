@@ -325,12 +325,16 @@ def create_ticket(
 # ---------------------------------------------------------------------------
 
 def _resolve_ticket(ticket_ref: str, user: str):
-    """Map 'ITHD-2' or 'IT-7' to the jira_tickets row (RBAC-checked)."""
+    """Map 'ITHD-2', 'OP-40' or 'IT-7' to the jira_tickets row (RBAC-checked)."""
     from app.persistence.models import JiraTicket
 
     with SessionLocal() as s:
         if ticket_ref.startswith("ITHD-"):
             row = s.query(JiraTicket).filter(JiraTicket.jira_key == ticket_ref).first()
+        elif ticket_ref.upper().startswith("OP-"):
+            # v1.6.9 — OpenProject mirror rows (jira_key='OP-<id>')
+            row = s.query(JiraTicket).filter(
+                JiraTicket.jira_key == ticket_ref.upper()).first()
         else:
             try:
                 tid = int(ticket_ref.replace("IT-", ""))
@@ -358,11 +362,9 @@ def _sync_jira_status(row):
     jira_status = (live.get("status") or "").strip().lower()
     if not jira_status:
         return None
-    # map Jira status name → local vocabulary
-    local = ("open" if any(w in jira_status for w in ("open", "to do", "backlog", "reopened", "re-open"))
-             else "pending" if any(w in jira_status for w in ("progress", "pending", "waiting"))
-             else "resolved" if any(w in jira_status for w in ("done", "resolved", "complete"))
-             else "closed" if "clos" in jira_status else None)
+    # v1.6.9 — canonical mapping (shared with OpenProject, ticket_status.py)
+    from app.integrations.ticket_status import canonical_from_jira_status
+    local = canonical_from_jira_status(jira_status) or None
     if local and row.status != local:
         old = row.status
         row.status = local
@@ -471,20 +473,33 @@ def ticket_update(ticket_ref: str, req: TicketUpdateRequest,
 
         from app.persistence.models import TicketComment
 
-        # v0.20.5 — push status change into Jira (best-effort; local stays authoritative)
-        jira_note = ""
+        # v1.6.9 — push status change to BOTH integrations (best-effort each).
+        # The canonical status model (ticket_status.py) maps open/pending/resolved/
+        # closed onto real Jira transitions AND OpenProject status IDs, so the two
+        # systems stay in step no matter where the change was made.
+        sync_notes: list[str] = []
         if req.status and row.jira_key:
             from app.integrations.jira import transition_issue
 
             tr = transition_issue(row.jira_key, req.status)
             if tr.get("ok"):
-                jira_note = " · synced to Jira"
+                sync_notes.append("synced to Jira")
             else:
-                jira_note = f" · Jira sync failed ({tr.get('detail')})"
+                sync_notes.append(f"Jira sync failed ({tr.get('detail')})")
                 logger.warning("jira transition failed for %s: %s", row.jira_key, tr.get("detail"))
+        if req.status and row.jira_key and row.jira_key.startswith("OP-"):
+            from app.integrations.openproject import update_status as op_update_status
+
+            opr = op_update_status(row.jira_key, req.status)
+            if opr.get("ok"):
+                sync_notes.append("synced to OpenProject")
+            else:
+                sync_notes.append(f"OpenProject sync failed ({opr.get('detail')})")
+                logger.warning("op status update failed for %s: %s", row.jira_key, opr.get("detail"))
+        jira_note = (" · " + " · ".join(sync_notes)) if sync_notes else ""
 
         if changes or jira_note:
-            body = "; ".join(changes) + jira_note if changes else f"Jira sync: {jira_note.strip(' .')}"
+            body = "; ".join(changes) + jira_note if changes else f"Upstream sync: {jira_note.strip(' ·')}"
             s.add(TicketComment(ticket_id=row.id, author=user,
                                 body=body, kind="status"))
             s.commit()
@@ -612,6 +627,7 @@ def openproject_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
     Admin/agent-triggered from Settings -> Integrations -> OpenProject.
     """
     from app.integrations.openproject import fetch_work_packages
+    from app.integrations.ticket_status import canonical_from_op_status
 
     tickets = fetch_work_packages()
     if not tickets:
@@ -629,7 +645,8 @@ def openproject_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
                 s.execute(text(
                     "UPDATE jira_tickets SET status=:st, subject=:sj, description=:ds, "
                     "assignee=:asg WHERE jira_key=:k"
-                ), {"st": t["status"], "sj": t["title"], "ds": t["body"],
+                ), {"st": canonical_from_op_status(t["status"]),
+                    "sj": t["title"], "ds": t["body"],
                     "asg": t["assignee"], "k": t["ticket_id"]})
                 updated += 1
             else:
@@ -655,6 +672,7 @@ def jira_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
     Settings -> Integrations -> Jira.
     """
     from app.integrations.jira import fetch_all_tickets
+    from app.integrations.ticket_status import canonical_from_jira_status
 
     tickets = fetch_all_tickets()
     if not tickets:
@@ -673,7 +691,8 @@ def jira_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
                 s.execute(text(
                     "UPDATE jira_tickets SET status=:st, subject=:sj, description=:ds, "
                     "assignee=:asg WHERE jira_key=:k"
-                ), {"st": t["status"], "sj": t["title"], "ds": t["body"],
+                ), {"st": canonical_from_jira_status(t["status"]),
+                    "sj": t["title"], "ds": t["body"],
                     "asg": t["assignee"] or None, "k": key})
                 updated += 1
             else:
@@ -681,7 +700,8 @@ def jira_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
                     "INSERT INTO jira_tickets (jira_key, domain, status, created_by, "
                     "created_at, subject, description, priority, assignee) "
                     "VALUES (:k, :dm, :st, :cb, COALESCE(:ca, NOW()), :sj, :ds, :pr, :asg)"
-                ), {"k": key, "dm": "general", "st": t["status"],
+                ), {"k": key, "dm": "general",
+                    "st": canonical_from_jira_status(t["status"]),
                     "cb": "jira-sync", "ca": t.get("created_at"),
                     "sj": t["title"], "ds": t["body"],
                     "pr": t.get("priority") or "medium",

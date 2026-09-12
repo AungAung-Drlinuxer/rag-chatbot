@@ -90,6 +90,12 @@ def create_issue(summary: str, description: str = "",
         "subject": summary[:255],
         "description": {"raw": description or ""},
     }
+    # v1.6.9 — pin the canonical status explicitly (default status of a fresh
+    # work package depends on the project type; make it deterministic).
+    from app.integrations.ticket_status import op_status_id_for
+    sid = op_status_id_for("open")
+    if sid is not None:
+        payload["_links"]["status"] = {"href": f"/api/v3/statuses/{sid}"}
     prio_map = {"low": "5", "medium": "6", "high": "7", "critical": "8"}
     p_href = prio_map.get((priority or "").lower())
     if p_href:
@@ -111,6 +117,47 @@ def create_issue(summary: str, description: str = "",
     except Exception as exc:
         return {"op_key": None, "link": f"{base}/work_packages/new",
                 "mode": "link", "error": f"{type(exc).__name__}: {exc}"}
+
+
+# v1.6.9 — canonical status transitions on OpenProject work packages
+def update_status(op_key: str, canonical: str) -> dict:
+    """Move an OP work package to the status matching a canonical platform status.
+
+    op_key: 'OP-<id>' (as stored in jira_tickets.jira_key).
+    Returns {ok, detail}.
+    """
+    import httpx
+
+    cfg = get_op_cfg()
+    base = (cfg.get("base_url") or "").rstrip("/")
+    key = cfg.get("api_key") or ""
+    wp_id = op_key.replace("OP-", "").strip()
+    if not (base and key and wp_id.isdigit()):
+        return {"ok": False, "detail": "OpenProject not configured or bad key"}
+
+    from app.integrations.ticket_status import op_status_id_for
+    sid = op_status_id_for(canonical)
+    if sid is None:
+        return {"ok": False, "detail": f"no OP status for '{canonical}'"}
+
+    try:
+        with httpx.Client(timeout=30, auth=("apikey", key),
+                          headers={"Accept": "application/hal+json",
+                                   "Content-Type": "application/json"}) as client:
+            lock_version = None
+            # OP work packages are PATCHed with lock_version for optimistic locking
+            r0 = client.get(f"{base}/api/v3/work_packages/{wp_id}")
+            if r0.status_code == 200:
+                lock_version = r0.json().get("lockVersion")
+            payload: dict = {"_links": {"status": {"href": f"/api/v3/statuses/{sid}"}}}
+            if lock_version is not None:
+                payload["lockVersion"] = lock_version
+            r = client.patch(f"{base}/api/v3/work_packages/{wp_id}", json=payload)
+            if r.status_code not in (200, 204):
+                return {"ok": False, "detail": f"HTTP {r.status_code}: {r.text[:160]}"}
+        return {"ok": True, "detail": f"OP status set to {canonical} (statuses/{sid})"}
+    except Exception as exc:
+        return {"ok": False, "detail": f"{type(exc).__name__}: {exc}"}
 
 
 # ---------------------------------------------------------------- work packages

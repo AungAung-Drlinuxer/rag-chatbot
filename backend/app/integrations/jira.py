@@ -197,12 +197,11 @@ def _create_via_issue_rest(summary, description, reporter, project, assignee):
 # ---------------------------------------------------------------------------
 
 # chatbot status word -> acceptable Jira transition names (first match wins)
-STATUS_TRANSITIONS: dict[str, list[str]] = {
-    "open": ["Reopen", "Re-open", "To Do", "Open", "Backlog", "Pending"],
-    "pending": ["Start Progress", "In Progress", "Pending"],
-    "resolved": ["Mark as done", "Done", "Resolve Issue", "Resolve"],
-    "closed": ["Close Issue", "Close", "Mark as done", "Done"],
-}
+# v1.6.9 — canonical status model shared with OpenProject (ticket_status.py)
+from app.integrations.ticket_status import (  # noqa: E402
+    JIRA_TRANSITIONS_BY_CANONICAL as STATUS_TRANSITIONS,
+    canonical_from_jira_status as _canonical_from_jira_status,
+)
 
 
 # ---------------------------------------------------------------------------
