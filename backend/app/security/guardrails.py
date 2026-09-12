@@ -46,6 +46,9 @@ _INJECTION_PATTERNS: list[tuple[str, str]] = [
 _TOXIC_PATTERNS: list[str] = [
     r"\b(f+u+c+k+|sh+i+t+|b+i+t+c+h+|a+s+s+h+o+l+e+)\b",
     r"\b(you\s+(are|re)\s+(a\s+)?(useless|stupid|idiot|trash|garbage))",
+    # v1.6.6 — "useless/garbage/trash" directed AT the chatbot itself
+    r"\b(useless|garbage|trash)\s+(chatbot|bot|assistant|service|system)",
+    r"\b(chatbot|bot|assistant|service)\s+is\s+(useless|garbage|trash|stupid)",
     r"\bhack(ing)?\s+(the\s+)?(ceo|president|someone)['\"s ]*",
 ]
 

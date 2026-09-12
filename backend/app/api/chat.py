@@ -73,17 +73,27 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     pass
                 if verdict.action == "blocked":
                     yield _sse("caution", {
-                        "message": ("Your message was blocked by content security policy ("
-                                    f"{verdict.type}). Please rephrase your question."),
+                        # v1.6.6 — professional tone for blocked messages too
+                        "message": ("I couldn't process that request — it looks like it "
+                                    "contains content our security policy doesn't allow "
+                                    f"({verdict.type}). If you're trying to reach IT "
+                                    "support, please rephrase your question and I'll be "
+                                    "glad to help."),
                         "blocked": True, "type": verdict.type})
                     yield _sse("done", {"message_id": "", "latency_ms": 0,
                                         "guardrail": verdict.type})
                     return
-                # v1.2.3 — flagged (toxic): reply immediately with a polite refusal.
-                # The old path burned a full LLM call (107s on CPU fallback) just to
-                # say "I can't help with that." Deterministic, instant, zero cost.
-                _refusal = ("I can't help with that. If you have an IT question — "
-                            "passwords, VPN, tickets, hardware — I'm happy to assist.")
+                # v1.6.6 — flagged (toxic): reply immediately with a calm,
+                # professional de-escalation. The old path burned a full LLM call
+                # (107s on CPU fallback); this stays deterministic, instant,
+                # zero cost — but now keeps a service-desk tone instead of a
+                # blunt "I can't help with that."
+                _refusal = (
+                    "I want to make sure you get the support you need, but I can't "
+                    "respond to messages with that tone. I'm here to help with "
+                    "passwords, VPN access, hardware issues, and any other IT "
+                    "requests — just let me know what you need and I'll get right on it."
+                )
                 yield _sse("caution", {"message": _refusal, "flagged": True, "type": verdict.type})
                 yield _sse("token", {"token": _refusal})
                 yield _sse("done", {"message_id": "", "latency_ms": int((time.time() - t0) * 1000),
