@@ -832,25 +832,26 @@ export default function Chat({
       {/* ================= RIGHT SOURCE PANEL ================= */}
       {showSources && messages.length > 0 && (
         <aside className="hidden w-[300px] shrink-0 border-l border-[var(--border)] bg-[var(--card)] xl:flex xl:flex-col">
-          <div className="flex h-16 items-center justify-between border-b px-5">
+          {/* v1.6.15 — compact header (was h-16/text-sm; tracker needs the room) */}
+          <div className="flex h-11 items-center justify-between border-b px-4">
             <div>
-              <h2 className="text-sm font-semibold">Knowledge sources</h2>
-              <p className="text-[10px] text-muted-foreground">Retrieved for this conversation</p>
+              <h2 className="text-[12px] font-semibold leading-tight">Knowledge sources</h2>
+              <p className="text-[9px] text-muted-foreground leading-tight">Retrieved for this conversation</p>
             </div>
-            <Link2 className="size-4 text-muted-foreground" />
+            <Link2 className="size-3.5 text-muted-foreground" />
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             {latestSources(messages).map((source, index) => (
               <SourceCard key={`${source.page_id}-${index}`} source={source} index={index + 1} />
             ))}
           </div>
-          {/* v1.6.14 — live RAG pipeline tracker (stage progress + per-stage
-              telemetry) so users can see exactly where their question is and
-              how long each stage took — below the Knowledge sources list. */}
-          {isTyping && (
+          {/* v1.6.15 — live RAG pipeline tracker. Stays visible after the answer
+              finishes so users can trace how long each stage took (per-stage ms
+              + total elapsed). Only hidden when nothing has run yet. */}
+          {(isTyping || pipeline.elapsed > 0) && (
             <div className="border-t p-4">
               <RagPipelineStatus
-                active
+                active={isTyping}
                 stage={stage}
                 streaming={false}
                 telemetry={pipeline.telemetry}

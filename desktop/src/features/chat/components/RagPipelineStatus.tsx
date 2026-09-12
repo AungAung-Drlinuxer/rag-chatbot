@@ -170,9 +170,24 @@ export default function RagPipelineStatus({
     return matchStageKey(stage);
   }, [simulate, demoStage, stage, streaming]);
 
-  const activeIdx = liveKey ? STEPS.findIndex((s) => s.key === liveKey) : -1;
+  // v1.6.15 - when finished (no live stage), mark everything up to the last
+  // measured stage as done so the trace reads left-to-right with checks.
+  const lastMeasured = useMemo(() => {
+    let last = -1;
+    STEPS.forEach((s, i) => {
+      if (telemetry?.[s.key] != null) last = i;
+    });
+    return last;
+  }, [telemetry]);
+  const activeIdx = liveKey
+    ? STEPS.findIndex((s) => s.key === liveKey)
+    : lastMeasured;
 
-  if (!active && !simulate) return null;
+  // keep rendering after completion (finished trace); only hide when nothing
+  // has ever run (no active request, no telemetry, no elapsed time).
+  if (!active && !simulate && elapsedMs <= 0 && !Object.keys(telemetry ?? {}).length) {
+    return null;
+  }
 
   /* ---- compact pill once the answer streams ------------------------- */
   if (streaming && !simulate) {
@@ -215,38 +230,34 @@ export default function RagPipelineStatus({
         )}
       </div>
 
-      <ol className="flex items-start gap-0">
+      {/* v1.6.15 - vertical rows for the narrow 300px sidebar:
+          no truncation, no overlap; each stage shows icon + label + ms. */}
+      <ol className="space-y-1.5">
         {STEPS.map((step, idx) => {
           const isActive = idx === activeIdx;
           const isDone = activeIdx > idx;
           const ms = telemetry?.[step.key];
 
           return (
-            <li key={step.key} className="flex min-w-0 flex-1 items-start">
-              {/* connector line (between steps) */}
-              {idx > 0 && (
-                <span
-                  aria-hidden
-                  className={`mx-1 mt-4 h-px flex-1 ${
-                    isDone || isActive
-                      ? "bg-blue-400 dark:bg-blue-500"
-                      : "bg-slate-200 dark:bg-slate-700"
-                  }`}
-                />
-              )}
+            <li key={step.key}>
               <button
                 type="button"
                 onMouseEnter={() => setHovered(step.key)}
                 onMouseLeave={() => setHovered(null)}
                 onFocus={() => setHovered(step.key)}
                 onBlur={() => setHovered(null)}
-                className="group flex min-w-0 flex-col items-center gap-1 outline-none"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors outline-none ${
+                  isActive
+                    ? "bg-blue-50 dark:bg-blue-950/50"
+                    : hovered === step.key
+                      ? "bg-slate-50 dark:bg-slate-900"
+                      : ""
+                }`}
                 aria-current={isActive ? "step" : undefined}
                 title={step.description}
               >
-                {/* icon bubble */}
                 <span
-                  className={`grid size-8 place-items-center rounded-full border text-sm transition-all ${
+                  className={`grid size-6 shrink-0 place-items-center rounded-full border text-[11px] transition-all ${
                     isActive
                       ? "animate-pulse border-blue-500 bg-blue-600 text-white shadow-md shadow-blue-500/30"
                       : isDone
@@ -256,21 +267,25 @@ export default function RagPipelineStatus({
                 >
                   {isDone ? "✓" : step.icon}
                 </span>
-                {/* label */}
                 <span
-                  className={`max-w-[76px] truncate text-center text-[9px] font-medium leading-tight ${
+                  className={`flex-1 truncate text-[10px] font-medium ${
                     isActive
-                      ? "text-blue-600 dark:text-blue-400"
+                      ? "text-blue-700 dark:text-blue-400"
                       : isDone
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-slate-400 dark:text-slate-500"
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-slate-500 dark:text-slate-500"
                   }`}
                 >
                   {step.label}
                 </span>
-                {/* per-stage telemetry */}
-                {ms != null && (isDone || isActive) && (
-                  <span className="font-mono text-[8px] text-slate-400 dark:text-slate-500">
+                {ms != null && (
+                  <span
+                    className={`shrink-0 font-mono text-[9px] ${
+                      isDone || isActive
+                        ? "text-slate-500 dark:text-slate-400"
+                        : "text-slate-300 dark:text-slate-600"
+                    }`}
+                  >
                     {ms}ms
                   </span>
                 )}
