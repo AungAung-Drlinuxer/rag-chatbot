@@ -31,6 +31,9 @@ class TicketCreate(BaseModel):
     domain: str = "general"
     assignee: str | None = None
     due_date: str | None = None
+    # v1.6.4 — where the ticket must be created. Per user policy there is no
+    # "internal only" option: every manual ticket must exist in Jira or OpenProject.
+    destination: str = "jira"  # jira | openproject
 
     def effective_subject(self) -> str:
         return (self.subject or self.summary or "").strip()
@@ -47,6 +50,24 @@ class AttachmentRequest(BaseModel):
     filename: str
     content_type: str
     data_base64: str
+
+
+@router.get("/ticket-destinations")
+def list_ticket_destinations(user: str = Depends(get_current_user)) -> dict:
+    """v1.6.4 — configured external ticket destinations for the create dialogs.
+
+    Local-only creation was removed by policy: the UI shows Jira / OpenProject
+    and disables whichever is not configured (with a hint to Settings)."""
+    from app.integrations.jira import _jira_cfg
+    from app.integrations.openproject import get_op_cfg
+    j = _jira_cfg()
+    o = get_op_cfg()
+    return {"destinations": [
+        {"key": "jira", "label": "Jira",
+         "configured": bool(j.get("base_url") and j.get("email") and j.get("api_token"))},
+        {"key": "openproject", "label": "OpenProject",
+         "configured": bool(o.get("base_url") and o.get("api_key") and o.get("project_id"))},
+    ]}
 
 
 @router.get("/domains")
@@ -191,31 +212,59 @@ def create_ticket(
     user: str = Depends(_require_create_tickets),
 ) -> dict:
     """Manual ticket creation — gated by the admin RBAC matrix (v0.21.57).
-    Users escalate via chat."""
+
+    v1.6.4 — destination policy (user mandate): a manual ticket MUST exist in
+    Jira or OpenProject. Local-only tickets are no longer accepted: if the
+    external create fails, the request fails with 502 and nothing is saved.
+    (A mirror row is still kept in jira_tickets so the Tickets board, filters
+    and audit keep working — the external key is the source of truth.)
+    """
     with SessionLocal() as s:
-        # v0.17.0 — create in Jira FIRST (real key), then persist. If Jira is not
-        # configured the ticket still saves locally with jira_key=None.
-        from app.integrations.jira import escalate as jira_escalate
         from app.persistence.models import JiraTicket
 
         subj = req.effective_subject()
         if not subj:
             raise HTTPException(status_code=400, detail="Ticket subject is required")
         summary = subj[:120]
-        jira_result = jira_escalate(
-            summary=summary,
-            description=req.description,
-            reporter=user,
-            project=None,  # jira_route(domain) decides inside escalate
-            assignee=req.assignee or None,  # v0.21.98 — honor chosen assignee in Jira
-            domain=req.domain,
-        )
-        jira_key = jira_result.get("jira_key")
+        destination = (req.destination or "jira").lower().strip()
+        if destination not in ("jira", "openproject"):
+            raise HTTPException(status_code=400,
+                                detail="destination must be 'jira' or 'openproject'")
+
+        ext_key: str | None = None
+        ext_link: str = ""
+        ext_mode: str = ""
+        if destination == "openproject":
+            from app.integrations.openproject import create_issue as op_create
+            res = op_create(summary=summary, description=req.description,
+                            priority=req.priority)
+            ext_key, ext_link, ext_mode = res.get("op_key"), res.get("link", ""), res.get("mode", "")
+            if not ext_key:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"OpenProject ticket creation failed"
+                           f"{(': ' + res['error']) if res.get('error') else ' (integration not configured — check Settings → Integrations)'}")
+        else:
+            from app.integrations.jira import escalate as jira_escalate
+            res = jira_escalate(
+                summary=summary,
+                description=req.description,
+                reporter=user,
+                project=None,  # jira_route(domain) decides inside escalate
+                assignee=req.assignee or None,  # v0.21.98 — honor chosen assignee in Jira
+                domain=req.domain,
+            )
+            ext_key, ext_link, ext_mode = res.get("jira_key"), res.get("link", ""), res.get("mode", "")
+            if not ext_key:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Jira ticket creation failed"
+                           f"{(': ' + res['error']) if res.get('error') else ' (integration not configured — check Settings → Integrations)'}")
 
         from datetime import datetime as _dt
 
         row = JiraTicket(
-            jira_key=jira_key,
+            jira_key=ext_key,
             domain=req.domain[:64],
             status="open",
             created_by=user,
@@ -231,13 +280,14 @@ def create_ticket(
         # v0.21.92 — alert the requester their ticket is open
         try:
             from app.notifier import notify_ticket_created
-            notify_ticket_created(user, jira_key, subj[:120])
+            notify_ticket_created(user, ext_key, subj[:120])
         except Exception:  # noqa: BLE001
             pass
         return {
-            "id": jira_key or f"IT-{row.id}",
-            "jira_mode": jira_result.get("mode"),
-            "jira_link": jira_result.get("link"),
+            "id": ext_key,
+            "destination": destination,
+            "jira_mode": ext_mode,
+            "jira_link": ext_link,
             "subject": subj[:120],
             "description": req.description,
             "status": "open",

@@ -59,7 +59,7 @@ import {
   getConversationMessages,
   renameConversation,
 } from "@/features/conversations/api";
-import { createTicketApi, listActiveDomains } from "@/features/tickets/api";
+import { createTicketApi, listActiveDomains, listTicketDestinations } from "@/features/tickets/api";
 import { assignableUsers } from "@/features/users/api";
 
 /* ============================================================
@@ -437,8 +437,12 @@ export default function Chat({
   // v0.21.90 — prefill ticket dialog (instead of silent auto-create on click)
   const [ticketForm, setTicketForm] = useState<null | {
     subject: string; description: string; domain: string; priority: string;
-    assignee: string; due_date: string;
+    assignee: string; due_date: string; destination: string;
   }>(null);
+  // v1.6.4 — configured external destinations (Jira / OpenProject)
+  const [ticketDests, setTicketDests] = useState<
+    { key: string; label: string; configured: boolean }[]
+  >([{ key: "jira", label: "Jira", configured: true }]);
   const [ticketBusy, setTicketBusy] = useState(false);
   // v1.6.3 — categories come from the live classifier-domain registry so a domain
   // added by a knowledge manager shows up immediately (was a hardcoded 7-item list)
@@ -475,7 +479,16 @@ export default function Chat({
       priority: "medium",
       assignee: "",
       due_date: "",
+      destination: "jira",
     });
+    listTicketDestinations()
+      .then((ds) => {
+        setTicketDests(ds);
+        const firstConfigured = ds.find((d) => d.configured);
+        if (firstConfigured)
+          setTicketForm((f) => (f ? { ...f, destination: firstConfigured.key } : f));
+      })
+      .catch(() => { /* noop */ });
     // v0.21.98 — assignable users (same list as Tickets page)
     assignableUsers()
       .then((d) => setAssignable(d?.users ?? []))
@@ -511,8 +524,9 @@ export default function Chat({
         priority: ticketForm.priority,
         assignee: ticketForm.assignee || null,
         due_date: ticketForm.due_date || null,
+        destination: ticketForm.destination,
       });
-      chatAlert(`Ticket ${created?.jira_key ?? created?.id ?? ""} created successfully`);
+      chatAlert(`${created?.id ?? "Ticket"} created in ${ticketForm.destination === "openproject" ? "OpenProject" : "Jira"}`);
       setTicketForm(null);
     } catch (e: any) {
       // v1.6.3 — surface the real reason (was a generic message that hid 422s)
@@ -877,6 +891,37 @@ export default function Chat({
                     onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
                     className="w-full resize-none rounded-xl border bg-white px-3 py-2.5 text-xs outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950"
                   />
+                </div>
+                {/* v1.6.4 — destination: create in Jira or OpenProject (no local-only) */}
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Create in
+                  </label>
+                  <div className="flex gap-2">
+                    {ticketDests.map((d) => {
+                      const active = ticketForm.destination === d.key;
+                      return (
+                        <button
+                          key={d.key}
+                          type="button"
+                          disabled={!d.configured}
+                          title={d.configured
+                            ? `Create this ticket in ${d.label}`
+                            : `${d.label} is not configured — set it up in Settings → Integrations`}
+                          onClick={() => setTicketForm({ ...ticketForm, destination: d.key })}
+                          className={`h-10 flex-1 rounded-xl border px-3 text-xs font-medium transition dark:border-slate-700 dark:bg-slate-950 ${
+                            active
+                              ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                              : d.configured
+                                ? "border hover:border-orange-400 dark:border-slate-700"
+                                : "cursor-not-allowed cursor-not-allowed opacity-40 italic dark:border-slate-800"
+                          }`}
+                        >
+                          {d.label}{!d.configured ? " (not configured)" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

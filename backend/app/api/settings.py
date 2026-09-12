@@ -214,6 +214,9 @@ def put_integration_settings(key: str, payload: dict, user: str = Depends(get_cu
     if key == "llm":
         from app.llm.client import reload_llm_cfg
         reload_llm_cfg()
+    if key == "jira":
+        from app.integrations.jira import reload_jira_cfg
+        reload_jira_cfg()
     return {"ok": True}
 
 @router.post("/settings/integrations/{key}/test")

@@ -18,15 +18,74 @@ from app.config import SETTINGS
 
 _CREATE_PATH = "/secure/CreateIssueDetails!init.jspa"
 
+# v1.6.4 — DB-first config overlay (system_settings["jira"] written by the
+# Settings → Integrations UI), env SETTINGS as fallback. Without this the UI
+# shows "configured" while escalate() still saw empty env vars and silently
+# skipped Jira (tickets saved local-only with jira_key=NULL).
+import time as _time
+
+_JIRA_CFG_CACHE: dict | None = None
+_JIRA_CFG_AT: float = 0.0
+_JIRA_CFG_TTL = 30.0
+
+
+def reload_jira_cfg() -> None:
+    global _JIRA_CFG_CACHE, _JIRA_CFG_AT
+    _JIRA_CFG_CACHE, _JIRA_CFG_AT = None, 0.0
+
+
+def _jira_cfg() -> dict:
+    global _JIRA_CFG_CACHE, _JIRA_CFG_AT
+    now = _time.time()
+    if _JIRA_CFG_CACHE is not None and (now - _JIRA_CFG_AT) < _JIRA_CFG_TTL:
+        return _JIRA_CFG_CACHE
+    out = {
+        "base_url": SETTINGS.jira_base_url,
+        "email": SETTINGS.jira_email,
+        "api_token": SETTINGS.jira_token,
+        "project": SETTINGS.jira_project,
+        "service_desk_id": SETTINGS.jira_service_desk_id,
+        "request_types": SETTINGS.jira_request_types,
+    }
+    try:
+        from sqlalchemy import text as _t
+        from app.persistence.database import SessionLocal
+        with SessionLocal() as s:
+            row = s.execute(_t(
+                "SELECT value FROM system_settings WHERE key = 'jira'")).first()
+        val = row[0] if row else {}
+        import json as _json
+        if isinstance(val, str):
+            val = _json.loads(val)
+        val = val or {}
+        if val.get("base_url"):
+            out["base_url"] = val["base_url"]
+        if val.get("email"):
+            out["email"] = val["email"]
+        if val.get("api_token"):
+            out["api_token"] = val["api_token"]
+        if val.get("project_key"):
+            out["project"] = val["project_key"]
+        elif val.get("project"):
+            out["project"] = val["project"]
+        if val.get("service_desk_id"):
+            out["service_desk_id"] = val["service_desk_id"]
+        if val.get("request_types"):
+            out["request_types"] = val["request_types"]                 if isinstance(val["request_types"], str)                 else _json.dumps(val["request_types"])
+    except Exception:  # DB not ready — env fallback keeps dev working
+        pass
+    _JIRA_CFG_CACHE, _JIRA_CFG_AT = out, now
+    return out
+
 
 def build_create_link(summary: str, description: str) -> str:
-    base = SETTINGS.jira_base_url.rstrip("/")
+    base = _jira_cfg()["base_url"].rstrip("/")
     q = f"?summary={quote(summary)}&description={quote(description)}"
     return f"{base}{_CREATE_PATH}{q}"
 
 
 def _get_request_type(domain):
-    raw = SETTINGS.jira_request_types
+    raw = _jira_cfg()["request_types"]
     if not raw:
         return None
     try:
@@ -41,25 +100,29 @@ def _get_request_type(domain):
 def escalate(summary: str, description: str, reporter=None,
              project=None, assignee=None, domain=None) -> dict:
     """Create a Jira ticket via JSM API (preferred) or issue REST (fallback)."""
-    if not SETTINGS.jira_base_url:
+    cfg = _jira_cfg()
+    if not cfg["base_url"]:
         return {"link": build_create_link(summary, description), "mode": "link",
                 "jira_key": None, "reporter": reporter}
 
-    service_desk_id = SETTINGS.jira_service_desk_id
+    service_desk_id = cfg["service_desk_id"]
     rt_id = _get_request_type(domain)
 
     try:
-        if service_desk_id and rt_id and SETTINGS.jira_email and SETTINGS.jira_token:
+        if service_desk_id and rt_id and cfg["email"] and cfg["api_token"]:
             key, link = _create_via_jsm(
                 service_desk_id, rt_id, summary, description, reporter, assignee, domain
             )
             return {"link": link, "mode": "jsm", "jira_key": key, "reporter": reporter}
-        if SETTINGS.jira_email and SETTINGS.jira_token:
+        if cfg["email"] and cfg["api_token"]:
             key, link = _create_via_issue_rest(summary, description, reporter, project, assignee)
             return {"link": link, "mode": "rest", "jira_key": key, "reporter": reporter}
-        key = _mock_key()
-        return {"link": f"{SETTINGS.jira_base_url.rstrip('/')}/browse/{key}",
-                "mode": "mock", "jira_key": key, "reporter": reporter}
+        # v1.6.4 — mock keys removed by policy: a ticket must exist in REAL Jira.
+        # Without credentials we fail loudly (tickets API -> 502) instead of
+        # inventing ESC-xxxx keys that never exist upstream.
+        return {"link": build_create_link(summary, description), "mode": "link",
+                "jira_key": None, "reporter": reporter,
+                "error": "Jira credentials missing (email + api token) in Settings → Integrations"}
     except Exception as exc:
         return {"link": build_create_link(summary, description), "mode": "link",
                 "jira_key": None, "reporter": reporter,
@@ -72,7 +135,8 @@ def _mock_key():
 
 
 def _auth_header():
-    raw = f"{SETTINGS.jira_email}:{SETTINGS.jira_token}".encode()
+    cfg = _jira_cfg()
+    raw = f"{cfg['email']}:{cfg['api_token']}".encode()
     return "Basic " + base64.b64encode(raw).decode()
 
 
@@ -80,6 +144,7 @@ def _create_via_jsm(service_desk_id, request_type_id, summary, description,
                     reporter, assignee, domain):
     """POST /rest/servicedeskapi/request — JSM customer-request creation."""
     import httpx
+    cfg = _jira_cfg()
     payload = {
         "serviceDeskId": service_desk_id,
         "requestTypeId": request_type_id,
@@ -95,20 +160,21 @@ def _create_via_jsm(service_desk_id, request_type_id, summary, description,
     headers = {"Authorization": _auth_header(), "Accept": "application/json",
                "Content-Type": "application/json"}
     with httpx.Client(timeout=30) as client:
-        r = client.post(f"{SETTINGS.jira_base_url.rstrip('/')}/rest/servicedeskapi/request",
+        r = client.post(f"{cfg['base_url'].rstrip('/')}/rest/servicedeskapi/request",
                         json=payload, headers=headers)
         r.raise_for_status()
         body = r.json()
     issue_key = body.get("issueKey") or body.get("key") or ""
-    link = f"{SETTINGS.jira_base_url.rstrip('/')}/browse/{issue_key}" if issue_key else ""
+    link = f"{cfg['base_url'].rstrip('/')}/browse/{issue_key}" if issue_key else ""
     return issue_key, link
 
 
 def _create_via_issue_rest(summary, description, reporter, project, assignee):
     """Standard POST /rest/api/3/issue fallback (no JSM service-desk)."""
     import httpx
+    cfg = _jira_cfg()
     fields = {
-        "project": {"key": project or SETTINGS.jira_project},
+        "project": {"key": project or cfg["project"]},
         "summary": summary,
         "description": {"type": "doc", "version": 1,
                         "content": [{"type": "paragraph",
@@ -118,12 +184,12 @@ def _create_via_issue_rest(summary, description, reporter, project, assignee):
     headers = {"Authorization": _auth_header(), "Accept": "application/json",
                "Content-Type": "application/json"}
     with httpx.Client(timeout=30) as client:
-        r = client.post(f"{SETTINGS.jira_base_url.rstrip('/')}/rest/api/3/issue",
+        r = client.post(f"{cfg['base_url'].rstrip('/')}/rest/api/3/issue",
                         json={"fields": fields}, headers=headers)
         r.raise_for_status()
         body = r.json()
     issue_key = body.get("key", "")
-    return issue_key, f"{SETTINGS.jira_base_url.rstrip('/')}/browse/{issue_key}"
+    return issue_key, f"{cfg['base_url'].rstrip('/')}/browse/{issue_key}"
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +207,8 @@ STATUS_TRANSITIONS: dict[str, list[str]] = {
 
 def transition_issue(issue_key: str, status: str) -> dict:
     """Move a Jira issue to a new status. Returns {ok, detail}."""
-    if not (SETTINGS.jira_base_url and SETTINGS.jira_email and SETTINGS.jira_token):
+    cfg = _jira_cfg()
+    if not (cfg["base_url"] and cfg["email"] and cfg["api_token"]):
         return {"ok": False, "detail": "Jira not configured"}
 
     names = STATUS_TRANSITIONS.get((status or "").lower(), [])
@@ -153,7 +220,7 @@ def transition_issue(issue_key: str, status: str) -> dict:
         with httpx.Client(timeout=20,
                           headers={"Authorization": auth, "Accept": "application/json"}) as client:
             # 1) list available transitions
-            r = client.get(f"{SETTINGS.jira_base_url.rstrip('/')}/rest/api/3/issue/{issue_key}/transitions")
+            r = client.get(f"{cfg['base_url'].rstrip('/')}/rest/api/3/issue/{issue_key}/transitions")
             r.raise_for_status()
             available = {t["name"].lower(): t["id"] for t in r.json().get("transitions", [])}
 
@@ -166,7 +233,7 @@ def transition_issue(issue_key: str, status: str) -> dict:
 
             # 3) perform the transition
             r2 = client.post(
-                f"{SETTINGS.jira_base_url.rstrip('/')}/rest/api/3/issue/{issue_key}/transitions",
+                f"{cfg['base_url'].rstrip('/')}/rest/api/3/issue/{issue_key}/transitions",
                 json={"transition": {"id": tid}},
             )
             r2.raise_for_status()
@@ -177,7 +244,8 @@ def transition_issue(issue_key: str, status: str) -> dict:
 
 def fetch_issue_status(issue_key: str) -> dict:
     """Read the live status of a Jira issue. Returns {ok, status, assignee}."""
-    if not (SETTINGS.jira_base_url and SETTINGS.jira_email and SETTINGS.jira_token):
+    cfg = _jira_cfg()
+    if not (cfg["base_url"] and cfg["email"] and cfg["api_token"]):
         return {"ok": False, "detail": "Jira not configured"}
     try:
         import httpx
@@ -185,7 +253,7 @@ def fetch_issue_status(issue_key: str) -> dict:
         with httpx.Client(timeout=15,
                           headers={"Authorization": _auth_header(), "Accept": "application/json"}) as client:
             r = client.get(
-                f"{SETTINGS.jira_base_url.rstrip('/')}/rest/api/3/issue/{issue_key}",
+                f"{cfg['base_url'].rstrip('/')}/rest/api/3/issue/{issue_key}",
                 params={"fields": "status,assignee"},
             )
             r.raise_for_status()

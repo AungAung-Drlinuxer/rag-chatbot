@@ -14,16 +14,30 @@ export async function listTickets(limit = 50) {
   return r.json();
 }
 
+export async function listTicketDestinations(): Promise<
+  { key: string; label: string; configured: boolean }[]
+> {
+  const r = await apiFetch(`${BASE}/api/ticket-destinations`, { headers: authHeaders() });
+  if (!r.ok) return [{ key: "jira", label: "Jira", configured: false }];
+  const d = await r.json();
+  return d?.destinations ?? [];
+}
+
 export async function createTicketApi(body: {
   subject: string; description: string; domain: string; priority: string;
   assignee?: string | null; due_date?: string | null;
+  destination?: string;
 }) {
   const r = await apiFetch(`${BASE}/api/tickets`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try { detail = (await r.json())?.detail || detail; } catch { /* non-json */ }
+    throw new Error(detail);
+  }
   return r.json();
 }
 

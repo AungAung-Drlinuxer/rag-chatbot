@@ -194,6 +194,15 @@ def _node_create_ticket(state: RAGState) -> dict:
                        reporter=state.get("user") or None, domain="general")
     ticket_id = jr.get("jira_key") or None
 
+    # v1.6.4 — external-only policy: without a real Jira key nothing is saved;
+    # the user sees why instead of a phantom local-only ticket.
+    if not ticket_id:
+        reason = jr.get("error") or "Jira did not return a ticket key"
+        return {"escalation_messages": [
+            f"❌ Ticket was NOT created in Jira ({reason}). Nothing was saved — "
+            "fix Jira in Settings → Integrations and retry."],
+            "ticket_id": None}
+
     with SessionLocal() as s:
         s.add(JiraTicket(jira_key=ticket_id, subject=summary,
                          description=state["question"] or "",

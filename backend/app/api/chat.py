@@ -356,6 +356,12 @@ def escalate(req: EscalateRequest, user: str = Depends(get_current_user)) -> dic
     audit("escalate", user, req.domain, req.confidence, detail=result.get("jira_key"))
 
     # Persist the escalation log (best-effort).
+    # v1.6.4 — external-only policy: only persist when a REAL Jira key exists;
+    # otherwise the caller gets the error and no phantom local-only row is saved.
+    if not result.get("jira_key"):
+        return {"ok": False, "error": result.get("error")
+                or "Jira ticket was not created — check Settings → Integrations",
+                **{k: result.get(k) for k in ("link", "mode")}}
     try:
         from app.persistence.database import SessionLocal
         from app.persistence.models import JiraTicket

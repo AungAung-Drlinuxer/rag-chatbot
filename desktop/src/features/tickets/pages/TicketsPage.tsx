@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // feature API (governance: endpoints live in features/*/api.ts, not components)
 import {
   listTickets,
+  listTicketDestinations,
   listActiveDomains,
   createTicketApi,
   ticketComments,
@@ -109,7 +110,12 @@ export default function Tickets({
     priority: "medium",
     assignee: "",
     due_date: "",
+    destination: "jira",
   });
+  // v1.6.4 — where the ticket is created: Jira / OpenProject (local-only removed)
+  const [destinations, setDestinations] = useState<
+    { key: string; label: string; configured: boolean }[]
+  >([{ key: "jira", label: "Jira", configured: true }]);
 
   // v0.20.0 — detail drawer: comments + field editing
   const [comments, setComments] = useState<Comment[]>([]);
@@ -218,6 +224,7 @@ export default function Tickets({
   useEffect(() => {
     assignableUsers().then((d) => setAssignable(d?.users ?? [])).catch(() => {});
     // v1.6.3 — live categories so new domains appear without a redeploy
+    listTicketDestinations().then(setDestinations).catch(() => {});
     listActiveDomains()
       .then((ds) => {
         if (!ds.length) return;
@@ -433,6 +440,7 @@ export default function Tickets({
         priority: newTicket.priority,
         assignee: newTicket.assignee || null,
         due_date: newTicket.due_date || null,
+        destination: newTicket.destination,
       });
 
       const ticket: Ticket = {
@@ -452,8 +460,8 @@ export default function Tickets({
         ticket,
         ...(current ?? []),
       ]);
-    } catch {
-      onToast("Ticket creation failed", "err");
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "Ticket creation failed", "err");
       return;
     }
 
@@ -464,11 +472,12 @@ export default function Tickets({
       priority: "medium",
       assignee: "",
       due_date: "",
+      destination: newTicket.destination,
     });
 
     setCreateOpen(false);
 
-    onToast("Ticket created");
+    onToast(`Ticket created in ${newTicket.destination === "openproject" ? "OpenProject" : "Jira"}`);
   }
 
     return (
@@ -1282,6 +1291,38 @@ export default function Tickets({
                 placeholder="Describe what happened, error messages, affected system, and what you have already tried..."
                 className="w-full resize-none rounded-xl border bg-background px-3 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
               />
+            </div>
+
+            {/* v1.6.4 — ticket destination: Jira or OpenProject (no local-only) */}
+            <div>
+              <label className="mb-2 block text-xs font-medium">
+                Create in
+              </label>
+              <div className="flex gap-2">
+                {destinations.map((d) => {
+                  const active = newTicket.destination === d.key;
+                  return (
+                    <button
+                      key={d.key}
+                      type="button"
+                      disabled={!d.configured}
+                      title={d.configured
+                        ? `Create this ticket in ${d.label}`
+                        : `${d.label} is not configured — set it up in Settings → Integrations`}
+                      onClick={() => setNewTicket({ ...newTicket, destination: d.key })}
+                      className={`h-11 flex-1 rounded-xl border px-3 text-sm font-medium transition ${
+                        active
+                          ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          : d.configured
+                            ? "border hover:border-blue-400"
+                            : "cursor-not-allowed border opacity-40 italic"
+                      }`}
+                    >
+                      {d.label}{!d.configured ? " (not configured)" : ""}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

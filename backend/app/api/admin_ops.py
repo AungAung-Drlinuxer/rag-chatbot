@@ -268,6 +268,12 @@ def decide_approval(approval_id: str, payload: dict, user: str = Depends(get_cur
                 summary = (res["question"] or "Escalation")[:120]
                 jr = jira_escalate(summary=summary, description=res["question"] or "",
                                    reporter=res["username"] or None, domain="general")
+                if not jr.get("jira_key"):
+                    # v1.6.4 — external-only policy: no real key → do not save a phantom row
+                    graph_state["escalation_messages"] = [
+                        f"❌ Ticket was NOT created in Jira "
+                        f"({jr.get('error') or 'no key returned'}) — nothing was saved."]
+                    raise RuntimeError("jira create failed")
                 with SessionLocal() as s:
                     s.add(JiraTicket(jira_key=jr.get("jira_key"), subject=summary,
                                      description=res["question"] or "",
@@ -282,7 +288,10 @@ def decide_approval(approval_id: str, payload: dict, user: str = Depends(get_cur
                     ticket_id=jr.get("jira_key"),
                     escalation_messages=[f"✅ Ticket ({jr.get('jira_key')}) opened successfully."])
             except Exception as exc2:
-                graph_state["escalation_messages"] = [f"escalation failed: {exc2}"]
+                _key = locals().get("jr") or {}
+                if not (_key.get("jira_key") if isinstance(_key, dict) else None):
+                    # v1.6.4 — keep the specific "NOT created" reason if already set
+                    graph_state["escalation_messages"] = [f"escalation failed: {exc2}"]
     # v0.22.1 — deliver the outcome to the REQUESTER, not just the admin UI:
     # (1) persist an assistant ChatMessage in their thread so it shows on reload
     # (2) email them the ticket info (or rejection notice)

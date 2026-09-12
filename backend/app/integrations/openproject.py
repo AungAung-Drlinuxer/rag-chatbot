@@ -64,6 +64,55 @@ def test_connection() -> dict:
         return {"ok": False, "message": str(exc)}
 
 
+# ---------------------------------------------------------------- creation
+def create_issue(summary: str, description: str = "",
+                 priority: str | None = None, project_id: str | None = None) -> dict:
+    """OpenProject ticket creation — POST /api/v3/projects/:id/work_packages.
+
+    Returns {op_key, link, mode} shaped like jira.escalate() so the tickets API
+    can treat both destinations uniformly. mode: 'rest' on success,
+    'link' when not configured/unreachable (pre-filled web form URL).
+    """
+    import httpx
+
+    cfg = get_op_cfg()
+    base = (cfg.get("base_url") or "").rstrip("/")
+    key = cfg.get("api_key") or ""
+    pid = str(project_id or cfg.get("project_id") or "").strip()
+    if not (base and key and pid):
+        return {"op_key": None, "link": f"{base}/work_packages/new", "mode": "link"}
+
+    payload: dict = {
+        "_links": {
+            "project": {"href": f"/api/v3/projects/{pid}"},
+            "type": {"href": "/api/v3/types/1"},  # 1 = "Task" in stock OP
+        },
+        "subject": summary[:255],
+        "description": {"raw": description or ""},
+    }
+    prio_map = {"low": "5", "medium": "6", "high": "7", "critical": "8"}
+    p_href = prio_map.get((priority or "").lower())
+    if p_href:
+        payload["_links"]["priority"] = {"href": f"/api/v3/priorities/{p_href}"}
+
+    try:
+        with httpx.Client(timeout=30, auth=("apikey", key),
+                          headers={"Accept": "application/hal+json",
+                                   "Content-Type": "application/json"}) as client:
+            r = client.post(f"{base}/api/v3/projects/{pid}/work_packages", json=payload)
+            if r.status_code not in (200, 201):
+                return {"op_key": None, "link": f"{base}/work_packages/new",
+                        "mode": "link", "error": f"HTTP {r.status_code}: {r.text[:160]}"}
+            body = r.json()
+        wp_id = body.get("id")
+        return {"op_key": f"OP-{wp_id}",
+                "link": f"{base}/work_packages/{wp_id}",
+                "mode": "rest"}
+    except Exception as exc:
+        return {"op_key": None, "link": f"{base}/work_packages/new",
+                "mode": "link", "error": f"{type(exc).__name__}: {exc}"}
+
+
 # ---------------------------------------------------------------- work packages
 def fetch_work_packages(limit: int = 200) -> list[dict]:
     """Pull open work packages for the configured project.
