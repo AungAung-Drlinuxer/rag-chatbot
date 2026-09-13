@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -108,9 +109,14 @@ def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
     )[0]["n"]
 
     def _pct(cur: int, prev: int) -> float | None:
-        """Real week-over-week percentage. None when no baseline (hide the pill)."""
+        """Real week-over-week percentage. None when there is no usable baseline.
+
+        The UI also receives the raw `previous` values (see `previous` below) so it
+        can label a 4-digit percentage honestly ("baseline too small") instead of
+        rendering a meaningless "+1136.4%" derived from a near-zero baseline.
+        """
         if prev <= 0:
-            return None if cur <= 0 else None  # no meaningful baseline yet
+            return None  # no meaningful baseline yet
         return round((cur - prev) / prev * 100, 1)
 
     return {
@@ -126,6 +132,15 @@ def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
             "resolved_by_bot": _pct(int(resolved_week or 0), int(resolved_prev or 0)),
             "escalated_to_tickets": _pct(int(escalated_week or 0), int(escalated_prev or 0)),
             "active_users": _pct(int(active_users or 0), int(active_users_prev or 0)),
+        },
+        # #4 — raw previous-window values. The UI needs the baseline to decide
+        # whether a percentage is meaningful (a jump from 11 -> 136 is "+1136%"
+        # arithmetic but useless information).
+        "previous": {
+            "total_conversations": int(chats_prev or 0),
+            "resolved_by_bot": int(resolved_prev or 0),
+            "escalated_to_tickets": int(escalated_prev or 0),
+            "active_users": int(active_users_prev or 0),
         },
     }
 
@@ -183,13 +198,14 @@ def dashboard_conversations(
 
 @router.get("/dashboard/domains")
 def dashboard_domains(user: str = Depends(get_current_user)) -> dict:
+    # #10 — total across ALL domains, then take the top 8 and fold the remainder
+    # into an explicit "Other" bucket. Previously the percentages summed to ~79%
+    # with no explanation of where the rest went.
+    total = int(_rows("SELECT count(*) AS n FROM kb_meta")[0]["n"] or 0) or 1
     rows = _rows(
         "SELECT domain AS name, count(*) AS n FROM kb_meta "
         "GROUP BY domain ORDER BY n DESC LIMIT 8"
     )
-    # kb page distribution is a stand-in for query-domain mix until
-    # chat_messages.meta domain aggregation is indexed; cheap + honest.
-    total = sum(int(r["n"]) for r in rows) or 1
     domains = [
         {
             "name": str(r["name"] or "general").capitalize(),
@@ -198,7 +214,16 @@ def dashboard_domains(user: str = Depends(get_current_user)) -> dict:
         }
         for r in rows
     ]
-    return {"domains": domains}
+    shown = sum(int(r["n"]) for r in rows)
+    if shown < total:
+        domains.append(
+            {
+                "name": "Other",
+                "count": total - shown,
+                "percentage": round(100.0 * (total - shown) / total, 1),
+            }
+        )
+    return {"domains": domains, "total": total}
 
 
 # ---------------------------------------------------------------------------
@@ -218,15 +243,37 @@ def dashboard_recent_conversations(
     )
     out = []
     for r in rows:
-        meta = r.get("meta") or ""
-        decision = "Resolved" if '"answer"' in meta else "Escalated"
+        # #1 — the previous rule was `"answer" in meta else "Escalated"`, which
+        # labelled every low-confidence (caution) turn as an escalation even though
+        # no ticket was created — the table read "Escalated" on all rows while the
+        # KPI counted 0 escalations. Parse the meta JSON and derive three honest
+        # states instead of a substring check:
+        #   Escalated  -> a ticket was actually raised from this turn
+        #   Cautioned  -> answered with a low-confidence caution notice
+        #   Resolved   -> answered from the KB with confidence
+        meta_raw = r.get("meta")
+        m: dict = {}
+        if meta_raw:
+            try:
+                m = json.loads(meta_raw) if isinstance(meta_raw, str) else (meta_raw or {})
+            except (ValueError, TypeError):
+                m = {}
+        tool_used = str(m.get("tool_used") or "").lower()
+        decision = str(m.get("decision") or "").lower()
+        if tool_used == "tickets" or m.get("ticket_id") or m.get("escalated"):
+            result = "Escalated"
+        elif decision == "caution":
+            result = "Cautioned"
+        else:
+            result = "Resolved"
         created = r["created_at"]
         out.append(
             {
                 "time": created.isoformat() if created else "",
                 "user": r.get("username") or "unknown",
                 "question": (r.get("content") or "")[:120],
-                "result": decision,
+                "result": result,
+                "confidence": m.get("confidence"),
             }
         )
     return {"conversations": out}
@@ -241,9 +288,21 @@ def dashboard_recent_tickets(
     limit: int = 5, user: str = Depends(get_current_user)
 ) -> dict:
     limit = max(1, min(limit, 20))
+    # #20 — E2E verification tickets ("... (please ignore)", "Test01") were showing on
+    # the executive dashboard next to real work. Exclude rows that mark themselves as
+    # verification artifacts. The pattern is deliberately narrow: a subject must contain
+    # an explicit ignore/E2E/Test marker, so real tickets are never hidden.
+    _ARTIFACT = (
+        "subject ILIKE '%please ignore%' "
+        "OR subject ILIKE '%(ignore)%' "
+        "OR subject ILIKE 'E2E %' "
+        "OR subject ~* '^Test[0-9]{1,3}$'"
+    )
     rows = _rows(
         "SELECT id, jira_key, domain, status, created_by, created_at, subject, priority, assignee, due_date "
-        "FROM jira_tickets ORDER BY created_at DESC LIMIT :limit",
+        "FROM jira_tickets "
+        f"WHERE COALESCE(subject, '') = '' OR NOT ({_ARTIFACT}) "
+        "ORDER BY created_at DESC LIMIT :limit",
         {"limit": limit},
     )
     priority_map = {"database": "High", "network": "High", "security": "Critical",
@@ -252,7 +311,9 @@ def dashboard_recent_tickets(
     for r in rows:
         out.append(
             {
-                "id": r.get("jira_key") or f"IT-{r['id']}",
+                # #6 — keys arrive with mixed casing from different upstreams
+                # (op-46 vs OP-46); normalize so the table is scannable.
+                "id": (str(r["jira_key"]).upper() if r.get("jira_key") else f"IT-{r['id']}"),
                 "subject": r.get("subject") or ((r.get("domain") or "general") + " escalation"),
                 # normalize to Dashboard's badge vocabulary (Open/Pending/Resolved)
                 "status": {"created": "Open", "open": "Open", "pending": "Pending",
@@ -338,15 +399,28 @@ def _secret_present(integration_key: str, *field_names: str) -> bool:
 
 
 @router.get("/dashboard/health")
-def dashboard_health(user: str = Depends(get_current_user)) -> list[dict]:
-    checks: list[dict] = []
+def dashboard_health(user: str = Depends(get_current_user)) -> dict:
+    """Real dependency checks for the dashboard health panel.
 
-    def add(name: str, ok: bool, latency_ms: int | None = None):
-        checks.append(
+    #11 — the guardrail event counter used to be appended to the SERVICE list as
+    if it were a dependency ("Input guardrails (110 events / 7d) — Healthy"), which
+    conflates a security metric with service availability. It is now returned in a
+    separate `security` block, and each service carries a stable `key` so the UI can
+    pick a meaningful icon and name the failing dependency in the banner.
+    """
+    services: list[dict] = []
+
+    def add(key: str, name: str, ok: bool, latency_ms: int | None = None,
+            detail: str | None = None):
+        services.append(
             {
+                "key": key,
                 "name": name,
                 "status": "Healthy" if ok else "Down",
                 "latency_ms": latency_ms,
+                # #12 — first line of the failure reason so the panel can explain
+                # WHY a dependency is down instead of only colouring it red.
+                "detail": None if ok else (detail or None),
             }
         )
 
@@ -354,24 +428,26 @@ def dashboard_health(user: str = Depends(get_current_user)) -> list[dict]:
     t0 = time.time()
     try:
         _rows("SELECT 1")
-        add("PostgreSQL + pgvector", True, int((time.time() - t0) * 1000))
+        add("postgres", "PostgreSQL + pgvector", True, int((time.time() - t0) * 1000))
     except Exception as exc:
-        add("PostgreSQL + pgvector", False)
+        add("postgres", "PostgreSQL + pgvector", False, detail=f"{type(exc).__name__}")
         logger.warning("health pg failed: %s", exc)
 
-    # Redis (Sentinel-aware — uses the same connection the app uses)
+    # Redis (Sentinel-aware — same connection path the app uses)
+    t0 = time.time()
     try:
         from app.persistence.redis import get_redis
 
         client = get_redis()
         client.socket_connect_timeout = 2
         client.socket_timeout = 2
-        t0 = time.time()
         client.ping()
-        add("Redis", True, int((time.time() - t0) * 1000))
+        add("redis", "Redis", True, int((time.time() - t0) * 1000))
     except Exception as exc:
         logger.warning("redis health failed: %s", exc)
-        add("Redis", False)
+        # Surface the actionable part of the failure, truncated — the panel shows it.
+        msg = f"{type(exc).__name__}: {exc}"
+        add("redis", "Redis", False, detail=msg[:200])
 
     # Ollama embeddings
     t0 = time.time()
@@ -379,41 +455,56 @@ def dashboard_health(user: str = Depends(get_current_user)) -> list[dict]:
         import httpx
 
         r = httpx.get(f"{SETTINGS.ollama_url}/api/tags", timeout=3)
-        add("Ollama / embeddings", r.status_code == 200, int((time.time() - t0) * 1000))
-    except Exception:
-        add("Ollama / embeddings", False)
+        add("ollama", "Ollama / embeddings", r.status_code == 200,
+            int((time.time() - t0) * 1000),
+            detail=None if r.status_code == 200 else f"HTTP {r.status_code}")
+    except Exception as exc:
+        add("ollama", "Ollama / embeddings", False, detail=type(exc).__name__)
 
     # LLM provider (H-Chat / OpenRouter) — config presence check (no cost)
     llm_ok = _secret_present("llm", "api_key") or bool(SETTINGS.hchat_api_key)
-    add("H-Chat API", llm_ok)
+    add("llm", "H-Chat API", llm_ok, detail=None if llm_ok else "no API key configured")
 
     # Confluence integration — DB token wins, env fallback
     conf_ok = _secret_present("confluence", "api_token") or bool(SETTINGS.confluence_token)
-    add("Confluence sync", conf_ok)
+    add("confluence", "Confluence sync", conf_ok,
+        detail=None if conf_ok else "no token configured")
 
     # Jira integration — same merged-config logic
     jira_ok = _secret_present("jira", "api_token") or bool(SETTINGS.jira_token)
-    add("Jira", jira_ok)
+    add("jira", "Jira", jira_ok, detail=None if jira_ok else "no token configured")
 
-    # LDAP (config presence; real bind test is expensive)
+    # LDAP (config presence; a real bind test is too expensive for a dashboard poll)
     ldap_cfg = _integration_cfg("ldap")
     ldap_ok = bool(str(ldap_cfg.get("bind_password") or "").strip()) or bool(SETTINGS.ldap_url) or True
-    add("LDAP / AD", ldap_ok)
+    add("ldap", "LDAP / AD", ldap_ok)
 
-    # v1.1.4 — Input guardrails activity (blocked+flagged last 7d, from audit_log)
+    # Security block — guardrail activity is a metric, not a dependency.
+    security: dict = {"guardrail_events_7d": 0}
     try:
-        gr = _rows(
-            "SELECT count(*) AS n FROM audit_log WHERE action LIKE 'guardrail%' "
-            "AND created_at >= :since",
-            {"since": (datetime.now(UTC) - timedelta(days=7)).isoformat()},
-        )[0]["n"]
-        # A service is "healthy" if the screening pipeline is wired (module present);
-        # detections >0 prove it is actively protecting. Zero events = idle, still OK.
-        add(f"Input guardrails ({gr} events / 7d)", True)
-    except Exception:
-        add("Input guardrails", False)
+        security["guardrail_events_7d"] = int(
+            _rows(
+                "SELECT count(*) AS n FROM audit_log WHERE action LIKE 'guardrail%' "
+                "AND created_at >= :since",
+                {"since": (datetime.now(UTC) - timedelta(days=7)).isoformat()},
+            )[0]["n"]
+            or 0
+        )
+    except Exception as exc:
+        logger.warning("guardrail metric failed: %s", exc)
 
-    return checks
+    down = [s["name"] for s in services if s["status"] != "Healthy"]
+    degraded = 0 < len(down) < len(services)
+    return {
+        "services": services,
+        "security": security,
+        # #3 — the banner names the failing dependency instead of a vague
+        # "Degraded — check services".
+        "overall": "Down" if len(down) == len(services) and down else (
+            "Degraded" if degraded else "Healthy"
+        ),
+        "down": down,
+    }
 
 
 # ---------------------------------------------------------------------------

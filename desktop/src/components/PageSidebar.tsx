@@ -39,6 +39,20 @@ function groupConversations(list: any[]): [string, any[]][] {
   return BUCKET_ORDER.filter((k) => buckets.has(k)).map((k) => [k, buckets.get(k)!] as [string, any[]]);
 }
 
+/**
+ * #18 — asking the same question repeatedly creates several sessions with the same
+ * title, which reads as duplicated rows. Tag repeats with a ×N count so the list is
+ * honest about how many conversations share that title (nothing is merged or hidden).
+ */
+function duplicateCounts(list: any[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const c of list) {
+    const k = (c?.title || "Untitled chat").trim().toLowerCase();
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return counts;
+}
+
 /* ============================================================
    PageSidebar — shared nav for non-chat pages (v0.13.0)
 ============================================================ */
@@ -71,6 +85,9 @@ export default function PageSidebar({
   const [conversations, setConversations] = useState<any[]>([]);
 
   const [activeSessionId, setActiveSessionId] = useState<string>("");
+
+  // #18 — title → occurrence count, so repeats can be badged in the list.
+  const _dupes = duplicateCounts(conversations);
 
   const loadHistory = () => {
     listConversations()
@@ -272,6 +289,7 @@ export default function PageSidebar({
 
             {historyOpen && (
               <div className="mt-1 max-h-60 space-y-0.5 overflow-y-auto pr-1">
+
                 {conversations.length === 0 ? (
                   <p className="px-2 py-2 text-[10px] text-slate-500 italic">No recent chats</p>
                 ) : (
@@ -306,6 +324,14 @@ export default function PageSidebar({
                         <span className="flex items-center gap-1.5 truncate">
                           {c.is_pinned && <Pin className="size-3 shrink-0 text-sky-400 rotate-45" />}
                           <span className="truncate">{c.title || "Untitled chat"}</span>
+                          {(_dupes.get((c.title || "Untitled chat").trim().toLowerCase()) ?? 1) > 1 && (
+                            <span
+                              className="shrink-0 rounded bg-slate-700/60 px-1 text-[9px] font-semibold text-slate-300"
+                              title="Sessions with this same title"
+                            >
+                              ×{_dupes.get((c.title || "Untitled chat").trim().toLowerCase())}
+                            </span>
+                          )}
                         </span>
                       </button>
 

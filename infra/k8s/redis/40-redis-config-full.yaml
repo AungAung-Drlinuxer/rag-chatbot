@@ -14,6 +14,18 @@
 #
 # NOTE: this file is rendered by CI/apply with $REDIS_PASSWORD substituted.
 # Do NOT commit a real password here.
+#
+# GOTCHA (hit in prod): an apply pipeline that redacts secrets in its logs will
+# happily substitute the literal placeholder `__REPLACE_WITH_RANDOM_32_BYTES__`
+# into the ConfigMap. That leaves the cluster with a sentinel whose
+# `sentinel auth-pass` is the placeholder (failover breaks) and, if requirepass
+# is also absent, an unauthenticated sentinel. Always verify after apply:
+#   kubectl -n rag-chatbot exec redis-sentinel-0 -- grep -c '^requirepass' /conf/sentinel.conf
+#   # -> must be 1, and the value must never be the placeholder
+#
+# The sentinel StatefulSet mounts THIS ConfigMap (`redis-config`, key
+# `sentinel.conf`) as /readonly-config — not the separate `redis-sentinel-conf`
+# ConfigMap. Editing the wrong one silently changes nothing.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -25,6 +37,15 @@ data:
     port 26379
     supervised no
     daemonize no
+    # Sentinel MUST accept AUTH: the backend connects with
+    # sentinel_kwargs={"password": ...} and kombu puts the password in the
+    # sentinel:// URL. Without `requirepass` here the Sentinel answers
+    # "AUTH <password> called without any password configured for the default
+    # user" -> redis.sentinel.MasterNotFoundError -> /api/dashboard/health
+    # reports Redis Down and rate limiting / celery lose the sentinel path.
+    requirepass ${REDIS_PASSWORD}
+    # ...and the Sentinel needs the master password to reach the data nodes.
+    masterauth ${REDIS_PASSWORD}
 
     sentinel resolve-hostnames yes
     sentinel announce-hostnames yes

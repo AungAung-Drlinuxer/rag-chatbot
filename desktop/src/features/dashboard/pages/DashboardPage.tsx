@@ -1,6 +1,9 @@
 import {
   Activity,
   ArrowDownRight,
+  Cpu,
+  Database,
+  Server,
   Download,
   Printer,
   ArrowUpRight,
@@ -11,11 +14,9 @@ import {
   ChevronDown,
   ExternalLink,
   Eye,
-  FileText,
   MessageSquare,
   Plus,
   RefreshCw,
-  Settings2,
   ShieldAlert,
   Ticket,
   Users,
@@ -71,8 +72,13 @@ type Domain = {
 };
 
 type HealthItem = {
+  /** #12 — stable backend key (postgres/redis/ollama/llm/jira/...) for the icon */
+  key?: string;
   name: string;
   status: "Healthy" | "Degraded" | "Down";
+  /** #12 — why a dependency is down (first line of the real error) */
+  detail?: string | null;
+  latency_ms?: number | null;
   icon: ReactNode;
 };
 
@@ -102,6 +108,29 @@ export default function Dashboard({ role, onNavigate }: Props) {
   const [liveHealth, setLiveHealth] = useState<HealthItem[] | null>(null);
   const [gateTrend, setGateTrend] = useState<{ day: string; answered: number; cautioned: number }[]>([]);
   const [refreshTick, setRefreshTick] = useState(0);
+  // #3/#11 — overall status + the failing dependency names + the guardrail metric
+  // (a security counter, no longer disguised as a service).
+  const [healthSummary, setHealthSummary] = useState<{
+    overall: string;
+    down: string[];
+    guardrailEvents: number;
+  }>({ overall: "Healthy", down: [], guardrailEvents: 0 });
+
+  // #19 — the "Last updated" footer was frozen at mount time. Poll every 60s so a
+  // dashboard left open does not show stale figures, and re-render a relative age.
+  const [nowTick, setNowTick] = useState(0);
+  void nowTick; // drives the relative-age re-render
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setRefreshTick((v) => v + 1);
+      setNowTick((v) => v + 1);
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick((v) => v + 1), 10_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -146,17 +175,29 @@ export default function Dashboard({ role, onNavigate }: Props) {
             priority: prio(t.priority),
           })));
         }
-        if (h?.length) {
-          setLiveHealth(h.map((x: { name: string; status: string }) => ({
+        // #11/#12 — the endpoint now returns {services, security, overall, down}.
+        if (h?.services?.length) {
+          setLiveHealth(h.services.map((x: any) => ({
+            key: x.key,
             name: x.name,
             status: (x.status === "Healthy" ? "Healthy" : "Down") as HealthItem["status"],
-            icon: <Activity className="size-4" />,
+            detail: x.detail ?? null,
+            latency_ms: x.latency_ms ?? null,
+            icon: healthIcon(x.key),
           })));
+          setHealthSummary({
+            overall: h.overall ?? "Healthy",
+            down: h.down ?? [],
+            guardrailEvents: h.security?.guardrail_events_7d ?? 0,
+          });
         }
       } catch {
         // keep sample fallbacks on failure
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setLastUpdated(new Date());
+        }
       }
     }
 
@@ -172,12 +213,53 @@ export default function Dashboard({ role, onNavigate }: Props) {
     setRefreshTick((v) => v + 1);
   }
 
-  // v1.1.6 — real week-over-week pill text from backend deltas; null = hide pill
-  function deltaPill(key: string): string | null {
+  // #4/#5 — week-over-week pill, with two honesty guards:
+  //  * a percentage computed from a tiny baseline is arithmetically true but
+  //    useless (11 -> 136 renders as "+1136.4%"), so we label the baseline
+  //    instead of printing a 4-digit number;
+  //  * a card with no delta must still SAY something — an empty description
+  //    beside "vs previous 7 days" read as a broken card.
+  function deltaInfo(key: string, current: number): {
+    change: string | null;
+    positive: boolean;
+    description: string;
+  } {
     const d = (stats as any)?.deltas?.[key];
-    if (d == null) return null;
-    const sign = d >= 0 ? "+" : "−";
-    return `${sign}${Math.abs(d)}%`;
+    const prev = (stats as any)?.previous?.[key];
+    if (d == null || prev == null) {
+      return {
+        change: null,
+        positive: true,
+        description:
+          prev === 0 && current > 0
+            ? "new this week"
+            : "no prior-week baseline",
+      };
+    }
+    if (prev < 10) {
+      // Baseline too small for a meaningful percentage.
+      return { change: null, positive: d >= 0, description: `up from ${prev} last week` };
+    }
+    if (Math.abs(d) >= 300) {
+      // Past ~3x the percentage stops being readable ("+1136.4%"). A multiplier is
+      // the honest, legible form: "12.4x vs last week".
+      const mult = prev > 0 ? current / prev : 0;
+      return {
+        change: null,
+        positive: d >= 0,
+        description: `${mult.toFixed(1)}× last week`,
+      };
+    }
+    return {
+      change: `${d >= 0 ? "+" : "−"}${Math.abs(d)}%`,
+      positive: d >= 0,
+      description: "vs previous 7 days",
+    };
+  }
+
+  /** Spread-ready variant so each KPI card spreads change/positive/description. */
+  function deltaProps(key: string, current: number) {
+    return deltaInfo(key, current);
   }
 
     return (
@@ -188,26 +270,9 @@ export default function Dashboard({ role, onNavigate }: Props) {
       title="Dashboard"
       description="Overview of IT Help Chatbot and system activity"
       actions={<>
-        <DashboardReportButtons stats={stats} conversations={liveConversations ?? []} tickets={liveTickets ?? []} domains={domainsLive ?? []} />
-        <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                onClick={refreshDashboard}
-              >
-                <RefreshCw
-                  className={[
-                    "mr-2 size-3.5",
-                    loading
-                      ? "animate-spin"
-                      : "",
-                  ].join(" ")}
-                />
-
-                Refresh
-              </Button>
-
-              <div className="relative hidden sm:block">
+        {/* #15 — the reporting window is a FILTER, so it reads left-to-right
+            before the actions that operate within it. */}
+        <div className="relative hidden sm:block">
                 <button
                   type="button"
                   onClick={() => setRangeOpen((v) => !v)}
@@ -235,7 +300,22 @@ export default function Dashboard({ role, onNavigate }: Props) {
                     ))}
                   </div>
                 )}
-              </div>
+        </div>
+
+        <Button variant="outline" size="sm" className="rounded-xl" onClick={refreshDashboard}>
+          <RefreshCw className={["mr-2 size-3.5", loading ? "animate-spin" : ""].join(" ")} />
+          Refresh
+        </Button>
+
+        {/* #14 — "Report" was the only saturated/primary button in the header, which
+            read as the page's most important action. Printing is secondary; it is now
+            an outline button alongside Export CSV. */}
+        <DashboardReportButtons
+          stats={stats}
+          conversations={liveConversations ?? []}
+          tickets={liveTickets ?? []}
+          domains={domainsLive ?? []}
+        />
       </>}
     />
 
@@ -255,9 +335,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 }
                 value={stats ? String(stats.total_conversations) : "—"}
                 title="Total Conversations"
-                change={deltaPill("total_conversations")}
-                positive={(stats?.deltas?.total_conversations ?? 0) >= 0}
-                description="vs previous 7 days"
+                {...deltaProps("total_conversations", stats?.total_conversations ?? 0)}
                 loading={loading}
               />
 
@@ -266,9 +344,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 icon={<CheckCircle2 className="size-4" />}
                 value={stats ? String(stats.resolved_by_bot) : "—"}
                 title="Resolved by Bot"
-                change={deltaPill("resolved_by_bot")}
-                positive={(stats?.deltas?.resolved_by_bot ?? 0) >= 0}
-                description="vs previous 7 days"
+                {...deltaProps("resolved_by_bot", stats?.resolved_by_bot ?? 0)}
                 loading={loading}
               />
 
@@ -278,9 +354,9 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 value={stats ? String(stats.escalated_to_tickets) : "—"}
                 title="Escalated to Tickets"
                 /* v1.5.3 — hide the delta when zero escalations: "−100%" confuses users */
-                change={stats?.escalated_to_tickets === 0 ? null : deltaPill("escalated_to_tickets")}
+                change={stats?.escalated_to_tickets === 0 ? null : deltaInfo("escalated_to_tickets", stats?.escalated_to_tickets ?? 0).change}
                 positive={(stats?.deltas?.escalated_to_tickets ?? 0) < 0}
-                description={stats?.escalated_to_tickets === 0 ? "no escalations this week" : "vs previous 7 days"}
+                description={stats?.escalated_to_tickets === 0 ? "no escalations this week" : deltaInfo("escalated_to_tickets", 0).description}
                 loading={loading}
               />
 
@@ -289,9 +365,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 icon={<Users className="size-4" />}
                 value={stats ? String(stats.active_users) : "—"}
                 title="Active Users"
-                change={deltaPill("active_users")}
-                positive={(stats?.deltas?.active_users ?? 0) >= 0}
-                description="vs previous 7 days"
+                {...deltaProps("active_users", stats?.active_users ?? 0)}
                 loading={loading}
               />
 
@@ -331,13 +405,15 @@ export default function Dashboard({ role, onNavigate }: Props) {
                   <QuickAction label="Create article" icon={<Plus className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
                 </>
               )}
-              {role === "admin" && (
-                <>
-                  <QuickAction label="Users" icon={<Users className="size-3.5" />} onClick={() => onNavigate?.("users")} />
-                  <QuickAction label="Audit log" icon={<FileText className="size-3.5" />} onClick={() => onNavigate?.("audits")} />
-                  <QuickAction label="Integrations" icon={<Settings2 className="size-3.5" />} onClick={() => onNavigate?.("settings")} />
-                </>
-              )}
+              {/* #16 — Users / Audit log / Integrations were duplicates of left-nav
+                  items; the row is now restricted to actions that START work from
+                  the dashboard (the rest is one click away in the sidebar). A link to
+                  the printable report replaces the longest nav duplicate. */}
+              <QuickAction
+                label="Printable report"
+                icon={<Printer className="size-3.5" />}
+                onClick={() => window.print()}
+              />
             </section>
 
             {/* =================================================
@@ -499,7 +575,9 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 LOWER ROW
             ================================================= */}
 
-            <section className="grid gap-4 xl:grid-cols-[1.2fr_1.1fr_1fr]">
+            {/* #7 — items-start stops the grid from stretching short panels to the
+                tallest sibling, which left ~400px of dead space under both tables. */}
+            <section className="grid items-start gap-4 xl:grid-cols-[1.2fr_1.1fr_1fr]">
 
               {/* Recent conversations */}
 
@@ -567,16 +645,17 @@ export default function Dashboard({ role, onNavigate }: Props) {
                   <table className="hidden w-full table-fixed text-xs md:table">
 
                     <colgroup>
+                      {/* #8 — Time widened: "Sep 13, 16:59" was truncated to
+                          "Sep 13, 16:5…" at 14%. */}
+                      <col className="w-[17%]" />
 
-                      <col className="w-[14%]" />
+                      <col className="w-[15%]" />
 
-                      <col className="w-[14%]" />
+                      <col className="w-[36%]" />
 
-                      <col className="w-[40%]" />
+                      <col className="w-[13%]" />
 
-                      <col className="w-[12%]" />
-
-                      <col className="w-[20%]" />
+                      <col className="w-[19%]" />
 
                     </colgroup>
 
@@ -612,7 +691,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
                       {(liveConversations ?? []).length === 0 && (
                         <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-[10px] text-muted-foreground">
+                          <td colSpan={5} className="px-4 py-8 text-center text-[10px] text-muted-foreground">
                             No conversations yet — data appears as users chat.
                           </td>
                         </tr>
@@ -625,12 +704,20 @@ export default function Dashboard({ role, onNavigate }: Props) {
                             className="border-t hover:bg-slate-50 dark:hover:bg-slate-900/50"
                           >
 
-                            <td className="whitespace-nowrap px-4 py-3 text-[10px] text-muted-foreground" title={conversation.time}>
+                            {/* #8 — date and time on separate lines; the single-line
+                                form was clipped and hid the minutes. */}
+                            <td className="px-4 py-3 text-[10px] leading-tight text-muted-foreground" title={conversation.time}>
                               {(() => {
                                 const d = conversation.time ? new Date(conversation.time.endsWith("Z") || conversation.time.includes("+") ? conversation.time : conversation.time + "Z") : null;
-                                return d && !Number.isNaN(d.getTime())
-                                  ? d.toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })
-                                  : conversation.time;
+                                if (!d || Number.isNaN(d.getTime())) return conversation.time;
+                                return (
+                                  <span className="flex flex-col">
+                                    <span>{d.toLocaleDateString(undefined, { day: "2-digit", month: "short" })}</span>
+                                    <span className="tabular-nums">
+                                      {d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok" })}
+                                    </span>
+                                  </span>
+                                );
                               })()}
                             </td>
 
@@ -727,43 +814,47 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               <Card className="overflow-hidden rounded-2xl">
 
-                <div className="flex items-center justify-between border-b px-5 py-4">
+                {/* #3 — three items packed into one flex row squeezed the title and
+                    wrapped the badge onto two lines. Title + status line stack on the
+                    left; the badge and the Grafana link occupy a shrink-0 right group. */}
+                <div className="flex items-start justify-between gap-3 border-b px-5 py-3.5">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold leading-tight">System health</h2>
+                    <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">
+                      {(liveHealth ?? []).length === 0
+                        ? "Checking dependencies…"
+                        : healthSummary.down.length > 0
+                          ? `Failing: ${healthSummary.down.join(", ")}`
+                          : `${(liveHealth ?? []).length} dependencies healthy`}
+                    </p>
+                  </div>
 
-                  <h2 className="text-sm font-semibold">
-                    System health
-                  </h2>
-
-                  {/* v1.1.6 — computed from the ACTUAL health payload (was static green) */}
-                  {(() => {
-                    const allOk = (liveHealth ?? []).length > 0 && (liveHealth ?? []).every((h) => h.status === "Healthy");
-                    return (
-                      <span className={[
-                        "rounded-full px-2.5 py-1 text-[10px] font-medium",
-                        allOk
-                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={[
+                      "whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-medium",
+                      healthSummary.overall === "Healthy"
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : healthSummary.overall === "Down"
+                          ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
                           : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-                      ].join(" ")}>
-                        {allOk ? "All systems operational" : "Degraded — check services"}
-                      </span>
-                    );
-                  })()}
+                    ].join(" ")}>
+                      {healthSummary.overall}
+                    </span>
 
-                  {/* v1.1.6 — Grafana deep link (deep-dive lives in Grafana, not duplicated here) */}
-                  <a
-                    href="http://10.10.10.18:3000/d/rag-platform-health"
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Open full observability in Grafana"
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
-                  >
-                    <ExternalLink className="size-3" />
-                    Grafana
-                  </a>
-
+                    <a
+                      href="http://10.10.10.18:3000/d/rag-platform-health"
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open full observability in Grafana"
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                    >
+                      <ExternalLink className="size-3" />
+                      Grafana
+                    </a>
+                  </div>
                 </div>
 
                 <div className="divide-y">
-
                   {(liveHealth ?? []).length === 0 && (
                     <div className="px-4 py-6 text-center text-[10px] text-muted-foreground">
                       Health data unavailable.
@@ -771,12 +862,24 @@ export default function Dashboard({ role, onNavigate }: Props) {
                   )}
 
                   {(liveHealth ?? []).map((item) => (
-                    <HealthRow
-                      key={item.name}
-                      item={item}
-                    />
+                    <HealthRow key={item.key ?? item.name} item={item} />
                   ))}
 
+                  {/* #11 — guardrail activity is a SECURITY metric, not a dependency,
+                      so it gets its own labelled block instead of sitting in the
+                      service list pretending to be "Healthy". */}
+                  <div className="flex items-center gap-3 bg-slate-50/60 px-5 py-2.5 dark:bg-slate-900/40">
+                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                      <ShieldAlert className="size-3.5" />
+                    </div>
+                    <span className="flex-1 text-[10px] font-medium">
+                      Guardrail activity
+                      <span className="ml-1 font-normal text-muted-foreground">last 7 days</span>
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {healthSummary.guardrailEvents} event{healthSummary.guardrailEvents === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 </div>
 
               </Card>
@@ -797,18 +900,28 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 |
               </span>
 
-              <span>
+              <span title={lastUpdated.toLocaleString()}>
                 Last updated:{" "}
-                {lastUpdated.toLocaleTimeString(
-                  "en-US",
-                  {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }
-                )}
+                {lastUpdated.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                <span className="ml-1 opacity-70">
+                  ({(() => {
+                    const secs = Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000));
+                    if (secs < 60) return `${secs}s ago`;
+                    const mins = Math.floor(secs / 60);
+                    return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+                  })()})
+                </span>
               </span>
 
-              <RefreshCw className="size-3" />
+              <button
+                type="button"
+                onClick={refreshDashboard}
+                title="Refresh now"
+                aria-label="Refresh dashboard"
+                className="rounded p-0.5 transition hover:text-blue-600"
+              >
+                <RefreshCw className={["size-3", loading ? "animate-spin" : ""].join(" ")} />
+              </button>
 
             </div>
 
@@ -830,8 +943,42 @@ const _PROFANITY_RE = new RegExp(
   "\\b(f+u+c+k+|sh+i+t+|b+i+t+c+h+|a+s+s+h+o+l+e+|d+a+m+n+)\\b",
   "gi"
 );
+/** #12 — a meaningful icon per dependency (was one identical Activity glyph ×8). */
+function healthIcon(key?: string) {
+  const cls = "size-3.5";
+  switch ((key || "").toLowerCase()) {
+    case "postgres":
+      return <Database className={cls} />;
+    case "redis":
+      return <Activity className={cls} />;
+    case "ollama":
+    case "llm":
+      return <Cpu className={cls} />;
+    case "jira":
+      return <Ticket className={cls} />;
+    case "confluence":
+      return <BookOpen className={cls} />;
+    case "ldap":
+      return <Users className={cls} />;
+    default:
+      return <Server className={cls} />;
+  }
+}
+
 function maskProfanity(text: string): string {
   return (text || "").replace(_PROFANITY_RE, (m) => "✱".repeat(Math.min(6, m.length)));
+}
+
+/**
+ * #9 — round a raw tick spacing up to the nearest "nice" number (1, 2, 2.5, 5, 10 x 10^n).
+ * Chart axes that use a raw max/4 spacing produce labels like 18, 35, 53.
+ */
+function niceTickStep(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const nice = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10;
+  return Math.max(1, nice * mag);
 }
 
 function KpiCard({
@@ -983,9 +1130,12 @@ function ConversationChart({
   // v0.21.84 — dynamic Y scale (was hardcoded 400): nearest "nice" ceiling
   // v1.5.3 — headroom reduced to 10% and "nice" step aligned to data magnitude
   // (a single spike no longer visually dwarfs the rest of the week)
+  // #9 — tick labels used to land on values like 18 / 35 / 53 because max was
+  // rounded to a power-of-ten step and then quartered. Pick a NICE step first and
+  // derive the ceiling from it, so every gridline is a round number.
   const dataMax = Math.max(10, ...data.flatMap((d) => [d.total, d.resolved, d.escalated]));
-  const step = Math.max(1, Math.pow(10, Math.floor(Math.log10(dataMax))));
-  const max = Math.ceil((dataMax * 1.1) / step) * step;
+  const niceStep = niceTickStep(dataMax / 4);
+  const max = niceStep * 4;
 
   const width = 620;
   const height = 240;
@@ -1426,7 +1576,7 @@ function DashboardReportButtons({ stats, conversations, tickets, domains }: {
         <Download className="mr-1.5 size-3.5" />
         Export CSV
       </Button>
-      <Button size="sm" className="rounded-xl bg-sky-700 hover:bg-sky-600" onClick={printReport} title="Open a printable report in a new tab">
+      <Button variant="outline" size="sm" className="rounded-xl" onClick={printReport} title="Open a printable report in a new tab">
         <Printer className="mr-1.5 size-3.5" />
         Report
       </Button>
@@ -1552,45 +1702,49 @@ function PriorityBadge({
    HEALTH ROW
 ============================================================ */
 
-function HealthRow({
-  item,
-}: {
-  item: HealthItem;
-}) {
-  const healthy =
-    item.status === "Healthy";
+function HealthRow({ item }: { item: HealthItem }) {
+  const healthy = item.status === "Healthy";
 
   return (
-    <div className="flex items-center gap-3 px-5 py-3.5">
-
-      <div className="grid size-8 place-items-center rounded-lg bg-muted text-muted-foreground">
+    // #13 — rows were size-8/py-3.5 for eight services (~560px panel). Compacted to
+    // size-7/py-2 with the failure reason inline so a red row explains itself.
+    <div className="flex items-center gap-3 px-5 py-2">
+      <div
+        className={[
+          "grid size-7 shrink-0 place-items-center rounded-lg",
+          healthy
+            ? "bg-muted text-muted-foreground"
+            : "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400",
+        ].join(" ")}
+      >
         {item.icon}
       </div>
 
-      <span className="flex-1 text-[10px] font-medium">
-        {item.name}
-      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[10px] font-medium leading-tight">{item.name}</div>
+        {!healthy && item.detail && (
+          <div className="mt-0.5 truncate text-[9px] leading-tight text-rose-600/90 dark:text-rose-400/90" title={item.detail}>
+            {item.detail}
+          </div>
+        )}
+      </div>
 
-      <div className="flex items-center gap-1.5">
+      {healthy && item.latency_ms != null && (
+        <span className="shrink-0 text-[9px] tabular-nums text-muted-foreground">
+          {item.latency_ms}ms
+        </span>
+      )}
 
+      <div className="flex shrink-0 items-center gap-1.5">
         {healthy ? (
           <CheckCircle2 className="size-3.5 text-emerald-500" />
         ) : (
           <XCircle className="size-3.5 text-red-500" />
         )}
-
-        <span
-          className={
-            healthy
-              ? "text-[10px] text-emerald-600"
-              : "text-[10px] text-red-600"
-          }
-        >
+        <span className={healthy ? "text-[10px] text-emerald-600" : "text-[10px] text-red-600"}>
           {item.status}
         </span>
-
       </div>
-
     </div>
   );
 }
@@ -1604,9 +1758,9 @@ function GateTrendChart({
 }: {
   data: { day: string; answered: number; cautioned: number }[];
 }) {
+  // #9 — same nice-step treatment as the conversation chart.
   const dataMax = Math.max(10, ...data.flatMap((d) => [d.answered, d.cautioned]));
-  const step = Math.max(1, Math.pow(10, Math.floor(Math.log10(dataMax))));
-  const max = Math.ceil((dataMax * 1.15) / step) * step;
+  const max = niceTickStep(dataMax / 4) * 4;
 
   const width = 1000;
   const height = 200;
