@@ -142,6 +142,15 @@ def _build_openai():
     return prompt | llm | StrOutputParser()
 
 
+_LOCAL_MODE_HINT = (
+    "\n\n"
+    "DEPTH RULE (important): the user chose the on-prem engine. Answer as fully as the "
+    "context allows: write complete step-by-step instructions with all commands, "
+    "requirements, and verification steps present in the context. Never summarize down "
+    "to a sentence when the context supports a full guide. Finish every list and table "
+    "you start. Do not stop mid-sentence."
+)
+
 def _build_local_ollama():
     """Local Ollama chat model (fallback) — CPU-only, on-prem."""
     from langchain_core.output_parsers import StrOutputParser
@@ -150,9 +159,12 @@ def _build_local_ollama():
 
     llm = ChatOllama(model=SETTINGS.fallback_llm_model, base_url=SETTINGS.ollama_url,
                      streaming=True, temperature=0.1,
-                     num_predict=256,   # v1.2.3 — cap local generation (CPU tok/s is slow)
+                     num_predict=1024,  # v1.6.24 — 256 cut local answers short; 1024 allows complete guides
                      num_ctx=4096)
-    prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM_PROMPT), ("human", "{question}")])
+    # v1.6.24 — local models tend to under-elaborate; append the depth rule so the
+    # answer length approaches the cloud engine's quality.
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", _SYSTEM_PROMPT + _LOCAL_MODE_HINT), ("human", "{question}")])
     return prompt | llm | StrOutputParser()
 
 

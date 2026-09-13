@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     # Phase 10 — fault-tolerant LLM fallback (H-Chat → local Ollama → dev mock)
     fallback_enabled: bool = True
-    fallback_llm_model: str = "llama3.2:1b"
+    fallback_llm_model: str = "llama3.2:3b"   # v1.6.24 — 3b has markedly better quality than 1b (still CPU-fit)
 
     # Auth (LDAP + JWT) — Phase 5
     ldap_url: str = ""                # ldaps://ldap.example.com:636
