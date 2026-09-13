@@ -3,7 +3,7 @@ import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader
 import { getIntegrationSettings, putIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
 import type { ProviderModel } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "notion" | "clickup";
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -92,6 +92,39 @@ const META: Record<IntegrationKey, {
       { key: "spaces", label: "Spaces (comma separated)", placeholder: "Main,IT,Help" },
     ],
   },
+  notion: {
+    label: "Notion (Knowledge Base)",
+    desc:
+      "Import Notion pages into the knowledge base. Uses a Notion internal integration token. " +
+      "IMPORTANT: a page must be shared with the integration (page -> ... -> Connections) or it " +
+      "returns 404 even with a valid token. Nested blocks are parsed recursively and sub-pages " +
+      "are ingested as their own articles automatically.",
+    docs: "https://www.notion.so/my-integrations",
+    fields: [
+      { key: "api_token", label: "Internal Integration Secret", placeholder: "ntn_... or secret_...", isSecret: true },
+      { key: "source_ids", label: "Page / Database IDs (comma separated, empty = all shared)", placeholder: "1f2a...c9, 8b7d...42" },
+      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
+      { key: "max_pages", label: "Max pages per sync", placeholder: "300" },
+    ],
+  },
+  clickup: {
+    label: "ClickUp (Docs & Tasks)",
+    desc:
+      "Import ClickUp Docs and/or tasks from named Lists. Uses a ClickUp personal token (pk_...) — " +
+      "the raw token goes in the Authorization header, never with a 'Bearer ' prefix. Tasks are only " +
+      "read from Lists you name here, and short entries are skipped, so operational chatter does not " +
+      "pollute retrieval. Status / priority / assignees / tags are stored as searchable metadata.",
+    docs: "https://developer.clickup.com/docs/authentication",
+    fields: [
+      { key: "api_token", label: "Personal API Token", placeholder: "pk_12345678_ABCDEF...", isSecret: true },
+      { key: "doc_ids", label: "Doc IDs (comma separated, optional)", placeholder: "8c9c4a1-1234" },
+      { key: "list_ids", label: "List IDs for tasks (comma separated)", placeholder: "901234567" },
+      { key: "include_comments", label: "Include task comments (true/false)", placeholder: "false" },
+      { key: "min_chars", label: "Minimum task text length", placeholder: "120" },
+      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
+      { key: "max_tasks", label: "Max tasks per sync", placeholder: "500" },
+    ],
+  },
 };
 
 export function IntegrationsConfig() {
@@ -174,7 +207,7 @@ export function IntegrationsConfig() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira", "openproject", "xwiki", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
+        {(["confluence", "jira", "openproject", "xwiki", "notion", "clickup", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
           <button
             key={k}
             onClick={() => switchTab(k)}

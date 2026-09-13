@@ -74,7 +74,16 @@ class Settings(BaseSettings):
     rbac_agent_groups: str = "it-help-agents"
     dev_admin_usernames: str = "ith@dmin"      # dev (no LDAP): these usernames are admin
     # role=domains (comma-sep per role; "*" = all). e.g. "user=general,system;agent=database,security,network,system;admin=*"
-    role_domains: str = "user=general,system;agent=database,security,network,system,general;admin=*"
+    # v1.6.34 — `knowledge` was absent from this map, so allowed_domains() returned an
+    # EMPTY set and a Knowledge Manager saw no KB content at all in chat (every chunk
+    # was filtered out by the domain gate). They curate the whole base, so they get
+    # unrestricted READ; write/manage authority stays with the capability map.
+    role_domains: str = (
+        "user=general,system;"
+        "agent=database,security,network,system,general;"
+        "knowledge=*;"
+        "admin=*"
+    )
     # domain=project,assignee — per-domain Jira routing. e.g. "database=IT,db-lead;network=IT,net-lead"
     domain_jira_routing: str = ""
 

@@ -107,6 +107,20 @@ def ingest_article(art: dict) -> str:
         context_prefix=art["title"],  # v0.10.0: every chunk carries title+header context
     )
     texts = chunks
+    # v1.6.34 — adapters may attach source-specific metadata (ClickUp status /
+    # priority / assignees, Notion last-edited). Those keys must reach the vector
+    # store's `cmetadata` or they cannot be filtered on later. Values are coerced
+    # to short strings and the core keys below always win, so an adapter can never
+    # clobber page_id / domain / source_url.
+    extra_meta: dict[str, str] = {}
+    for k, v in (art.get("meta") or {}).items():
+        if v is None or isinstance(v, (dict, list)):
+            continue
+        key = str(k).strip()[:40]
+        if not key:
+            continue
+        extra_meta[key] = str(v)[:200]
+
     metadatas = [{
         "page_id": art["page_id"],
         "page_title": art["title"],
@@ -114,6 +128,7 @@ def ingest_article(art: dict) -> str:
         "source_url": art["source_url"],
         "content_hash": chash,
         "chunk_index": str(i),
+        **extra_meta,
     } for i in range(len(chunks))]
 
     if existing:

@@ -168,7 +168,8 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
-INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama", "openproject", "xwiki"}
+INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama",
+                    "openproject", "xwiki", "notion", "clickup"}
 
 @router.get("/settings/integrations/{key}")
 def get_integration_settings(key: str, user: str = Depends(get_current_user)) -> dict:
@@ -307,6 +308,16 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
         elif key == "xwiki":
             from app.integrations.xwiki import test_connection as _xw_test
             result = _xw_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("message", "")
+        elif key == "notion":
+            from app.integrations.notion import test_connection as _no_test
+            result = _no_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("message", "")
+        elif key == "clickup":
+            from app.integrations.clickup import test_connection as _cu_test
+            result = _cu_test()
             status = 200 if result.get("ok") else 502
             detail = result.get("message", "")
         else:

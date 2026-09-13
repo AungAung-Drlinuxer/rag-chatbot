@@ -69,7 +69,7 @@ def load_fileshare(base_dir: str | None = None) -> list[dict]:
 
 
 def load_all() -> list[dict]:
-    """Aggregate KB sources (v1.1.0): Confluence + OpenProject wiki + XWiki.
+    """Aggregate KB sources: Confluence + OpenProject wiki + XWiki + Notion + ClickUp.
 
     Each loader returns article dicts with the standard shape; missing/empty
     integrations simply contribute nothing (safe no-op)."""
@@ -87,5 +87,20 @@ def load_all() -> list[dict]:
         articles.extend(_fetch_xwiki())
     except Exception as exc:  # pragma: no cover
         logger.warning("xwiki load skipped: %s", exc)
+
+    # v1.6.34 — Notion (cloud SaaS). Recursive block walk; skipped entirely when
+    # no token is configured, so air-gapped deployments are unaffected.
+    try:
+        from app.integrations.notion import fetch_pages as _fetch_notion
+        articles.extend(_fetch_notion())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("notion load skipped: %s", exc)
+
+    # v1.6.34 — ClickUp (cloud SaaS): Docs (plan-gated) + explicitly designated Lists.
+    try:
+        from app.integrations.clickup import fetch_pages as _fetch_clickup
+        articles.extend(_fetch_clickup())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("clickup load skipped: %s", exc)
 
     return articles
