@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import AgentActivity, { stageFromText } from "@/components/AgentActivity";
+import MarkdownMessage from "@/components/MarkdownMessage";
 import {
   ArrowUp,
   Bot,
@@ -28,12 +29,12 @@ import {
   Pencil,
   Paperclip,
   RefreshCw,
+  RotateCcw,
+  Share2,
   Shield,
   Sparkles,
   X,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import { currentTime, type Message, type Source } from "@/features/chat/model";
 import { uploadAttachment } from "@/features/chat/api";
@@ -114,6 +115,14 @@ export function FloatingChatPopup() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [sessionRef] = useState(() => crypto.randomUUID());
   const [editingId, setEditingId] = useState<string | null>(null);
+  // v1.6.45 — brief confirmation for copy/share actions
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashNotice = useCallback((msg: string) => {
+    setNotice(msg);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2200);
+  }, []);
   const [editText, setEditText] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -225,6 +234,42 @@ export function FloatingChatPopup() {
     setInput("");
     runQuestion(q);
   }, [input, isTyping, runQuestion]);
+
+  /** v1.6.45 — re-run the question that produced this answer. Useful when the
+   *  answer was cut short, degraded by a rerank timeout, or when the user simply
+   *  wants a second sample from the model. */
+  const regenerate = useCallback(
+    (botId: string) => {
+      if (isTyping) return;
+      const idx = messages.findIndex((m) => m.id === botId);
+      if (idx < 1) return;
+      const q = [...messages.slice(0, idx)].reverse().find((m) => m.role === "user");
+      if (!q) return;
+      runQuestion(q.content, { replaceBotId: botId });
+    },
+    [messages, isTyping, runQuestion],
+  );
+
+  /** Share the answer: native sheet where available, clipboard as the fallback. */
+  const shareText = useCallback(async (text: string) => {
+    const nav = navigator as Navigator & {
+      share?: (d: { title: string; text: string }) => Promise<void>;
+    };
+    if (nav.share) {
+      try {
+        await nav.share({ title: "IT Knowledge Assistant", text });
+        return;
+      } catch {
+        /* user cancelled — fall through to copy */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      flashNotice("Copied to clipboard");
+    } catch {
+      flashNotice("Could not share on this device");
+    }
+  }, [flashNotice]);
 
   const retryFailed = useCallback(
     (botMsg: Msg) => {
@@ -380,10 +425,12 @@ export function FloatingChatPopup() {
                   )
                 ) : (
                   <>
-                    {/* identical markdown treatment to the Chat page so an answer
-                        looks the same in both surfaces (headings, lists, code, tables) */}
-                    <div className="md min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-xs leading-relaxed [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:border [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_th]:bg-slate-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-slate-700 dark:[&_th]:bg-slate-800/80 dark:[&_th]:text-slate-200 [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-slate-800 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/60 [&_td]:px-3 [&_td]:py-2 [&_td]:text-xs [&_tr:last-child_td]:border-b-0">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                    {/* v1.6.45 — the shared MarkdownMessage owns the answer styling, so
+                        the chat page and this widget render identically (including the
+                        one-click Copy button on code blocks). `compact` scales it down
+                        for the 380px widget. */}
+                    <div className="contents">
+                      <MarkdownMessage content={m.content} compact />
                     </div>
                     {m.failed && (
                       <button
@@ -420,9 +467,30 @@ export function FloatingChatPopup() {
                 )}
               </div>
 
-              {/* Message actions (hover) — copy answer / copy question / edit query */}
+              {/* Message actions (hover) — copy / share, plus edit-and-resend on the
+                  question and re-generate on the newest answer (v1.6.45). */}
               <div className={`mt-1 flex items-center gap-1 ${m.role === "user" ? "justify-end" : ""}`}>
                 <CopyButton getText={() => m.content} label={m.role === "user" ? "Copy question" : "Copy answer"} />
+                <button
+                  type="button"
+                  title="Share this answer"
+                  aria-label="Share this answer"
+                  onClick={() => shareText(m.content)}
+                  className="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-black/5 hover:text-foreground group-hover:opacity-100 dark:hover:bg-white/10"
+                >
+                  <Share2 className="size-3" />
+                </button>
+                {m.role === "assistant" && !isTyping && m.id === messages[messages.length - 1]?.id && (
+                  <button
+                    type="button"
+                    title="Re-generate this answer"
+                    aria-label="Re-generate this answer"
+                    onClick={() => regenerate(m.id)}
+                    className="rounded-md p-1 text-muted-foreground opacity-0 transition hover:bg-black/5 hover:text-foreground group-hover:opacity-100 dark:hover:bg-white/10"
+                  >
+                    <RotateCcw className="size-3" />
+                  </button>
+                )}
                 {m.role === "user" && editingId !== m.id && (
                   <button
                     type="button"
@@ -455,6 +523,17 @@ export function FloatingChatPopup() {
           </div>
         )}
       </div>
+
+      {/* v1.6.45 — transient confirmation for copy / share */}
+      {notice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute inset-x-0 bottom-[74px] z-10 mx-auto w-fit rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-medium text-white shadow-lg dark:bg-slate-100/95 dark:text-slate-900"
+        >
+          {notice}
+        </div>
+      )}
 
       {/* Composer */}
       <div className="shrink-0 border-t border-[var(--border)] bg-white p-2.5 dark:bg-[#111827]">

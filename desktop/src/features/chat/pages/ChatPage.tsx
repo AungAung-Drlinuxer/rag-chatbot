@@ -26,8 +26,6 @@ import {
   Zap
 } from "lucide-react";
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import {
   useEffect,
@@ -56,6 +54,7 @@ import {
 } from "@/features/chat/components/chat-parts";
 import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
 import AgentActivity, { stageFromText } from "@/components/AgentActivity";
+import MarkdownMessage from "@/components/MarkdownMessage";
 import { alertTicket } from "@/lib/notify";
 import {
   listConversations,
@@ -493,6 +492,27 @@ export default function Chat({
       .catch(() => chatAlert("Feedback failed", "err"));
   }
 
+  /** v1.6.45 — answer a follow-up grounded in ONE retrieved source.
+   *
+   * The source card only shows a trimmed excerpt, so "I want the details of this
+   * article" previously meant retyping the question and hoping retrieval picked
+   * the same chunks again. This sends a prompt that names the article, which pins
+   * the retrieval target and asks for the full context, the procedure and any
+   * exact commands.
+   */
+  function explainSource(source: Source) {
+    const q =
+      `Explain the knowledge base article "${source.title}" in full detail. ` +
+      `Include: what it covers, the complete step-by-step procedure, every exact ` +
+      `command or configuration value it mentions (in fenced code blocks), and any ` +
+      `warnings or prerequisites.` +
+      (source.url ? `\nSource: ${source.url}` : "");
+    setInput(q);
+    window.setTimeout(() => {
+      document.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    }, 60);
+  }
+
   function openTicketForm(
     _message?: Message,
     prefill?: { subject?: string; description?: string; domain?: string },
@@ -914,7 +934,12 @@ export default function Chat({
               </div>
             ) : (
               sources.map((source, index) => (
-                <SourceCard key={`${source.page_id}-${index}`} source={source} index={index + 1} />
+                <SourceCard
+                  key={`${source.page_id}-${index}`}
+                  source={source}
+                  index={index + 1}
+                  onExplain={explainSource}
+                />
               ))
             )}
           </div>
@@ -1332,16 +1357,12 @@ function MessageBubble({
             </div>
             )
           ) : (
-            <div className="md min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-xs leading-relaxed [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:border [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-slate-700 dark:[&_th]:bg-slate-800/80 dark:[&_th]:text-slate-200 [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-slate-800 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/60 [&_td]:px-4 [&_td]:py-2.5 [&_td]:text-xs [&_tr:last-child_td]:border-b-0 [&_tbody_tr:hover]:bg-slate-50/50 dark:[&_tbody_tr:hover]:bg-slate-800/40">
+            <div className="contents">
               {message.content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                <MarkdownMessage content={message.content} />
               ) : busy ? (
-                /* v1.6.38 — replaced the blank skeleton with a live "agent at work"
-                   indicator: brand avatar with an orbiting ring, a stage icon that
-                   changes as the pipeline advances, and a shimmering label
-                   (Thinking -> Rewriting -> Searching -> Researching -> Writing).
-                   The detailed per-stage telemetry still lives in the pipeline
-                   card on the right, so this is a status readout, not a second timer. */
+                /* v1.6.45 — the animated agent indicator, restored after the markdown
+                   renderer was extracted into MarkdownMessage. */
                 <AgentActivity
                   stage={stageFromText(liveStageText)}
                   detail={liveStageText}
@@ -1588,7 +1609,16 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
-function SourceCard({ source, index }: { source: Source; index: number }) {
+function SourceCard({
+  source,
+  index,
+  onExplain,
+}: {
+  source: Source;
+  index: number;
+  /** Ask the assistant to expand this specific source in full detail. */
+  onExplain?: (source: Source) => void;
+}) {
   const body = (
     <>
       <div className="flex items-start gap-3">
@@ -1617,18 +1647,39 @@ function SourceCard({ source, index }: { source: Source; index: number }) {
       <p className="mt-3 line-clamp-3 text-[10px] leading-4 text-muted-foreground">{source.excerpt}</p>
     </>
   );
-  return source.url ? (
+  // The action row lives OUTSIDE the anchor: a <button> nested in an <a> is
+  // invalid HTML, and clicking it would also trigger the link navigation.
+  const explainRow = onExplain ? (
+    <button
+      type="button"
+      onClick={() => onExplain(source)}
+      className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/60 px-2 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70"
+      title="Ask the assistant to explain this source in full detail, with steps and commands"
+    >
+      <Sparkles className="size-3" />
+      Explain this source in detail
+    </button>
+  ) : null;
+
+  const card = source.url ? (
     <a
       href={source.url}
       target="_blank"
       rel="noreferrer"
-      className="mb-3 block w-full rounded-xl border bg-white p-3 text-left transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="block w-full rounded-xl border bg-white p-3 text-left transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900"
     >
       {body}
     </a>
   ) : (
-    <div className="mb-3 w-full rounded-xl border bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+    <div className="w-full rounded-xl border bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
       {body}
+    </div>
+  );
+
+  return (
+    <div className="mb-3">
+      {card}
+      {explainRow}
     </div>
   );
 }

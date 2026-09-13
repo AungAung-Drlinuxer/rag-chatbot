@@ -35,6 +35,7 @@ import {
 } from "@/features/domains/components/DomainClassifierManager";
 
 import { PageShell, PageHeader } from "@/components/ui/page";
+import { providerOf } from "@/lib/kbProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -602,6 +603,7 @@ export default function Knowledge({
                     <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
                       <tr className="text-left text-slate-600 dark:text-slate-300">
                         <th className="px-5 py-3.5 font-semibold">Article Title</th>
+                        <th className="px-4 py-3.5 font-semibold">Source</th>
                         <th className="px-4 py-3.5 font-semibold">Domain</th>
                         <th className="px-4 py-3.5 font-semibold">Synced</th>
                         <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
@@ -610,13 +612,13 @@ export default function Knowledge({
                     <tbody>
                       {listing ? (
                         <tr>
-                          <td colSpan={4} className="p-4">
+                          <td colSpan={5} className="p-4">
                             <Skeleton className="h-9 w-full rounded-lg" />
                           </td>
                         </tr>
                       ) : !items || items.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                          <td colSpan={5} className="p-8 text-center text-muted-foreground">
                             No articles found in this filter.
                           </td>
                         </tr>
@@ -627,6 +629,15 @@ export default function Knowledge({
                             <tr key={article.page_id} className="border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60">
                               <td className="max-w-[400px] truncate px-5 py-3 font-medium text-slate-900 dark:text-white">
                                 {article.title}
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] ${providerOf(article).className}`}
+                                  title={article.source_url || undefined}
+                                >
+                                  {providerOf(article).label}
+                                </Badge>
                               </td>
                               <td className="px-4 py-3">
                                 <Badge variant="outline" className="text-[10px] capitalize bg-slate-50 dark:bg-slate-800">
