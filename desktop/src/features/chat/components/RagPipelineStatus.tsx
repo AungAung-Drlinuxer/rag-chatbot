@@ -437,6 +437,9 @@ export function useStageTelemetry() {
   const [telemetry, setTelemetry] = useState<StageTelemetry>({});
   const [elapsed, setElapsed] = useState(0);
   const [streaming, setStreaming] = useState(false);
+  // v1.6.38 — the stage currently running, exposed as state (not just a ref) so the
+  // in-bubble AgentActivity indicator can show the matching icon + label live.
+  const [currentStage, setCurrentStage] = useState<StageKey | null>(null);
   const telemetryRef = useRef<StageTelemetry>({});
   const elapsedRef = useRef<number>(0);
   const startedAt = useRef<number>(0);
@@ -453,6 +456,7 @@ export function useStageTelemetry() {
     setTelemetry({});
     setElapsed(0);
     setStreaming(false);
+    setCurrentStage(null);
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
       const now = performance.now();
@@ -488,6 +492,13 @@ export function useStageTelemetry() {
     }
     stageAt.current = now;
     prevStage.current = completed;
+    // The NEXT stage starts now — that is what the user should see as "current".
+    if (completed) {
+      const idx = STEPS.findIndex((s) => s.key === completed);
+      setCurrentStage(STEPS[idx + 1]?.key ?? completed);
+    } else {
+      setCurrentStage("understanding");
+    }
     const el = Math.round(now - startedAt.current);
     elapsedRef.current = el;
     setElapsed(el);
@@ -500,6 +511,7 @@ export function useStageTelemetry() {
     setTelemetry((t) => ({ ...t, generate: runMs }));
     prevStage.current = null;
     setStreaming(true);
+    setCurrentStage("generate");
     const el = Math.round(now - startedAt.current);
     elapsedRef.current = el;
     setElapsed(el);
@@ -519,5 +531,16 @@ export function useStageTelemetry() {
     };
   };
 
-  return { telemetry, elapsed, streaming, telemetryRef, elapsedRef, begin, onStage, onFirstToken, finish };
+  return {
+    telemetry,
+    elapsed,
+    streaming,
+    currentStage,
+    telemetryRef,
+    elapsedRef,
+    begin,
+    onStage,
+    onFirstToken,
+    finish,
+  };
 }

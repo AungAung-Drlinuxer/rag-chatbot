@@ -18,6 +18,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import AgentActivity, { stageFromText } from "@/components/AgentActivity";
 import {
   ArrowUp,
   Bot,
@@ -109,6 +110,8 @@ export function FloatingChatPopup() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [stage, setStage] = useState<string | undefined>();
+  // v1.6.38 — elapsed ms for the animated activity indicator
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [sessionRef] = useState(() => crypto.randomUUID());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -119,6 +122,17 @@ export function FloatingChatPopup() {
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping, minimized]);
+
+  // tick a local clock while the agent is working
+  useEffect(() => {
+    if (!isTyping) {
+      setElapsedMs(0);
+      return;
+    }
+    const startedAt = performance.now();
+    const id = setInterval(() => setElapsedMs(Math.round(performance.now() - startedAt)), 200);
+    return () => clearInterval(id);
+  }, [isTyping]);
 
   useEffect(() => {
     if (editingId) editRef.current?.focus();
@@ -311,18 +325,24 @@ export function FloatingChatPopup() {
         )}
 
         {messages.map((m) => (
-          <div key={m.id} className={m.role === "user" ? "group flex justify-end" : "group flex justify-start"}>
-            <div className="max-w-[85%]">
+          <div key={m.id} className={m.role === "user" ? "group flex justify-end" : "group flex justify-start gap-2"}>
+            {/* v1.6.38 — brand avatar on assistant turns, matching the Chat page */}
+            {m.role !== "user" && (
+              <div className="grid size-7 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm">
+                <Bot className="size-3.5" />
+              </div>
+            )}
+            <div className={m.role === "user" ? "max-w-[85%]" : "min-w-0 max-w-[88%]"}>
               <div
                 className={[
-                  "rounded-2xl px-3.5 py-2.5 text-xs leading-5",
+                  "min-w-0 max-w-full overflow-hidden rounded-2xl px-3.5 py-3 text-xs leading-relaxed",
                   m.role === "user"
                     ? editingId === m.id
                       ? "rounded-br-md border-2 border-blue-400 bg-blue-50 dark:bg-blue-950/40"
                       : "rounded-br-md bg-blue-600 text-white"
                     : m.failed
-                      ? "rounded-bl-md border border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"
-                      : "rounded-bl-md border border-[var(--border)] bg-white text-[#0F172A] dark:bg-[#111827] dark:text-slate-100",
+                      ? "rounded-tl-none border border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"
+                      : "rounded-tl-none border border-slate-200 bg-white text-slate-800 shadow-xs dark:border-slate-800 dark:bg-[#111827] dark:text-slate-100",
                 ].join(" ")}
               >
                 {m.role === "user" ? (
@@ -360,7 +380,9 @@ export function FloatingChatPopup() {
                   )
                 ) : (
                   <>
-                    <div className="prose prose-xs max-w-none dark:prose-invert [&_p]:my-1.5 [&_li]:my-0.5 [&_code]:text-[11px] [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[11px] [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1.5 [&_th]:font-semibold [&_th]:text-slate-800 dark:[&_th]:border-slate-700 dark:[&_th]:bg-slate-800 dark:[&_th]:text-slate-200 [&_td]:border [&_td]:border-slate-200 [&_td]:px-2 [&_td]:py-1.5 dark:[&_td]:border-slate-800">
+                    {/* identical markdown treatment to the Chat page so an answer
+                        looks the same in both surfaces (headings, lists, code, tables) */}
+                    <div className="md min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-xs leading-relaxed [&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800 [&_h1]:mt-3 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-xs [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-xs [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:space-y-1 [&_table]:my-3 [&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:overflow-hidden [&_table]:rounded-xl [&_table]:border [&_table]:border-slate-200 dark:[&_table]:border-slate-800 [&_th]:bg-slate-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-slate-700 dark:[&_th]:bg-slate-800/80 dark:[&_th]:text-slate-200 [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-slate-800 [&_td]:border-b [&_td]:border-slate-100 dark:[&_td]:border-slate-800/60 [&_td]:px-3 [&_td]:py-2 [&_td]:text-xs [&_tr:last-child_td]:border-b-0">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                     </div>
                     {m.failed && (
@@ -418,16 +440,18 @@ export function FloatingChatPopup() {
         ))}
 
         {isTyping && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="grid size-7 place-items-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/40">
-              <Bot className="size-3.5" />
-            </span>
-            {stage || "Thinking"}…
-            <span className="flex gap-1">
-              {[0, 1, 2].map((i) => (
-                <span key={i} className="size-1 animate-bounce rounded-full bg-blue-400" style={{ animationDelay: `${i * 150}ms` }} />
-              ))}
-            </span>
+          /* v1.6.38 — matched to the Chat page: brand avatar + orbiting ring, a
+             stage icon that changes as the pipeline advances, and a shimmering
+             label (Thinking -> Rewriting -> Searching -> Researching -> Writing). */
+          <div className="flex justify-start">
+            <div className="min-w-0 max-w-[92%] rounded-2xl rounded-tl-none border border-slate-200 bg-white px-3.5 py-3 shadow-xs dark:border-slate-800 dark:bg-[#111827]">
+              <AgentActivity
+                stage={stageFromText(stage)}
+                detail={stage}
+                elapsedMs={elapsedMs}
+                compact
+              />
+            </div>
           </div>
         )}
       </div>

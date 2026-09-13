@@ -56,6 +56,7 @@ import {
   Row,
 } from "@/features/chat/components/chat-parts";
 import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
+import AgentActivity, { stageFromText } from "@/components/AgentActivity";
 import {
   listConversations,
   getConversationMessages,
@@ -660,6 +661,8 @@ export default function Chat({
                     key={m.id}
                     message={m}
                     busy={isTyping}
+                    liveStageText={stage}
+                    liveElapsedMs={pipeline.elapsed}
                     onHelpful={() => submitFeedback(m, 1)}
                     onNotHelpful={() => submitFeedback(m, -1)}
                     onOpenTicketForm={() => openTicketForm(m)}
@@ -1283,6 +1286,8 @@ function MessageBubble({
   onSubmitEdit,
   onRetryQuestion,
   busy = false,
+  liveStageText,
+  liveElapsedMs,
 }: {
   message: Message;
   onHelpful: () => void;
@@ -1291,6 +1296,9 @@ function MessageBubble({
   onSubmitEdit?: (messageId: string, newText: string) => void;
   onRetryQuestion?: () => void;
   busy?: boolean;
+  /** v1.6.38 — live pipeline stage (detail text) for the animated indicator */
+  liveStageText?: string;
+  liveElapsedMs?: number;
 }) {
   const isUser = message.role === "user";
   const caution = message.decision === "caution";
@@ -1395,15 +1403,17 @@ function MessageBubble({
               {message.content ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
               ) : busy ? (
-                /* S1.2 — the live RAG pipeline card is the single progress surface;
-                   this bubble shows a neutral skeleton (no second spinner/counter)
-                   so the user is not reading two conflicting "in progress" states. */
-                <div className="space-y-2" aria-label="Preparing answer" role="status">
-                  <div className="h-2.5 w-4/5 animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-700/60" />
-                  <div className="h-2.5 w-full animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-700/60 [animation-delay:120ms]" />
-                  <div className="h-2.5 w-3/5 animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-700/60 [animation-delay:240ms]" />
-                  <span className="sr-only">Generating answer</span>
-                </div>
+                /* v1.6.38 — replaced the blank skeleton with a live "agent at work"
+                   indicator: brand avatar with an orbiting ring, a stage icon that
+                   changes as the pipeline advances, and a shimmering label
+                   (Thinking -> Rewriting -> Searching -> Researching -> Writing).
+                   The detailed per-stage telemetry still lives in the pipeline
+                   card on the right, so this is a status readout, not a second timer. */
+                <AgentActivity
+                  stage={stageFromText(liveStageText)}
+                  detail={liveStageText}
+                  elapsedMs={liveElapsedMs}
+                />
               ) : (message as any).guardrail ? (
                 <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
                   <ShieldAlert className="mt-0.5 size-4 shrink-0" />

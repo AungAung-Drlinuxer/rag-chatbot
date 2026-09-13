@@ -724,3 +724,60 @@ code, pre, .mono { font-family: var(--mono); }
 *::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.55); }
 [data-theme="dark"] *::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.55); }
 [data-theme="dark"] *::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.7); }
+
+
+/* === v1.6.38 — animated "agent at work" indicator =========================
+   The chat no longer shows a blank skeleton while the RAG pipeline runs: the
+   assistant row carries a brand avatar with an orbiting ring, a stage icon that
+   changes per pipeline stage, and a shimmering stage label
+   (Thinking -> Rewriting -> Searching -> Researching -> Writing).
+   All motion is disabled under prefers-reduced-motion.                      */
+@keyframes agent-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes agent-orbit {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes agent-float {
+  0%, 100% { transform: translateY(0);    opacity: 0.5; }
+  50%      { transform: translateY(-2.5px); opacity: 1; }
+}
+@keyframes agent-pop {
+  0%   { transform: scale(0.6) rotate(-12deg); opacity: 0; }
+  60%  { transform: scale(1.08) rotate(4deg);  opacity: 1; }
+  100% { transform: scale(1) rotate(0deg);     opacity: 1; }
+}
+@keyframes agent-halo {
+  0%   { transform: scale(0.85); opacity: 0.55; }
+  70%  { transform: scale(1.45); opacity: 0; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+.agent-shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    currentColor 0%, currentColor 34%,
+    rgba(148, 163, 184, 0.35) 50%,
+    currentColor 66%, currentColor 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: agent-shimmer 2s linear infinite;
+}
+.agent-orbit { animation: agent-orbit 2.6s linear infinite; }
+.agent-icon-pop { animation: agent-pop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+.agent-dot { animation: agent-float 1.15s ease-in-out infinite; }
+.agent-halo { animation: agent-halo 1.9s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-shimmer-text,
+  .agent-orbit,
+  .agent-icon-pop,
+  .agent-dot,
+  .agent-halo { animation: none; }
+  .agent-shimmer-text { color: inherit; -webkit-text-fill-color: inherit; background: none; }
+}
