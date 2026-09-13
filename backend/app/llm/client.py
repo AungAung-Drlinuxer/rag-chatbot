@@ -151,16 +151,33 @@ def _build_openai():
     return prompt | llm | StrOutputParser()
 
 
+# v1.6.30 — SHORT dedicated local prompt. The full _SYSTEM_PROMPT (2112 chars of
+# rules) + 4k context pushed the llama3.2:3b model into script drift (Burmese
+# gibberish repetition). Small models need short, focused prompts.
+_LOCAL_SYSTEM_PROMPT = (
+    "You are an IT support assistant. Answer in ENGLISH ONLY - never output "
+    "Burmese, Khmer, Chinese or any other non-English script. Never repeat the "
+    "same word consecutively.\n"
+    "Answer using ONLY the CONTEXT below. Be complete: finish every step and "
+    "list you start. If the CONTEXT does not contain the answer, reply with one "
+    "short English sentence saying so.\n"
+    "Use markdown formatting for tables and code.\n\n"
+    "CONTEXT:\n{context}"
+)
+
 _LOCAL_MODE_HINT = (
     "\n\n"
+    "LANGUAGE LOCK (ABSOLUTE RULE — highest priority): your ENTIRE answer must be in "
+    "ENGLISH text only. Never output Burmese, Khmer, Chinese, or any other script. "
+    "If context contains such characters, IGNORE that text entirely and answer in "
+    "English. One non-English character in your reply = wrong answer.\n"
+    "REPETITION RULE: never repeat the same word or phrase consecutively; if you catch "
+    "yourself looping, end that section and move to the next one.\n"
     "DEPTH RULE (important): the user chose the on-prem engine. Answer as fully as the "
     "context allows: write complete step-by-step instructions with all commands, "
     "requirements, and verification steps present in the context. Never summarize down "
     "to a sentence when the context supports a full guide. Finish every list and table "
-    "you start. Do not stop mid-sentence.\n"
-    "LANGUAGE LOCK (critical): answer in ENGLISH ONLY. If any context text contains "
-    "non-English characters (e.g. Khmer, Chinese, Burmese), IGNORE that text and answer "
-    "in English. Never copy non-English characters into your answer."
+    "you start. Do not stop mid-sentence."
 )
 
 def _build_local_ollama():
@@ -169,17 +186,34 @@ def _build_local_ollama():
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_ollama import ChatOllama
 
-    llm = ChatOllama(model=SETTINGS.fallback_llm_model, base_url=SETTINGS.ollama_url,
-                     streaming=True, temperature=0.1,
-                     # v1.6.29 — user request: allow up-to-4096-token local answers
-                     # (1024 still cut long runbooks). KV cache scales with num_ctx
-                     # (unchanged), so output length does not add memory pressure.
-                     num_predict=4096,
-                     num_ctx=4096)
-    # v1.6.24 — local models tend to under-elaborate; append the depth rule so the
-    # answer length approaches the cloud engine's quality.
+    llm = ChatOllama(
+        model=SETTINGS.fallback_llm_model, base_url=SETTINGS.ollama_url,
+        streaming=True, temperature=0.1,
+        # v1.6.29 — allow up-to-4096-token local answers (1024 cut long runbooks)
+        num_predict=4096,
+        num_ctx=4096,
+        # v1.6.30 — 3b drift fix: once a small model emits a few non-English tokens
+        # it enters a degenerate repetition loop (723s of Burmese gibberish).
+        # repeat_penalty discourages token loops; top_k/top_p tighten sampling.
+        repeat_penalty=1.3,
+        top_k=40,
+        top_p=0.9,
+    )
+    # v1.6.30 — the full 2112-char system prompt + 803-char hint + 4k context
+    # pushed the 3b model into script-drift (Burmese gibberish). Use a SHORT
+    # dedicated local prompt: language lock first, minimal rules, then context.
+    _LOCAL_PROMPT = (
+        "You are an IT support assistant. Answer in ENGLISH ONLY - never output "
+        "Burmese, Khmer or any other script. Never repeat words consecutively.\n"
+        "Answer using ONLY the context below. Be complete: finish every step and "
+        "list you start. If the context does not contain the answer, say so in one "
+        "short English sentence.\n\n"
+        "CONTEXT:\n{context}\n\n"
+        "QUESTION: {question}\n\n"
+        "ANSWER (English only):"
+    )
     prompt = ChatPromptTemplate.from_messages([
-        ("system", _SYSTEM_PROMPT + _LOCAL_MODE_HINT), ("human", "{question}")])
+        ("system", _LOCAL_PROMPT), ("human", "{question}")])
     return prompt | llm | StrOutputParser()
 
 
@@ -244,7 +278,8 @@ def _extract_usage(chunk) -> dict | None:
     return None
 
 
-def _stream_with_usage(llm, question: str, context: str) -> Iterable[tuple[str, dict | None]]:
+def _stream_with_usage(llm, question: str, context: str,
+                       system_prompt: str | None = None) -> Iterable[tuple[str, dict | None]]:
     """Stream the chat model DIRECTLY and yield (token, usage). `usage` is non-None
     on the LAST pair (a zero-length sentinel).
 
@@ -253,10 +288,14 @@ def _stream_with_usage(llm, question: str, context: str) -> Iterable[tuple[str, 
     loses `usage_metadata` by the time we see it. We replicate the prompt inline
     and pull the delta text from each chunk's `content`, keeping the chunk
     itself accessible for `_extract_usage`.
+
+    v1.6.30 — `system_prompt` lets the local path use its own short prompt
+    (the full 2112-char system prompt pushed the 3b model into script drift).
     """
     from langchain_core.prompts import ChatPromptTemplate
 
-    prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM_PROMPT), ("human", "{question}")])
+    sys_prompt = system_prompt or _SYSTEM_PROMPT
+    prompt = ChatPromptTemplate.from_messages([("system", sys_prompt), ("human", "{question}")])
     msg = prompt.format_messages(question=question, context=context)
     last_usage: dict | None = None
     for chunk in llm.stream(msg):
@@ -295,7 +334,9 @@ def stream_answer(question: str, context: str, llm_provider: str | None = None) 
                         if len(context) > 4_000:
                             context = context[:4_000] + "\n[context truncated for local model]"
                         logger.info("forced local generation: context=%d chars", len(context))
-                        yield from _stream_with_usage(local_llm, question, context)
+                        yield from _stream_with_usage(
+                            local_llm, question, context,
+                            system_prompt=_LOCAL_SYSTEM_PROMPT)
                         return
             except Exception as exc:
                 logger.warning(f"forced local generation failed ({type(exc).__name__}): {exc}; using dev mock")
@@ -332,7 +373,9 @@ def stream_answer(question: str, context: str, llm_provider: str | None = None) 
                         context = context[:4_000] + "\n[context truncated for local model]"
                     logger.info("local fallback generation: context=%d chars, question=%d chars",
                                 len(context), len(question))
-                    yield from _stream_with_usage(local_llm, question, context)
+                    yield from _stream_with_usage(
+                        local_llm, question, context,
+                        system_prompt=_LOCAL_SYSTEM_PROMPT)
                     return
         except Exception as exc:
             logger.warning(f"local fallback failed ({type(exc).__name__}): {exc}; using dev mock")
