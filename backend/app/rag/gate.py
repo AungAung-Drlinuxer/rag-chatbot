@@ -27,7 +27,12 @@ def gate_confidence(doc: dict) -> float:
     if rr is not None:
         import math
 
-        sig = 1.0 / (1.0 + math.exp(-rr))  # bge-reranker outputs logits
+        # v1.6.26 — bge-reranker-base emits logits in a narrow ~0..1 range for
+        # relevant pairs (sigmoid(rr) saturates at ~0.73), which made the 0.75
+        # gate nearly unreachable even for exact title matches (conf 0.732 on a
+        # 74%-match article). Apply a 2.5x gain: relevant pairs (~1.0 logit) map
+        # to ~0.92, irrelevant (~0.0 logit) stay ~0.5 — real separation again.
+        sig = 1.0 / (1.0 + math.exp(-2.5 * rr))
         blend = 0.7 * sig + 0.3 * similarity_to_confidence(doc.get("distance", 1.0))
         return round(max(0.0, min(blend, 1.0)), 3)
     return similarity_to_confidence(doc.get("distance", 1.0))
