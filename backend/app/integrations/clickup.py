@@ -5,13 +5,23 @@ Config stored in `system_settings key='clickup'` (JSON):
     domain, min_chars, max_tasks }
 
   api_token        — ClickUp *personal* API token (pk_...)
-  list_ids         — REQUIRED for task ingestion; comma list of List IDs
-  doc_ids          — optional comma list of ClickUp Doc IDs (Docs API is newer and
-                     plan-gated; a 404/403 is logged and skipped, never fatal)
+  list_ids         — REAL List IDs (not the workspace id!), comma separated.
+                     Required for task ingestion; tasks are only read from these.
+  doc_ids          — optional comma list of Doc IDs. EMPTY = every doc in the
+                     workspace (the Docs API is workspace-scoped).
+  workspace_ids    — optional; the first workspace the token can see is used otherwise
   include_comments — "1"/"true" to fold task comments into the body (default off)
-  domain           — KB domain tag; empty → auto-classified
+  domain           — KB domain tag; empty → auto-classified. Must be a real
+                     pipeline domain (e.g. "general") or the content is invisible
+                     to role-scoped users.
   min_chars        — skip tasks whose text is shorter than this (default 120)
   max_tasks        — safety ceiling per sync (default 500)
+
+Docs API note (v1.6.41): the documented /api/v3/docs/{id}/pages and /api/v2/doc/{id}
+routes return '404 page not found'. The working, workspace-scoped routes are:
+    GET /api/v3/workspaces/{ws}/docs
+    GET /api/v3/workspaces/{ws}/docs/{doc}/pages
+    GET /api/v3/workspaces/{ws}/docs/{doc}/pages/{page}   (content lives in .content)
 
 Auth: ClickUp wants the raw token in `Authorization` — **no `Bearer ` prefix**.
 That is a common foot-gun; a prefixed token returns 401 with a misleading body.
@@ -142,7 +152,28 @@ def test_connection() -> dict:
             return {"ok": False, "message": "Request failed — check the token (HTTP 401 returns no body)"}
         user = data.get("user") or {}
         name = user.get("username") or user.get("email") or "unknown"
-        return {"ok": True, "message": f"Connected as {name}"}
+
+        # v1.6.41 — also report what is actually reachable, because a valid token
+        # with a wrong List/Doc id syncs NOTHING while the connection test still
+        # passes. This turns a silent no-op into an obvious message.
+        detail_bits: list[str] = []
+        with httpx.Client(timeout=25) as client:
+            wsid = _workspace_id(cfg, _headers(cfg), client)
+            if wsid:
+                docs = _list_docs(wsid, _headers(cfg), client)
+                detail_bits.append(f"{len(docs)} doc(s)")
+            if cfg.get("list_ids"):
+                for lid in _csv(cfg, "list_ids"):
+                    rl = client.get(f"{_API}/list/{lid}/task", headers=_headers(cfg),
+                                    params={"page": 0})
+                    detail_bits.append(
+                        f"list {lid}: {'OK' if rl.status_code == 200 else f'HTTP {rl.status_code}'}"
+                    )
+            else:
+                detail_bits.append("no list_ids (tasks will not sync)")
+
+        tail = " · ".join(detail_bits) if detail_bits else ""
+        return {"ok": True, "message": f"Connected as {name}" + (f" — {tail}" if tail else "")}
     except Exception as exc:
         return {"ok": False, "message": str(exc)}
 
@@ -284,42 +315,101 @@ def _fetch_tasks(client, cfg: dict, headers: dict) -> list[dict]:
 # Fetch: docs (plan-gated — failures are logged, never fatal)
 # ---------------------------------------------------------------------------
 
+def _workspace_id(cfg: dict, headers: dict, client) -> str | None:
+    """Resolve the ClickUp workspace (team) id.
+
+    The Docs API is workspace-scoped, and a `pk_...` token can span several
+    workspaces, so `workspace_ids` may name one explicitly; otherwise the first
+    workspace the token can see is used.
+    """
+    explicit = _csv(cfg, "workspace_ids")
+    if explicit:
+        return explicit[0]
+    data = _get(f"{_API}/team", headers, client=client)
+    teams = (data or {}).get("teams") or []
+    return str(teams[0]["id"]) if teams else None
+
+
+def _list_docs(workspace_id: str, headers: dict, client) -> list[dict]:
+    """All ClickUp Docs in a workspace (v3, paginated)."""
+    out: list[dict] = []
+    page = 0
+    while page < 20:  # ceiling: 20 * 100 docs
+        data = _get(
+            f"{_API_V3}/workspaces/{workspace_id}/docs",
+            headers,
+            {"page": page},
+            client=client,
+        )
+        if not data:
+            break
+        docs = data.get("docs") or []
+        if not docs:
+            break
+        out.extend(docs)
+        if len(docs) < 100:
+            break
+        page += 1
+    return out
+
+
 def _fetch_docs(client, cfg: dict, headers: dict) -> list[dict]:
     doc_ids = _csv(cfg, "doc_ids")
-    if not doc_ids:
-        return []
     domain = (cfg.get("domain") or "").strip().lower()
     articles: list[dict] = []
 
-    for doc_id in doc_ids:
-        pages = _get(f"{_API_V3}/docs/{doc_id}/pages", headers, client=client)
-        if pages is None:
-            logger.info(
-                "clickup doc %s unavailable (Docs API is plan-gated / may 404) — skipped", doc_id
-            )
+    # v1.6.41 — the Docs API is WORKSPACE-scoped. The previous paths
+    # (/api/v3/docs/{id}/pages, /api/v2/doc/{id}) both return
+    # '404 page not found'; the working routes are
+    #   GET /api/v3/workspaces/{ws}/docs                -> all docs
+    #   GET /api/v3/workspaces/{ws}/docs/{doc}/pages    -> pages of a doc
+    #   GET /api/v3/workspaces/{ws}/docs/{doc}/pages/{page}
+    ws = _workspace_id(cfg, headers, client)
+    if not ws:
+        logger.info("clickup: no workspace id resolvable — docs skipped")
+        return []
+
+    docs = _list_docs(ws, headers, client)
+    if doc_ids:
+        wanted = set(doc_ids)
+        docs = [d for d in docs if str(d.get("id")) in wanted] or [
+            {"id": d, "name": d} for d in doc_ids
+        ]
+    if not docs:
+        logger.info("clickup: no docs available for workspace %s", ws)
+    for doc in docs:
+        doc_id = doc.get("id")
+        if not doc_id:
             continue
-        for pg in (pages.get("pages") or pages.get("data") or []):
+        pages = _get(f"{_API_V3}/workspaces/{ws}/docs/{doc_id}/pages", headers, client=client)
+        if pages is None:
+            logger.info("clickup doc %s unavailable — skipped", doc_id)
+            continue
+        if isinstance(pages, dict):
+            pages = pages.get("pages") or pages.get("data") or []
+        for pg in pages:
             pid = pg.get("id")
             name = (pg.get("name") or pg.get("title") or "").strip()
             if not pid:
                 continue
-            detail = _get(f"{_API_V3}/docs/{doc_id}/pages/{pid}", headers, client=client)
+            detail = _get(
+                f"{_API_V3}/workspaces/{ws}/docs/{doc_id}/pages/{pid}", headers, client=client
+            )
             content = ""
             if detail:
                 node = detail.get("page") or detail
                 content = node.get("content") or node.get("text") or ""
-                if not content and isinstance(node.get("pages"), list):
-                    content = "\n\n".join(
-                        (c.get("content") or c.get("text") or "") for c in node["pages"]
-                    )
             if not content.strip():
+                # A page with an empty body carries no knowledge — skip it rather
+                # than indexing a title-only stub.
                 continue
             art: dict = {
                 "page_id": f"clickup-doc-{doc_id}-{pid}",
-                "title": name or f"ClickUp doc {doc_id}",
-                "source_url": f"https://app.clickup.com/{doc_id}",
+                "title": name or (doc.get("name") or f"ClickUp doc {doc_id}"),
+                "source_url": f"https://app.clickup.com/{ws}/v/dc/{doc_id}/{pid}",
                 "body": content,
-                "meta": {"source": "clickup", "clickup_kind": "doc"},
+                "meta": {"source": "clickup", "clickup_kind": "doc",
+                         "clickup_doc": (doc.get("name") or doc_id)},
             }
             if domain:
                 art["domain"] = domain

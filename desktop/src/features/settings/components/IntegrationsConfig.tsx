@@ -111,17 +111,20 @@ const META: Record<IntegrationKey, {
     label: "ClickUp (Docs & Tasks)",
     desc:
       "Import ClickUp Docs and/or tasks from named Lists. Uses a ClickUp personal token (pk_...) — " +
-      "the raw token goes in the Authorization header, never with a 'Bearer ' prefix. Tasks are only " +
-      "read from Lists you name here, and short entries are skipped, so operational chatter does not " +
-      "pollute retrieval. Status / priority / assignees / tags are stored as searchable metadata.",
+      "the raw token goes in the Authorization header, never with a 'Bearer ' prefix. " +
+      "Docs come from the whole workspace (leave Doc IDs empty for all of them). Tasks are only " +
+      "read from Lists you name — enter real LIST ids, not the workspace id (a wrong id returns " +
+      "404 'List not found' and silently syncs nothing). Set KB Domain Tag to a real domain such " +
+      "as 'general', otherwise the content lands in a domain no role can read.",
     docs: "https://developer.clickup.com/docs/authentication",
     fields: [
       { key: "api_token", label: "Personal API Token", placeholder: "pk_12345678_ABCDEF...", isSecret: true },
-      { key: "doc_ids", label: "Doc IDs (comma separated, optional)", placeholder: "8c9c4a1-1234" },
-      { key: "list_ids", label: "List IDs for tasks (comma separated)", placeholder: "901234567" },
+      { key: "doc_ids", label: "Doc IDs (empty = all docs in the workspace)", placeholder: "8c9c4a1-1018" },
+      { key: "list_ids", label: "List IDs for tasks (NOT the workspace id)", placeholder: "901804099497" },
+      { key: "workspace_ids", label: "Workspace ID (optional — first visible workspace is used)", placeholder: "9018580345" },
       { key: "include_comments", label: "Include task comments (true/false)", placeholder: "false" },
       { key: "min_chars", label: "Minimum task text length", placeholder: "120" },
-      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
+      { key: "domain", label: "KB Domain Tag (use a real domain, e.g. general)", placeholder: "general" },
       { key: "max_tasks", label: "Max tasks per sync", placeholder: "500" },
     ],
   },
