@@ -1421,7 +1421,7 @@ function MessageBubble({
                   <p className="text-[10px]">
                     The pipeline ran (retrieval + generation) but the upstream model returned no
                     content — this is usually a free-tier rate limit or invalid model name. Try
-                    again, or change the model in <strong>Settings → Integrations → H-Chat (LLM API)</strong>.
+                    again, or change the model in <strong>Settings → Integrations → Models Provider</strong>.
                   </p>
                 </div>
               )}

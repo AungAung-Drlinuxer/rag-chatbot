@@ -11,6 +11,8 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
+  Lock,
+  Pencil,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
@@ -134,7 +136,7 @@ export default function Settings({ role }: { role?: string }) {
   const [rateLimiting, setRateLimiting] = useState(true);
   const [systemAlerts, setSystemAlerts] = useState(true);
   const [dailyDigest, setDailyDigest] = useState(false);
-  const [llmProvider, setLlmProvider] = useState("H-Chat / Claude");
+  const [llmProvider, setLlmProvider] = useState("Models Provider");
   const [embeddingModel, setEmbeddingModel] = useState("nomic-embed-text");
   const [confidenceGate, setConfidenceGate] = useState(true);
 
@@ -540,21 +542,30 @@ function MailSettings() {
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // v1.6.35 — which mail fields already hold a stored (write-only) value
+  const [smtpSet, setSmtpSet] = useState<string[]>([]);
+  const [replacingSmtp, setReplacingSmtp] = useState<Record<string, boolean>>({});
+  const smtpConfigured = (k: string) => smtpSet.includes(k);
+  const smtpEditable = (k: string) => !smtpConfigured(k) || !!replacingSmtp[k] || !!form[k as "host" | "username" | "from"];
 
   useEffect(() => {
     getSmtpSettings()
       .then((d) => {
         const s = d.smtp ?? {};
+        const set: string[] = (d as any).fields_set ?? [];
+        setSmtpSet(set);
+        // v1.6.35 — sensitive fields (host / username / from-address / password)
+        // are write-only and come back masked, so they are NEVER loaded into the
+        // form. Only operational knobs are seeded. Typing a value replaces it.
         setForm({
-          host: s.host ?? "", port: Number(s.port) || 587,
-          username: s.username ?? "", password: "",
-          from: s.from_address ?? s.from ?? "", use_tls: s.use_tls !== false,
+          host: "", port: Number(s.port) || 587,
+          username: "", password: "",
+          from: "", use_tls: s.use_tls !== false,
           enabled: s.enabled !== false,
         });
         if (s.alerts && typeof s.alerts === "object")
           setAlerts({ approval_request: true, ticket_created: true, ticket_status_change: true, ...s.alerts });
         setPasswordSet(!!s.password_set);
-        if (!testTo && (s.from_address || s.username)) setTestTo(s.from_address || s.username);
       })
       .catch(() => setError("Failed to load mail settings"))
       .finally(() => setLoading(false));
@@ -562,15 +573,27 @@ function MailSettings() {
   }, []);
 
   async function save() {
-    if (!form.host.trim() || !form.from.trim()) { setError("Host and from-address are required."); return; }
+    // A stored (masked) field counts as satisfied — it is write-only, so the
+    // admin is not asked to retype the host just to flip a toggle.
+    const hostOk = !!form.host.trim() || smtpConfigured("host");
+    const fromOk = !!form.from.trim() || smtpConfigured("from_address") || smtpConfigured("from");
+    if (!hostOk || !fromOk) { setError("Host and from-address are required."); return; }
     setSaving(true); setError(null);
     try {
       const body: Record<string, unknown> = {
-        host: form.host, port: Number(form.port) || 587, username: form.username,
-        from_address: form.from, use_tls: form.use_tls, enabled: form.enabled,
+        port: Number(form.port) || 587, use_tls: form.use_tls, enabled: form.enabled,
         alerts,
       };
-      if (form.password.trim()) body.password = form.password; // keep existing if blank
+      // Only send fields the admin actually typed; blank keeps the stored value.
+      // A masked value is never sent (it would overwrite the real one).
+      const MASK_CHARS = "•";
+      for (const [k, v] of [
+        ["host", form.host], ["username", form.username],
+        ["from_address", form.from], ["password", form.password],
+      ] as const) {
+        const val = (v || "").trim();
+        if (val && !val.includes(MASK_CHARS)) body[k] = val;
+      }
       await putSmtpSettings(body);
       setPasswordSet(true);
       setSaved(true);
@@ -579,6 +602,48 @@ function MailSettings() {
       setError(err?.message || "Save failed");
     } finally { setSaving(false); }
   }
+
+  /** v1.6.35 — a stored mail field is shown as a mask; Replace unlocks the input. */
+  const writeOnlyRow = (
+    fieldKey: string,
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    placeholder: string,
+    type = "text",
+  ) => (
+    <label className="block">
+      <span className={labelCls}>
+        {label}
+        {smtpConfigured(fieldKey) && (
+          <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-emerald-600">
+            <Lock className="h-3 w-3" /> saved — not retrievable
+          </span>
+        )}
+      </span>
+      {smtpConfigured(fieldKey) && !smtpEditable(fieldKey) ? (
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+            <Lock className="h-3 w-3 shrink-0 text-slate-400" />
+            <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
+            <span className="ml-auto text-[10px] text-slate-400">write-only</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReplacingSmtp({ ...replacingSmtp, [fieldKey]: true })}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            title="Enter a new value"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Replace
+          </button>
+        </div>
+      ) : (
+        <input className={inputCls} type={type} value={value} placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)} />
+      )}
+    </label>
+  );
 
   async function sendTest() {
     const to = (testTo.trim() || form.username || form.from);
@@ -614,21 +679,15 @@ function MailSettings() {
         {!loading && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className={labelCls}>SMTP host</span>
-                <input className={inputCls} value={form.host} placeholder="smtp.gmail.com"
-                  onChange={(e) => setForm({ ...form, host: e.target.value })} />
-              </label>
+              {writeOnlyRow("host", "SMTP host", form.host,
+                (v) => setForm({ ...form, host: v }), "smtp.gmail.com")}
               <label className="block">
                 <span className={labelCls}>Port</span>
                 <input className={inputCls} type="number" value={form.port}
                   onChange={(e) => setForm({ ...form, port: Number(e.target.value) || 587 })} />
               </label>
-              <label className="block">
-                <span className={labelCls}>Username</span>
-                <input className={inputCls} value={form.username} placeholder="you@gmail.com"
-                  onChange={(e) => setForm({ ...form, username: e.target.value })} />
-              </label>
+              {writeOnlyRow("username", "Username", form.username,
+                (v) => setForm({ ...form, username: v }), "you@gmail.com")}
               <label className="block">
                 <span className={labelCls}>
                   Password {passwordSet && <span className="text-emerald-600">(saved — leave blank to keep)</span>}
@@ -636,11 +695,10 @@ function MailSettings() {
                 <input className={inputCls} type="password" value={form.password} placeholder="16-char app password"
                   onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </label>
-              <label className="block sm:col-span-2">
-                <span className={labelCls}>From address</span>
-                <input className={inputCls} value={form.from} placeholder="you@gmail.com"
-                  onChange={(e) => setForm({ ...form, from: e.target.value })} />
-              </label>
+              <div className="block sm:col-span-2">
+                {writeOnlyRow("from_address", "From address", form.from,
+                  (v) => setForm({ ...form, from: v }), "you@gmail.com")}
+              </div>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               <ToggleRow checked={form.enabled} onChange={(v) => setForm({ ...form, enabled: v })}
@@ -745,7 +803,7 @@ function IntegrationStatusCards() {
       detail: cfg.jira?.base_url ? `URL: ${cfg.jira.base_url}` : "URL: (configured)" },
     { key: "ldap", name: "LDAP / Active Directory", desc: "User authentication and group synchronization.",
       detail: cfg.ldap?.host ? `Server: ${cfg.ldap.host}:${cfg.ldap.port ?? 389}` : "Server: 10.10.10.10" },
-    { key: "h-chat", name: "H-Chat (LLM API)", desc: "External LLM provider for generating responses.",
+    { key: "h-chat", name: "Models Provider", desc: "External LLM provider for generating responses.",
       detail: cfg.llm?.model
         ? `Model: ${cfg.llm.model}${cfg.llm.base_url ? ` · ${cfg.llm.base_url.replace(/^https?:\/\//, "")}` : ""}`
         : "Provider: OpenRouter" },

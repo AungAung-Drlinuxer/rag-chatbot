@@ -279,7 +279,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         if result.decision == DECISION_CAUTION and not result.tool_used:
             yield _sse("caution", {"message": caution_message(), "confidence": result.confidence})
 
-        # H-Chat generation (doc §3 ⑥). Answer = the assembled briefing.
+        # Models Provider generation (doc §3 ⑥). Answer = the assembled briefing.
         # `stream_answer` now yields (token, usage) pairs; usage is non-None only on the
         # LAST pair (a zero-length sentinel) so the consumer can pick it up exactly once.
         context = result.context or build_context(result.docs, result.rewritten)

@@ -86,10 +86,20 @@ def get_smtp_settings(user: str = Depends(get_current_user)) -> dict:
     if isinstance(val, str):
         try: val = _json.loads(val)
         except Exception: val = {}
-    # never return the password to the client
-    safe = {k: v for k, v in (val or {}).items() if k != "password"}
-    safe["password_set"] = bool(val and val.get("password"))
-    return {"smtp": safe}
+    # v1.6.35 — same write-only policy as the integrations: no stored value is
+    # returned (host / username / from-address were being echoed verbatim, and the
+    # smarthost account name is itself sensitive in most enterprises).
+    from app.security.credentials import MASK, fields_set, redact_config
+
+    val = val or {}
+    set_keys = fields_set(val)
+    return {
+        "smtp": redact_config(val),
+        "fields_set": set_keys,
+        "mask": MASK,
+        "configured": bool(set_keys),
+        "password_set": bool(val.get("password")),
+    }
 
 @router.put("/settings/smtp")
 def put_smtp_settings(payload: dict, user: str = Depends(get_current_user)) -> dict:
@@ -171,21 +181,104 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama",
                     "openproject", "xwiki", "notion", "clickup"}
 
+def _reload_after_change(key: str) -> None:
+    """Drop any in-process cache that mirrors the integration config we just wrote."""
+    if key == "llm":
+        from app.llm.client import reload_llm_cfg
+        reload_llm_cfg()
+    if key == "jira":
+        from app.integrations.jira import reload_jira_cfg
+        reload_jira_cfg()
+
+
 @router.get("/settings/integrations/{key}")
 def get_integration_settings(key: str, user: str = Depends(get_current_user)) -> dict:
+    """Return the integration's configuration WITHOUT any stored value.
+
+    v1.6.35 — WRITE-ONLY. The previous filter dropped only `*_token` / `*_password`,
+    which leaked `api_key` (Models Provider), `client_secret` (Keycloak) and every
+    identifier (`base_url`, `email`, `host`, `bind_dn`, ...) in plaintext — an admin
+    token could read secrets straight back out.
+
+    Nothing is echoed now: the client receives mask tokens plus `fields_set` /
+    `secret_fields` so the UI can render "configured" without being able to recover
+    the value. Confirming a configuration is done with the Test endpoint, which
+    runs server-side.
+    """
     if key not in INTEGRATION_KEYS:
         raise HTTPException(status_code=404, detail="Unknown integration")
+
+    import json as _json
+
+    from app.security.credentials import (
+        MASK,
+        fields_set,
+        redact_config,
+        secret_fields_set,
+    )
+
     with SessionLocal() as s:
         from sqlalchemy import text as _t
-        row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"), {"k": key}).first()
-    import json as _json
+        row = s.execute(
+            _t("SELECT value, updated_at FROM system_settings WHERE key = :k"), {"k": key}
+        ).first()
+
     val = row[0] if row else {}
+    updated_at = row[1] if row else None
     if isinstance(val, str):
-        try: val = _json.loads(val)
-        except Exception: val = {}
-    safe = {k: v for k, v in (val or {}).items() if not (k.endswith("_token") or k.endswith("_password"))}
-    safe["token_set"] = bool(val and val.get("api_token"))
-    return {"integration": key, "settings": safe}
+        try:
+            val = _json.loads(val)
+        except Exception:
+            val = {}
+    val = val or {}
+
+    set_keys = fields_set(val)
+    return {
+        "integration": key,
+        "configured": bool(set_keys),
+        # every stored key is present but masked — no raw value ever leaves here
+        "settings": redact_config(val),
+        # the UI renders from these flags, never from a returned value
+        "fields_set": set_keys,
+        "secret_fields": secret_fields_set(val),
+        "mask": MASK,
+        "updated_at": updated_at.isoformat() if updated_at else None,
+        # kept for older clients
+        "token_set": bool(secret_fields_set(val)),
+    }
+
+
+@router.delete("/settings/integrations/{key}")
+def delete_integration_settings(
+    key: str, confirm: str = "", user: str = Depends(get_current_user)
+) -> dict:
+    """Remove a stored integration configuration entirely ("disconnect").
+
+    v1.6.35 — needed because a credential is write-only: an empty field means
+    "keep the stored value", so there was previously NO way for an admin to
+    revoke a saved token through the API.
+    """
+    if key not in INTEGRATION_KEYS:
+        raise HTTPException(status_code=404, detail="Unknown integration")
+    # Guard: this is unrecoverable (credentials are write-only, and there is no
+    # settings backup), so require the caller to name the integration again.
+    # `?confirm=<key>` prevents an accidental/scripted wipe of live config.
+    if confirm != key:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Confirmation required: call DELETE /api/settings/integrations/{key}?confirm={key}. "
+                "Removing an integration config cannot be undone and the stored credentials "
+                "cannot be recovered."
+            ),
+        )
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        s.execute(_t("DELETE FROM system_settings WHERE key = :k"), {"k": key})
+        s.commit()
+    _reload_after_change(key)
+    return {"ok": True, "integration": key, "cleared": True}
+
 
 @router.put("/settings/integrations/{key}")
 def put_integration_settings(key: str, payload: dict, user: str = Depends(get_current_user)) -> dict:
@@ -202,22 +295,18 @@ def put_integration_settings(key: str, payload: dict, user: str = Depends(get_cu
         if isinstance(current, str):
             try: current = _json.loads(current)
             except Exception: current = {}
-        current = current or {}
-        for k, v in data.items():
-            if (k.endswith("_token") or k.endswith("_password") or k in ("api_key", "password")) and not v:
-                continue  # empty secret keeps the stored one
-            current[k] = v
+        # v1.6.35 — central policy in app/security/credentials.py:
+        #   mask echoed back -> refused (would destroy the real value)
+        #   "__CLEAR__"      -> delete the field
+        #   empty/absent     -> keep the stored value
+        from app.security.credentials import apply_update
+        current = apply_update(current, data)
         s.execute(_t(
             "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
         ), {"k": key, "v": _json.dumps(current)})
         s.commit()
-    if key == "llm":
-        from app.llm.client import reload_llm_cfg
-        reload_llm_cfg()
-    if key == "jira":
-        from app.integrations.jira import reload_jira_cfg
-        reload_jira_cfg()
+    _reload_after_change(key)
     return {"ok": True}
 
 @router.post("/settings/integrations/{key}/test")
@@ -334,7 +423,7 @@ def list_llm_models(user: str = Depends(get_current_user)) -> dict:
     """Fetch the model catalogue from the configured provider (saved key required).
 
     Returns [{id, name}] sorted by id. Used by the Settings -> Integrations ->
-    H-Chat (LLM API) model selector so admins pick from the provider's real list.
+    Models Provider model selector so admins pick from the provider's real list.
     """
     from app.auth.rbac import get_role as _get_role
     if _get_role(user) != "admin":

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon, AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
-import { getIntegrationSettings, putIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
+import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon, AlertCircle, ChevronDown, RefreshCw, Lock, ShieldCheck, Trash2, Pencil } from "lucide-react";
+import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
 import type { ProviderModel } from "@/features/settings/api";
 
 type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "notion" | "clickup";
@@ -59,8 +59,8 @@ const META: Record<IntegrationKey, {
     ],
   },
   llm: {
-    label: "H-Chat (LLM API)",
-    desc: "Primary AI provider for generating answers (OpenAI-compatible: OpenRouter, DeepSeek, local H-Chat, or Anthropic). Changes apply within 30 seconds without a rebuild.",
+    label: "Models Provider",
+    desc: "Primary AI provider for generating answers (OpenAI-compatible: OpenRouter, DeepSeek, Anthropic, or an on-prem gateway). Credentials are write-only — once saved they can never be read back. Changes apply within 30 seconds without a rebuild.",
     docs: "https://openrouter.ai/keys",
     fields: [
       { key: "provider", label: "Provider", placeholder: "openai or anthropic" },
@@ -129,7 +129,15 @@ const META: Record<IntegrationKey, {
 
 export function IntegrationsConfig() {
   const [active, setActive] = useState<IntegrationKey>("confluence");
+  // v1.6.35 — `form` holds ONLY newly typed values. Stored values are never
+  // loaded into it (the API does not return them), so a plain Save can never
+  // re-submit or overwrite a secret with a placeholder.
   const [form, setForm] = useState<Record<string, string>>({});
+  const [fieldsSet, setFieldsSet] = useState<string[]>([]);
+  const [secretFields, setSecretFields] = useState<string[]>([]);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [replacing, setReplacing] = useState<Record<string, boolean>>({});
+  const [clearing, setClearing] = useState(false);
   const [tokenSet, setTokenSet] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -161,16 +169,55 @@ export function IntegrationsConfig() {
     setResult(null);
     try {
       const res = await getIntegrationSettings(key);
-      setForm({ ...(res.settings || {}) });
-      setTokenSet(!!res.settings?.token_set);
+      // Deliberately DO NOT seed `form` from the response: every value in
+      // `res.settings` is a mask token. Only the "which fields are set" flags
+      // are usable.
+      setForm({});
+      setReplacing({});
+      setFieldsSet(res.fields_set || []);
+      setSecretFields(res.secret_fields || []);
+      setUpdatedAt(res.updated_at || null);
+      setTokenSet(!!res.token_set || (res.secret_fields || []).length > 0);
     } catch {
       setForm({});
+      setFieldsSet([]);
+      setSecretFields([]);
+      setUpdatedAt(null);
+      setTokenSet(false);
+    }
+  };
+
+  /** True when the stored config already holds a value for this field. */
+  const isConfigured = (fieldKey: string) => fieldsSet.includes(fieldKey);
+
+  /** A field is editable only after the admin explicitly chooses Replace, or when
+   *  nothing is stored yet. */
+  const isEditable = (fieldKey: string) =>
+    !isConfigured(fieldKey) || !!replacing[fieldKey] || fieldKey in form;
+
+  const clearIntegration = async () => {
+    if (!window.confirm(
+      `Remove the stored ${META[active].label} configuration?\n\n` +
+      "Credentials are write-only, so this is the only way to revoke them. " +
+      "The integration stops working until it is configured again."
+    )) return;
+    setClearing(true);
+    setResult(null);
+    try {
+      await deleteIntegrationSettings(active);
+      setResult({ ok: true, message: "Stored configuration removed." });
+      await load(active);
+    } catch (e: any) {
+      setResult({ ok: false, message: e?.message || "Could not clear the configuration" });
+    } finally {
+      setClearing(false);
     }
   };
 
   const switchTab = (key: IntegrationKey) => {
     setActive(key);
     setShowSecret(false);
+    setReplacing({});
     setModels([]);
     setModelsError(null);
     load(key);
@@ -179,9 +226,21 @@ export function IntegrationsConfig() {
   const save = async () => {
     setSaving(true);
     setResult(null);
+    // Only fields the admin actually typed are sent. Omitted fields keep their
+    // stored value server-side, so a write-only field can never be blanked.
+    const payload: Record<string, string> = {};
+    for (const [k, v] of Object.entries(form)) {
+      if (typeof v === "string" && v.trim()) payload[k] = v;
+    }
+    const changed = Object.keys(payload).length;
     try {
-      await putIntegrationSettings(active, form);
-      setResult({ ok: true, message: "Saved. Click Test to verify connection." });
+      await putIntegrationSettings(active, payload);
+      setResult({
+        ok: true,
+        message: changed
+          ? `Saved ${changed} field(s). Click Test to verify the connection.`
+          : "Nothing new to save — stored values are unchanged.",
+      });
       await load(active);
     } catch (e: any) {
       setResult({ ok: false, message: e?.message || "Save failed" });
@@ -234,19 +293,60 @@ export function IntegrationsConfig() {
       <div className="px-5 pb-5 space-y-4">
         <p className="text-xs text-slate-500 dark:text-slate-400">{META[active].desc}</p>
 
+        {/* v1.6.35 — state the posture up front so nobody is surprised that values
+            cannot be read back. */}
+        <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          <p className="text-2xs leading-relaxed text-slate-600 dark:text-slate-400">
+            <b>Credentials are write-only.</b> Every value below — URLs, hosts, accounts,
+            keys and tokens — is stored server-side and is <b>never returned</b> once saved.
+            {" "}Enter a value only when adding or replacing it; leaving a field blank keeps
+            what is already stored.
+            {updatedAt && <> Last saved {new Date(updatedAt).toLocaleString()}.</>}
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 gap-3">
           {META[active].fields.map((f) => {
             const isModelField = isLlm && f.key === "model";
+            const configured = isConfigured(f.key);
+            const editable = isEditable(f.key);
+            const isSecret = !!f.isSecret || secretFields.includes(f.key);
             return (
             <div key={f.key} className="space-y-1">
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
                 {f.label}
-                {f.isSecret && tokenSet && (
+                {configured && (
                   <span className="ml-2 inline-flex items-center gap-1 text-2xs text-emerald-600">
-                    <CheckCircle2 className="h-3 w-3" /> Token saved
+                    {isSecret ? <Lock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+                    {isSecret ? "Secret saved — not retrievable" : "Configured — value hidden"}
                   </span>
                 )}
               </label>
+
+              {/* v1.6.35 — a stored value is never rendered. The admin sees a mask
+                  and must press Replace to write a new one. */}
+              {configured && !editable ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                    <Lock className="h-3 w-3 shrink-0 text-slate-400" />
+                    <span className="font-mono text-xs tracking-widest text-slate-400 select-none">
+                      ••••••••
+                    </span>
+                    <span className="ml-auto text-2xs text-slate-400">write-only</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplacing({ ...replacing, [f.key]: true })}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    title="Enter a new value for this field"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Replace
+                  </button>
+                </div>
+              ) : (
+              <>
               <div className="relative">
                 {isModelField ? (
                   <div className="flex gap-2">
@@ -311,6 +411,22 @@ export function IntegrationsConfig() {
                   {models.length} models available from your provider — pick one, or keep a custom ID.
                 </p>
               )}
+              {configured && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplacing({ ...replacing, [f.key]: false });
+                    const next = { ...form };
+                    delete next[f.key];
+                    setForm(next);
+                  }}
+                  className="mt-1 text-2xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  Keep the stored value
+                </button>
+              )}
+              </>
+              )}
             </div>
             );
           })}
@@ -333,6 +449,17 @@ export function IntegrationsConfig() {
             {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LoaderIcon className="h-3.5 w-3.5" />}
             Test connection
           </button>
+          {fieldsSet.length > 0 && (
+            <button
+              onClick={clearIntegration}
+              disabled={clearing}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30 text-xs font-medium px-3 py-2 disabled:opacity-50"
+              title="Revoke the stored credentials — the only way to remove a write-only value"
+            >
+              {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Remove stored settings
+            </button>
+          )}
           {active === "openproject" && (
             <button
               onClick={async () => {

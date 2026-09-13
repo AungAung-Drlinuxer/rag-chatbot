@@ -461,9 +461,9 @@ def dashboard_health(user: str = Depends(get_current_user)) -> dict:
     except Exception as exc:
         add("ollama", "Ollama / embeddings", False, detail=type(exc).__name__)
 
-    # LLM provider (H-Chat / OpenRouter) — config presence check (no cost)
+    # Models Provider (H-Chat / OpenRouter) — config presence check (no cost)
     llm_ok = _secret_present("llm", "api_key") or bool(SETTINGS.hchat_api_key)
-    add("llm", "H-Chat API", llm_ok, detail=None if llm_ok else "no API key configured")
+    add("llm", "Models Provider", llm_ok, detail=None if llm_ok else "no API key configured")
 
     # Confluence integration — DB token wins, env fallback
     conf_ok = _secret_present("confluence", "api_token") or bool(SETTINGS.confluence_token)

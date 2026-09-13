@@ -58,6 +58,13 @@ def reset_admin_setting(key: str, user: str = Depends(get_current_user),
     return {"reset": key}
 
 
+def _mask_url(url: str | None) -> str:
+    """Mask any credentials embedded in a connection URL (shared policy)."""
+    from app.security.credentials import mask_url_secret
+
+    return mask_url_secret(url)
+
+
 def _secret_status(value: str | None) -> str:
     """Never expose secret values — only the meta state."""
     if value is None or value == "":
@@ -85,11 +92,12 @@ def integrations_status(user: str = Depends(get_current_user)) -> dict:
             "embedding_dim": S.embedding_dim,
         },
         "postgres": {
-            "url": re.sub(r"://([^:/@]+):[^@/]+@", r"://\1:***@", S.database_url),
+            "url": _mask_url(S.database_url),
             "cnpg_cluster": "postgres-ha",
         },
         "redis": {
-            "url": S.redis_url,
+            # masked: redis_url embeds the live Redis password
+            "url": _mask_url(S.redis_url),
             "mode": S.redis_mode,
             "sentinels": S.redis_sentinels,
             "master_name": S.redis_master_name,

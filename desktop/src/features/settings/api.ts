@@ -126,7 +126,20 @@ export async function sendTestEmail(to: string): Promise<{ ok: boolean; to: stri
 }
 
 // --- integrations ---
-export async function getIntegrationSettings(key: string): Promise<{ integration: string; settings: Record<string, any> }> {
+/** v1.6.35 — integration config is write-only: values come back masked, and the
+ *  response carries `fields_set` / `secret_fields` flags to render from instead. */
+export type IntegrationSettingsResponse = {
+  integration: string;
+  configured?: boolean;
+  settings: Record<string, any>;
+  fields_set?: string[];
+  secret_fields?: string[];
+  mask?: string;
+  updated_at?: string | null;
+  token_set?: boolean;
+};
+
+export async function getIntegrationSettings(key: string): Promise<IntegrationSettingsResponse> {
   const r = await apiFetch(`${BASE}/api/settings/integrations/${key}`, { headers: { ...authHeaders() } });
   if (!r.ok) throw new Error(`integration settings fetch failed (HTTP ${r.status})`);
   return r.json();
@@ -143,6 +156,19 @@ export async function putIntegrationSettings(key: string, settings: Record<strin
     try { const j = await r.json(); if (j?.detail) msg = String(j.detail); } catch {}
     throw new Error(msg);
   }
+  return r.json();
+}
+
+/** v1.6.35 — revoke a stored integration config. Needed because credentials are
+ *  write-only and an empty field means "keep the stored value", so this is the
+ *  only way for an admin to remove a saved token. */
+export async function deleteIntegrationSettings(key: string): Promise<{ ok: boolean; cleared?: boolean }> {
+  // `confirm` is required: the removal is unrecoverable.
+  const r = await apiFetch(
+    `${BASE}/api/settings/integrations/${key}?confirm=${encodeURIComponent(key)}`,
+    { method: "DELETE", headers: authHeaders() }
+  );
+  if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
