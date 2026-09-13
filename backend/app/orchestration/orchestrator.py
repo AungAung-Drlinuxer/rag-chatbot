@@ -8,7 +8,10 @@ answer chain with the retrieval/context stages and produces a structured result.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
+
+logger = logging.getLogger("orchestration")
 
 from app.classifier.engine import LOCKDOWN, STAGE1_CONFIDENCE, classify_domain
 from app.config import SETTINGS
@@ -45,10 +48,43 @@ def _query_rewrite(query: str, history: list[dict] | None = None) -> str:
 
 # --- Stage 2: Retriever (Vector Search) ------------------------------------
 def _retrieve(rewritten: str, domain: str, k: int | None = None) -> list[dict]:
+    """Hybrid retrieval, with a domain-scoped-search fallback (v1.6.43).
+
+    The domain passed in comes from `classify_domain`, which is confidently wrong
+    on whole categories of question. Live example: "What is the SDLC engineering
+    process and what are the key stages?" classifies as `server` at 0.75 — above
+    STAGE1_CONFIDENCE — so the search was filtered to `server` while the indexed
+    answer lived under `general` (the ClickUp/Notion content). Retrieval returned
+    plausible but unrelated Linux articles, the gate scored them ~0.5, and the user
+    was told "I couldn't find information in the knowledge base" for content that
+    WAS indexed and retrievable.
+
+    So the classifier is treated as a hint: if the scoped search looks weak, retry
+    unrestricted and keep whichever result ranks better. Permissions are NOT widened
+    — RBAC is applied by the caller after this returns.
+    """
     try:
-        return retrieve(rewritten, domain=domain, k=k)
+        docs = retrieve(rewritten, domain=domain, k=k)
     except Exception:  # retrieval must never break the stream (fail-safe)
         return []
+
+    try:
+        from app.rag.retrieval import _is_stronger, _is_weak
+    except Exception:  # noqa: BLE001
+        return docs
+
+    if _is_weak(docs):
+        try:
+            wider = retrieve(rewritten, domain=None, k=k)
+        except Exception:  # noqa: BLE001
+            wider = []
+        if wider and _is_stronger(wider, docs):
+            logger.info(
+                "domain fallback: %r classified as %r but an unrestricted search ranked higher",
+                rewritten[:60], domain,
+            )
+            return wider
+    return docs
 
 
 # --- Stage 3: Context Assembly ---------------------------------------------

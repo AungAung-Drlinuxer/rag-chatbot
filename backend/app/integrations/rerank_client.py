@@ -12,6 +12,7 @@ vector order so a degraded reranker never takes chat down.
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 
@@ -25,6 +26,18 @@ def score(query: str, docs: list[dict]) -> list[float]:
 
     `docs` items only need a "content" key; truncation mirrors the local path
     (first 2000 chars) so local and remote modes score identically.
+
+    v1.6.42 — RETRY. This used to be a single POST with the full 30s timeout and
+    no retry. rerank-svc is HPA-scaled, so a scale-up event routes traffic to a
+    pod that is still loading bge-reranker; one ReadTimeout then dropped the whole
+    request to vector order, the confidence gate scored it as `caution`, and the
+    user was told "I couldn't find information in the knowledge base" even though
+    the answer WAS indexed and retrievable. That turned a transient pod restart
+    into a wrong answer.
+
+    Now: a short per-attempt timeout (so a slow pod fails fast instead of blocking
+    the request for 30s) with up to 3 attempts and backoff. The caller still
+    catches everything, so a genuinely dead reranker degrades exactly as before.
     """
     payload = {
         "query": query,
@@ -34,15 +47,34 @@ def score(query: str, docs: list[dict]) -> list[float]:
     if SETTINGS.rerank_api_key:
         headers["X-API-Key"] = SETTINGS.rerank_api_key
     url = SETTINGS.rerank_url.rstrip("/") + "/v1/rerank"
-    with httpx.Client(timeout=SETTINGS.rerank_timeout_s) as client:
-        r = client.post(url, json=payload, headers=headers)
-        r.raise_for_status()
-        body = r.json()
 
-    scores = [0.0] * len(docs)
-    for hit in body.get("results", []):
-        idx = hit.get("index")
-        if isinstance(idx, int) and 0 <= idx < len(docs):
-            scores[idx] = float(hit.get("relevance_score", 0.0))
-    logger.debug("remote rerank: %d docs in %sms", len(docs), body.get("took_ms"))
-    return scores
+    per_attempt = min(8.0, float(SETTINGS.rerank_timeout_s))
+    attempts = 3
+    last_exc: Exception | None = None
+
+    for attempt in range(attempts):
+        try:
+            with httpx.Client(timeout=per_attempt) as client:
+                r = client.post(url, json=payload, headers=headers)
+                r.raise_for_status()
+                body = r.json()
+            scores = [0.0] * len(docs)
+            for hit in body.get("results", []):
+                idx = hit.get("index")
+                if isinstance(idx, int) and 0 <= idx < len(docs):
+                    scores[idx] = float(hit.get("relevance_score", 0.0))
+            logger.debug("remote rerank: %d docs in %sms", len(docs), body.get("took_ms"))
+            return scores
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt < attempts - 1:
+                # 0.4s, then 1.0s — long enough for a warming pod to answer.
+                delay = 0.4 * (attempt + 1) + 0.3 * attempt
+                logger.warning(
+                    "rerank attempt %d/%d failed (%s: %s) — retrying in %.1fs",
+                    attempt + 1, attempts, type(exc).__name__, exc, delay,
+                )
+                time.sleep(delay)
+
+    logger.error("rerank failed after %d attempts: %s", attempts, last_exc)
+    raise last_exc if last_exc else RuntimeError("rerank failed")

@@ -249,6 +249,39 @@ class PipelineResult:
     context: str = ""
 
 
+# v1.6.43 — helpers for the domain-scoped-search fallback in run_pipeline().
+# "weak" = nothing retrieved, or the best hit is well below the gate. The bar is
+# deliberately below the 0.75 answer gate: we only widen the search when the scoped
+# result is clearly poor, so a genuinely good domain-scoped answer is left alone.
+_WEAK_CONFIDENCE = 0.58
+
+
+def _is_weak(docs: list[dict]) -> bool:
+    from app.rag.gate import similarity_to_confidence
+
+    if not docs:
+        return True
+    best = docs[0].get("distance")
+    if best is None:
+        return False
+    try:
+        return similarity_to_confidence(float(best)) < _WEAK_CONFIDENCE
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _is_stronger(candidate: list[dict], current: list[dict]) -> bool:
+    """True when `candidate`'s best hit beats `current`'s (lower distance wins)."""
+    if not candidate:
+        return False
+    if not current:
+        return True
+    try:
+        return float(candidate[0].get("distance") or 9.9) < float(current[0].get("distance") or 9.9)
+    except (TypeError, ValueError):
+        return False
+
+
 def run_pipeline(query: str, history: list[dict] | None = None) -> PipelineResult:
     """Execute the single RAG pipeline for one user turn (doc §3 flow)."""
     from app.classifier.engine import LOCKDOWN, STAGE1_CONFIDENCE, classify_domain
@@ -262,6 +295,29 @@ def run_pipeline(query: str, history: list[dict] | None = None) -> PipelineResul
         docs = retrieve(rewritten, domain=domain)
     except Exception:  # retrieval failure must never break the stream
         docs = []
+
+    # v1.6.43 — the classifier is a HINT, not a hard gate.
+    # `classify_domain` is confidently wrong on whole categories of question:
+    # "What is the SDLC engineering process and what are the key stages?" scores
+    # "server" at 0.75, above STAGE1_CONFIDENCE, so the search was filtered to
+    # `server` while the indexed answer lived under `general`. The result was a
+    # plausible-looking list of unrelated articles and a "I couldn't find
+    # information in the knowledge base" answer for content that WAS indexed and
+    # retrievable. If the scoped search looks weak, retry unrestricted and keep
+    # whichever result is stronger. RBAC is still applied by the caller, so this
+    # can widen retrieval but never widen permissions.
+    if _is_weak(docs):
+        try:
+            wider = retrieve(rewritten, domain=None)
+        except Exception:  # noqa: BLE001
+            wider = []
+        if wider and _is_stronger(wider, docs):
+            logger.info(
+                "domain fallback: %r classified as %r but a wider search ranked higher",
+                query[:60], domain,
+            )
+            docs = wider
+            domain = docs[0].get("domain") or domain
 
     # Stage 2 fallback: if keyword stage is weak and we have retrieved docs, trust the
     # top doc's stored domain (doc: ML zero-shot classifier if conf < 0.7).
