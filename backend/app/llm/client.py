@@ -243,12 +243,39 @@ def _stream_with_usage(llm, question: str, context: str) -> Iterable[tuple[str, 
         yield "", last_usage
 
 
-def stream_answer(question: str, context: str) -> Iterable[tuple[str, dict | None]]:
+def stream_answer(question: str, context: str, llm_provider: str | None = None) -> Iterable[tuple[str, dict | None]]:
     """Yield (token, usage) pairs. H-Chat → local Ollama → dev mock (Phase 10 fault tolerance).
 
     `usage` is non-None only on the LAST yielded pair (a zero-length sentinel), giving
     the caller a single, deterministic hook to read final token counts.
+
+    v1.6.22 — `llm_provider` per-request selection:
+      "auto" / None  → standard chain (primary → Ollama fallback → dev mock)
+      "cloud"        → force primary ONLY (no Ollama fallback on failure)
+      "local"        → force on-prem Ollama (air-gap / cost-saving mode)
     """
+    want = (llm_provider or "auto").strip().lower()
+
+    # Local-forced mode: skip the primary entirely
+    if want == "local":
+        if SETTINGS.fallback_enabled:
+            try:
+                fb = _build_local_ollama()
+                if fb is not None:
+                    steps = getattr(fb, "steps", None)
+                    local_llm = steps[-2] if steps and len(steps) >= 2 else None
+                    if local_llm is not None:
+                        if len(context) > 4_000:
+                            context = context[:4_000] + "\n[context truncated for local model]"
+                        logger.info("forced local generation: context=%d chars", len(context))
+                        yield from _stream_with_usage(local_llm, question, context)
+                        return
+            except Exception as exc:
+                logger.warning(f"forced local generation failed ({type(exc).__name__}): {exc}; using dev mock")
+        for tok in _DEV_MOCK:
+            yield tok, None
+        return
+
     # 1) Primary — external H-Chat (stream the bare LLM so we can read usage_metadata)
     llm = make_llm()
     if llm is not None:
@@ -257,6 +284,11 @@ def stream_answer(question: str, context: str) -> Iterable[tuple[str, dict | Non
             return
         except Exception as exc:
             logger.warning(f"H-Chat failed ({type(exc).__name__}): {exc}; falling back to local model")
+            if want == "cloud":
+                # cloud-forced: do NOT silently degrade to the local model
+                for tok in _DEV_MOCK:
+                    yield tok, None
+                return
 
     # 2) Fallback — local Ollama (CPU, on-prem)
     if SETTINGS.fallback_enabled:

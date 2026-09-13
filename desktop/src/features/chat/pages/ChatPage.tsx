@@ -100,6 +100,8 @@ export default function Chat({
   const [stage, setStage] = useState("");
   // v1.6.12 — RAG pipeline live tracker (per-stage telemetry + streaming pill)
   const pipeline = useStageTelemetry();
+  // v1.6.22 — per-request LLM provider selection (user toggle in the chat input bar)
+  const [llmProvider, setLlmProvider] = useState<"auto" | "cloud" | "local">("auto");
   const [approval, setApproval] = useState<{ id: string; question: string } | null>(null);
   // v0.21.72 — admin polls the approval queue so requests from OTHER users surface too
   useEffect(() => {
@@ -345,6 +347,7 @@ export default function Chat({
             );
           },
         },
+        llmProvider,
       );
       historyRef.current = [
         ...historyRef.current,
@@ -779,6 +782,36 @@ export default function Chat({
                   ))}
                 </div>
               )}
+              {/* v1.6.22 — LLM provider toggle (Auto / Cloud / Local) */}
+              <div className="mb-1.5 flex items-center gap-1 px-1">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                  AI Engine
+                </span>
+                {([
+                  { key: "auto", label: "Auto", title: "OpenRouter first, on-prem Ollama fallback" },
+                  { key: "cloud", label: "Cloud only", title: "Force OpenRouter — never fall back to local" },
+                  { key: "local", label: "Local only", title: "Force on-prem Ollama (air-gap / cost-saving)" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    title={opt.title}
+                    onClick={() => setLlmProvider(opt.key)}
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
+                      llmProvider === opt.key
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                {llmProvider === "local" && (
+                  <span className="ml-1 text-[9px] text-amber-600 dark:text-amber-400">
+                    ⚠ slower · on-prem
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-2 shadow-xs transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900/80 dark:focus-within:bg-slate-900">
                 <button
                   type="button"

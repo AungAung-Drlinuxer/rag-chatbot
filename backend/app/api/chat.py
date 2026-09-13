@@ -256,6 +256,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         }
         if guardrail_flag:
             meta["guardrail_flagged"] = guardrail_flag  # toxic-abuse marker for audit/UI
+        meta["llm_provider"] = (req.llm_provider or "auto").strip().lower()  # v1.6.22 — echo requested provider
         yield _sse("meta", meta)
 
         if result.decision == DECISION_CAUTION and not result.tool_used:
@@ -282,7 +283,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 span.set_attribute("rag.confidence", result.confidence)
                 span.set_attribute("rag.decision", result.decision)
                 span.set_attribute("llm.model", active_llm_model)
-                for tok, usage in stream_answer(req.message, context):
+                for tok, usage in stream_answer(req.message, context, llm_provider=req.llm_provider):
                     if usage is not None:
                         # The last (zero-length) token carries the final usage dict.
                         last_usage = usage

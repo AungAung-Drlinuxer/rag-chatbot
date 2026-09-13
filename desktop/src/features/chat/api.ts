@@ -6,12 +6,13 @@ export async function streamChat(
   sessionId: string,
   history: { role: string; content: string }[],
   onEvent: (e: { event: string; data: any }) => void,
+  llmProvider?: "auto" | "cloud" | "local",
   signal?: AbortSignal
 ) {
   const res = await apiFetch(`${BASE}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ message, session_id: sessionId, context: history }),
+    body: JSON.stringify({ message, session_id: sessionId, context: history, llm_provider: llmProvider ?? "auto" }),
     signal,
   });
   if (res.status === 401) throw new Error("Session expired — please log in again");

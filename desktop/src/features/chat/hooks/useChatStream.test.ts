@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/features/chat/api", () => ({
-  streamChat: vi.fn(async (_q: string, _s: string, _h: unknown, onEvent: (e: any) => void) => {
+  streamChat: vi.fn(async (_q: string, _s: string, _h: unknown, onEvent: (e: any) => void, _prov?: string) => {
     // scripted backend event sequence (drives the mock below)
     (globalThis as any).__emit(onEvent);
   }),
@@ -12,7 +12,10 @@ vi.mock("@/features/chat/api", () => ({
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import { streamChat } from "@/features/chat/api";
 
-beforeEach(() => vi.resetModules());
+beforeEach(() => {
+  vi.resetModules();
+  vi.clearAllMocks();
+});
 
 const emit = (onEvent: (e: any) => void, ...events: any[]) =>
   events.forEach((e) => onEvent(e));
@@ -84,7 +87,7 @@ describe("runChatStream", () => {
       onApprovalRequest: vi.fn(), onDone: vi.fn(),
     });
     expect(streamChat).toHaveBeenCalledWith(
-      "why", "sess-9", [{ role: "user", content: "hi" }], expect.any(Function)
+      "why", "sess-9", [{ role: "user", content: "hi" }], expect.any(Function), undefined, undefined
     );
   });
 });

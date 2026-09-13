@@ -21,7 +21,9 @@ export async function runChatStream(
   question: string,
   sessionId: string,
   history: { role: string; content: string }[],
-  h: StreamHandlers
+  h: StreamHandlers,
+  llmProvider?: "auto" | "cloud" | "local",
+  signal?: AbortSignal
 ): Promise<string> {
   let streamed = "";
   await streamChat(question, sessionId, history, (e) => {
@@ -54,6 +56,6 @@ export async function runChatStream(
     } else if (e.event === "done") {
       h.onDone(e.data ?? {});
     }
-  });
+  }, llmProvider, signal);
   return streamed;
 }

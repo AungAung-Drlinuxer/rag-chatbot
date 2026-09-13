@@ -19,6 +19,10 @@ class ChatRequest(StrictModel):
     context: list[dict] = []  # chat history turns [{role, content}]
     username: str | None = None
     top_k: int | None = None  # override SETTINGS.retrieval_top_k for this call
+    # v1.6.22 — per-request LLM provider selection: "auto" (default, OpenRouter
+    # with Ollama failover), "cloud" (force primary only), or "local"
+    # (force on-prem Ollama). None/"auto" preserves the standard failover chain.
+    llm_provider: str | None = None
 
 
 class EscalateRequest(StrictModel):
