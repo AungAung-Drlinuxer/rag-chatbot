@@ -230,17 +230,34 @@ export default function Knowledge({
   }, [classifierDomains]);
 
   const metaFor = (domain?: string) => {
-    const card = domain ? domainCardMap.get(domain) : undefined;
-    const fallback = DOMAIN_META[domain ?? "general"] ?? DOMAIN_META.general;
+    const key = domain ?? "general";
+    const card = domainCardMap.get(key);
+    // v1.6.46 — the label must come from the DB, not a hardcoded map.
+    // DOMAIN_META only ever held the original 7 domains and the fallback line was
+    // `DOMAIN_META[domain] ?? DOMAIN_META.general`, so every domain added later
+    // (software_dev, blockchain, cloud_aws, system) rendered as "General IT" —
+    // three identical chips on the Knowledge page. Renaming a domain in the
+    // Domains & Routing engine was ignored too, because the hardcoded label
+    // shadowed the admin's display_name.
+    // Order: admin domain list -> RBAC-filtered API list -> hardcoded entry
+    // (icon/colour hints only) -> humanised key. It never claims "General IT"
+    // for a domain that is not general.
+    const apiCard = domains?.find((d) => d.domain === key);
+    const fallback = DOMAIN_META[key];
+    const humanized = key.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     const dynamicIconComp = card?.icon && ICON_OPTIONS[card.icon]?.icon;
-    const resolvedIcon = dynamicIconComp || fallback.icon;
+    const resolvedIcon = dynamicIconComp || fallback?.icon || BookOpen;
     const dynamicColorDef = card?.color && COLOR_OPTIONS[card.color];
-    const resolvedIconClass = dynamicColorDef ? dynamicColorDef.textClass : fallback.iconClass;
-    const resolvedBgClass = dynamicColorDef ? dynamicColorDef.bgClass : fallback.bgClass;
+    const resolvedIconClass = dynamicColorDef
+      ? dynamicColorDef.textClass
+      : fallback?.iconClass || "text-blue-600 dark:text-blue-400";
+    const resolvedBgClass = dynamicColorDef
+      ? dynamicColorDef.bgClass
+      : fallback?.bgClass || "bg-blue-50 dark:bg-blue-950/40";
 
     return {
-      label: fallback.label,
-      description: fallback.description,
+      label: card?.display_name || apiCard?.display_name || fallback?.label || humanized,
+      description: card?.description || apiCard?.description || fallback?.description || "",
       icon: resolvedIcon,
       iconClass: resolvedIconClass,
       bgClass: resolvedBgClass,
