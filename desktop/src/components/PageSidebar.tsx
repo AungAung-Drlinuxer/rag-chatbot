@@ -1,6 +1,7 @@
 /** Shared nav sidebar for non-chat pages (extracted verbatim from App.tsx).
  * Capability-aware nav (v0.21.57): locked items stay visible; clicking shows WHY. */
 import { useEffect, useState } from "react";
+import { dateBucket } from "@/features/chat/model";
 import { useBranding } from "@/app/useBranding";
 import {
   BookOpen, Bot, ChevronDown, ChevronRight, Home, KeyRound as KeyIcon, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
@@ -20,6 +21,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+const BUCKET_ORDER = ["Pinned", "Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
+
+/**
+ * S1.3 — bucket conversations for the sidebar timeline.
+ * Pinned chats always sit on top; the rest are grouped by the newest message date.
+ * Bucket order is fixed (not insertion order) so the list never reshuffles weirdly.
+ */
+function groupConversations(list: any[]): [string, any[]][] {
+  const buckets = new Map<string, any[]>();
+  for (const c of list) {
+    const key = c?.is_pinned ? "Pinned" : dateBucket(c?.last_at ?? c?.updated_at);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(c);
+  }
+  return BUCKET_ORDER.filter((k) => buckets.has(k)).map((k) => [k, buckets.get(k)!] as [string, any[]]);
+}
 
 /* ============================================================
    PageSidebar — shared nav for non-chat pages (v0.13.0)
@@ -253,11 +271,19 @@ export default function PageSidebar({
             </div>
 
             {historyOpen && (
-              <div className="mt-1 space-y-0.5 max-h-60 overflow-y-auto pr-1">
+              <div className="mt-1 max-h-60 space-y-0.5 overflow-y-auto pr-1">
                 {conversations.length === 0 ? (
                   <p className="px-2 py-2 text-[10px] text-slate-500 italic">No recent chats</p>
                 ) : (
-                  conversations.map((c) => {
+                  /* S1.3 — date grouping (Newest-first buckets) so a long history
+                     reads as a timeline instead of one flat list of near-identical
+                     question strings. */
+                  groupConversations(conversations).map(([bucket, items]) => (
+                    <div key={bucket} className="pb-1">
+                      <div className="sticky top-0 z-10 bg-[var(--card)]/95 px-2 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500 backdrop-blur-sm">
+                        {bucket}
+                      </div>
+                      {items.map((c) => {
                     const isSelected = activeSessionId === c.session_id;
                     return (
                     <div key={c.session_id} className="group relative flex items-center">
@@ -330,7 +356,9 @@ export default function PageSidebar({
                       </DropdownMenu>
                     </div>
                     );
-                  })
+                      })}
+                    </div>
+                  ))
                 )}
               </div>
             )}

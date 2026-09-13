@@ -48,8 +48,25 @@ def list_conversations(user: str = Depends(get_current_user), limit: int = 20) -
                 .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
                 .first()
             )
-            fallback = (first[0][:80] + "…") if first and len(first[0]) > 80 else (first[0] if first else "New conversation")
-            title = (session_title[:80] + "…") if session_title and len(session_title) > 80 else (session_title or fallback)
+            # S1.3 — when a session has no stored title (rows created before the
+            # auto-title change), derive it with the SAME deterministic cleaner so
+            # the sidebar reads consistently instead of showing a raw 80-char
+            # question dump. Backfilled rows are persisted below, best-effort.
+            from app.textutil import auto_title
+
+            if session_title:
+                title = session_title
+            else:
+                title = auto_title(first[0]) if first and first[0] else "New conversation"
+                if first:
+                    try:
+                        from app.persistence.models import ChatSession as _CS
+                        _row = s.get(_CS, r[0])
+                        if _row is not None and not _row.title:
+                            _row.title = title
+                            s.commit()
+                    except Exception:
+                        s.rollback()  # backfill is best-effort; listing must not fail
             convs.append({
                 "session_id": str(r[0]),
                 "title": title,

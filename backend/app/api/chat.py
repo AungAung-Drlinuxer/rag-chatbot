@@ -109,7 +109,12 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             s = SessionLocal()
             sess = s.get(ChatSession, session_id)
             if sess is None:
-                sess = ChatSession(id=session_id, username=user)
+                # S1.3 — derive a real title from the first question (deterministic,
+                # no LLM call) so the sidebar never falls back to a raw truncated
+                # question and duplicate-looking rows.
+                from app.textutil import auto_title
+                sess = ChatSession(id=session_id, username=user,
+                                   title=auto_title(req.message))
                 s.add(sess)
                 s.flush()  # ensure session row exists before the FK'd message insert
             s.add(ChatMessage(session_id=session_id, role="user", content=req.message))
@@ -253,6 +258,18 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             "context_tokens_estimate": result.context_tokens_estimate,
             "context_truncated": result.context_truncated,
             "max_context_tokens": int(SETTINGS.max_context_tokens),
+            # S1.1 — REAL retrieval telemetry for the right-hand panel. Previously the
+            # UI hardcoded "Hybrid + rerank" / "Enabled" and derived both counters from
+            # the source list, so it reported "Chunks retrieved: 0" while citing sources.
+            "retrieval": {
+                "chunks": len(result.docs or []),
+                "cited": len(result.sources or []),
+                "top_k": result.top_k,
+                "rerank_used": any(d.get("rerank_score") is not None
+                                   for d in (result.docs or [])),
+                "acl_scoped": allowed is not None,
+                "role": role,
+            },
         }
         if guardrail_flag:
             meta["guardrail_flagged"] = guardrail_flag  # toxic-abuse marker for audit/UI

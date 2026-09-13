@@ -1,3 +1,4 @@
+import { prettyName } from "@/features/chat/model";
 import {
   ArrowRight,
   Bot,
@@ -53,11 +54,15 @@ export function EmptyChat({ onSuggestion, userName }: { onSuggestion: (question:
   // v1.5.2 — time-based personalized greeting (Perplexity-style)
   const h = new Date().getHours();
   const timeGreeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-  const firstName = (userName || "").split(/[@.\s]/)[0];
-  const greeting = firstName ? `${timeGreeting}, ${firstName}` : timeGreeting;
+  // S3.12 — was showing the raw login ("ui-reviewer"). prettyName() derives a
+  // readable label from the username — it never invents a legal name.
+  const displayName = prettyName(userName);
+  const greeting = displayName ? `${timeGreeting}, ${displayName.split(" ")[0]}` : timeGreeting;
 
+  // S2.5 — was max-w-2xl (672px) inside a 1000px message column, so the cards
+  // read as a narrow island. max-w-3xl keeps the two-up grid balanced.
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center py-6 sm:py-10">
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center py-6 sm:py-10">
       {/* ============ GREETING HEADER (Clean, modern, Perplexity/ChatGPT style) ============ */}
       <div className="mb-6 text-center sm:mb-8">
         <div className="mx-auto mb-3.5 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-white shadow-md shadow-blue-600/20">
@@ -93,7 +98,7 @@ export function EmptyChat({ onSuggestion, userName }: { onSuggestion: (question:
                   </span>
                   <ArrowRight className="size-3.5 shrink-0 text-slate-300 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 dark:text-slate-600" />
                 </div>
-                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
                   {s.desc}
                 </p>
               </div>

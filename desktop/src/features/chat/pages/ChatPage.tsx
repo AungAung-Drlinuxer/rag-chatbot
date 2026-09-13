@@ -49,6 +49,7 @@ import {
   type Conv,
   currentTime,
   latestSources,
+  latestRetrieval,
 } from "@/features/chat/model";
 import {
   EmptyChat,
@@ -290,10 +291,12 @@ export default function Chat({
                           : h.distance != null ? Math.round((1 - h.distance) * 100)
                           : null,
                         excerpt: (h.content ?? "").slice(0, 180),
-                        url: h.source_url ?? null,
-                      })),
-                    }
-                  : m,
+                          url: h.source_url ?? null,
+                        })),
+                        // S1.1 — real retrieval stats for the right-hand panel
+                        retrieval: meta.retrieval ?? undefined,
+                        }
+                        : m,
               ),
             ),
           onToken: (token) => {
@@ -593,6 +596,12 @@ export default function Chat({
       RENDER
   ---------------------------------------------------------- */
 
+  // S1.1 — derived once per render: real retrieval stats + cited sources for the panel.
+  const sources = latestSources(messages);
+  const retrieval = latestRetrieval(messages);
+  // S1.2 — exactly one progress surface: the live pipeline card. While it is on
+  // screen (isTyping) the in-bubble placeholder degrades to a neutral skeleton so
+  // the user never reads two competing "in progress" animations.
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       {mobileHistory && (
@@ -601,13 +610,15 @@ export default function Chat({
 
       {/* ================= MAIN CHAT ================= */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
+        {/* S2.8 — h-16 duplicated the app-shell bar's height; h-12 keeps a single
+            visual rhythm between the shell chrome and the page chrome. */}
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setMobileHistory(true)}>
               <Menu className="size-5" />
             </button>
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-chip)] text-sky-300 shadow-sm">
-              <Bot className="size-5" />
+            <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-[var(--brand-chip)] text-sky-300 shadow-sm">
+              <Bot className="size-4" />
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold">IT Knowledge Assistant</h1>
@@ -616,14 +627,17 @@ export default function Chat({
                 <span className="text-[10px] text-muted-foreground">Online</span>
                 <span className="text-[10px] text-muted-foreground">·</span>
                 <span className="hidden text-[10px] text-muted-foreground sm:block">
-                  Hybrid RAG + rerank
+                  Hybrid RAG
                 </span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-[10px] sm:flex">
-              <Shield className="size-3.5 text-emerald-600" />
+            {/* S2.8 — "Hybrid RAG + rerank" moved to the retrieval panel (it was
+                static text here) and the chip is slimmer so the header reads as one
+                line of chrome instead of a second title bar. */}
+            <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-[10px] sm:flex">
+              <Shield className="size-3 text-emerald-600" />
               RBAC protected
             </div>
           </div>
@@ -631,9 +645,12 @@ export default function Chat({
 
         {/* Messages */}
         <div ref={messagesContainerRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-[1000px] px-4 py-6 lg:px-8">
+          {/* S2.4 — the scroll container must be a flex column for `justify-center`
+              to have any height to centre within; previously the empty state sat
+              top-heavy with ~200px of dead space above the composer. */}
+          <div className="mx-auto flex min-h-full max-w-[1000px] flex-col px-4 py-6 lg:px-8">
             {messages.length === 0 ? (
-              <div className="flex min-h-full flex-col justify-center">
+              <div className="flex flex-1 flex-col justify-center">
                 <EmptyChat userName={userName} onSuggestion={(q) => { setInput(q); window.setTimeout(() => { const form = document.querySelector<HTMLFormElement>("form"); form?.requestSubmit(); }, 60); }} />
               </div>
             ) : (
@@ -652,7 +669,10 @@ export default function Chat({
                 ))}
                 {/* In-flight RAG execution status shown ONLY while actively generating before message persists */}
                 {isTyping && (
-                  <div className="mx-auto w-full max-w-3xl px-1 pb-2">
+                  // S2.7 — align with the answer column (bubbles are max-w-[88%] of
+                  // the 1000px column) instead of a narrower 768px panel that read
+                  // like a floating modal parked under the bubble.
+                  <div className="mx-auto w-full max-w-[88%] px-1 pb-2">
                     <RagPipelineStatus
                       active={true}
                       stage={stage}
@@ -867,42 +887,100 @@ export default function Chat({
               </div>
             </form>
 
-            <div className="mt-1 text-center text-[9.5px] text-slate-400 dark:text-slate-500">
+            {/* S3.11 — 9.5px slate-500 on the page background failed comfortable
+                reading; 11px at slate-500/400 clears the contrast floor. */}
+            <p className="mt-1.5 text-center text-[11px] leading-snug text-slate-500 dark:text-slate-400">
               Answers are AI-generated — verify before acting. Access is RBAC-protected.
-            </div>
+            </p>
           </div>
         </div>
       </main>
 
       {/* ================= RIGHT SOURCE PANEL ================= */}
-      {showSources && messages.length > 0 && (
-        <aside className="hidden w-[300px] shrink-0 border-l border-[var(--border)] bg-[var(--card)] xl:flex xl:flex-col">
-          {/* v1.6.15 — compact header (was h-16/text-sm; tracker needs the room) */}
-          <div className="flex h-11 items-center justify-between border-b px-4">
+      {/* S2.6 — always mounted on xl (was gated on messages.length > 0, which made
+          the message column jump 300px narrower the moment the first answer landed). */}
+      {showSources && (
+        <aside className="hidden w-[300px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--card)] xl:flex">
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
             <div>
               <h2 className="text-[12px] font-semibold leading-tight">Knowledge sources</h2>
-              <p className="text-[9px] text-muted-foreground leading-tight">Retrieved for this conversation</p>
+              <p className="text-[9px] leading-tight text-muted-foreground">
+                Retrieved for this conversation
+              </p>
             </div>
             <Link2 className="size-3.5 text-muted-foreground" />
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {latestSources(messages).map((source, index) => (
-              <SourceCard key={`${source.page_id}-${index}`} source={source} index={index + 1} />
-            ))}
-          </div>
-          <div className="border-t p-4">
+
+          {/* S2.9 — retrieval stats pinned directly under the header so the panel has
+              no unlabelled dead band in the middle. S1.1 — every value comes from the
+              real `meta.retrieval` payload; "—" when the backend did not report it
+              (never a fabricated number). */}
+          <div className="shrink-0 border-b border-[var(--border)] p-4">
             <div className="rounded-xl bg-[var(--muted)] p-3">
               <div className="flex items-center gap-2">
                 <History className="size-3.5 text-blue-500" />
                 <span className="text-[10px] font-semibold">Retrieval information</span>
               </div>
               <div className="mt-3 space-y-2 text-[10px] text-muted-foreground">
-                <Row label="Chunks retrieved" value={String(latestSources(messages).length || 0)} />
-                <Row label="Sources used" value={String(latestSources(messages).length || 0)} />
-                <Row label="Search type" value="Hybrid + rerank" />
-                <Row label="ACL filtering" value="Enabled" good />
+                <Row
+                  label="Chunks retrieved"
+                  value={retrieval?.chunks != null ? String(retrieval.chunks) : "—"}
+                />
+                <Row
+                  label="Sources cited"
+                  value={
+                    retrieval?.cited != null
+                      ? String(retrieval.cited)
+                      : sources.length > 0
+                        ? String(sources.length)
+                        : "—"
+                  }
+                />
+                <Row
+                  label="Search type"
+                  value={
+                    retrieval?.rerank_used === true
+                      ? "Hybrid + rerank"
+                      : retrieval?.rerank_used === false
+                        ? "Hybrid (rerank skipped)"
+                        : "—"
+                  }
+                />
+                <Row
+                  label="ACL filtering"
+                  value={
+                    retrieval?.acl_scoped == null
+                      ? "—"
+                      : retrieval.acl_scoped
+                        ? "Enforced (domain-scoped)"
+                        : "Enforced (unrestricted role)"
+                  }
+                  good={retrieval?.acl_scoped != null}
+                />
+                <Row
+                  label="Top K"
+                  value={retrieval?.top_k != null ? String(retrieval.top_k) : "—"}
+                />
               </div>
             </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
+            {sources.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-2 text-center">
+                <div className="grid size-9 place-items-center rounded-xl bg-[var(--muted)]">
+                  <Link2 className="size-4 text-muted-foreground" />
+                </div>
+                <p className="text-[11px] font-medium text-muted-foreground">No sources yet</p>
+                <p className="text-[10px] leading-relaxed text-muted-foreground/80">
+                  Ask a question — the KB articles used to ground the answer appear here.
+                </p>
+              </div>
+            ) : (
+              sources.map((source, index) => (
+                <SourceCard key={`${source.page_id}-${index}`} source={source} index={index + 1} />
+              ))
+            )}
           </div>
         </aside>
       )}
@@ -1317,13 +1395,14 @@ function MessageBubble({
               {message.content ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
               ) : busy ? (
-                <div className="flex items-center gap-2 text-slate-500">
-                  <span className="flex gap-1">
-                    <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:0ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:150ms]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:300ms]" />
-                  </span>
-                  <span className="text-[11px] font-medium">Generating answer…</span>
+                /* S1.2 — the live RAG pipeline card is the single progress surface;
+                   this bubble shows a neutral skeleton (no second spinner/counter)
+                   so the user is not reading two conflicting "in progress" states. */
+                <div className="space-y-2" aria-label="Preparing answer" role="status">
+                  <div className="h-2.5 w-4/5 animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-700/60" />
+                  <div className="h-2.5 w-full animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-700/60 [animation-delay:120ms]" />
+                  <div className="h-2.5 w-3/5 animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-700/60 [animation-delay:240ms]" />
+                  <span className="sr-only">Generating answer</span>
                 </div>
               ) : (message as any).guardrail ? (
                 <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
@@ -1428,32 +1507,39 @@ function MessageBubble({
           {isUser && (
             // v1.1.2 — always-visible compact icons (hover-only hid them on touch devices):
             // Edit query / Copy query / Retry
+            // S3.10 — icons were 14px with a ~21px hit area; 16px icons inside a
+            // 30px target meet the minimum comfortable touch/click size.
             <span className="flex items-center gap-0.5">
               <button type="button" title="Edit query — edit in place and resend"
+                aria-label="Edit query"
                 onClick={() => { setEditDraft(message.content); setEditing(true); }}
-                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-                <Pencil className="size-3.5" />
+                className="grid size-[30px] place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                <Pencil className="size-4" />
               </button>
-              <button type="button" title="Copy query" onClick={() => copyText(message.content)}
-                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-                {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+              <button type="button" title="Copy query" aria-label="Copy query"
+                onClick={() => copyText(message.content)}
+                className="grid size-[30px] place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                {copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
               </button>
-              <button type="button" title="Retry — re-run this question" onClick={() => onRetryQuestion?.()}
-                className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-                <RotateCcw className="size-3.5" />
+              <button type="button" title="Retry — re-run this question" aria-label="Retry question"
+                onClick={() => onRetryQuestion?.()}
+                className="grid size-[30px] place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                <RotateCcw className="size-4" />
               </button>
             </span>
           )}
           {!isUser && message.content && !busy && (
             <span className="flex items-center gap-1">
-              <button type="button" title="Copy answer" onClick={() => copyText(message.content)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
-                {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
+              <button type="button" title="Copy answer" aria-label="Copy answer"
+                onClick={() => copyText(message.content)}
+                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
                 {copied ? "Copied" : "Copy"}
               </button>
-              <button type="button" title="Share answer" onClick={() => shareText(message.content)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
-                {shared ? <Check className="size-3 text-emerald-500" /> : <Share2 className="size-3" />}
+              <button type="button" title="Share answer" aria-label="Share answer"
+                onClick={() => shareText(message.content)}
+                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                {shared ? <Check className="size-3.5 text-emerald-500" /> : <Share2 className="size-3.5" />}
                 {shared ? "Shared" : "Share"}
               </button>
             </span>
