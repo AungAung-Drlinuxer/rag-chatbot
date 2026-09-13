@@ -37,7 +37,6 @@ import {
 } from "react";
 
 import {
-  listApprovals,
   decideApproval,
   uploadAttachment,
   submitFeedback as pushFeedback,
@@ -57,6 +56,7 @@ import {
 } from "@/features/chat/components/chat-parts";
 import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
 import AgentActivity, { stageFromText } from "@/components/AgentActivity";
+import { alertTicket } from "@/lib/notify";
 import {
   listConversations,
   getConversationMessages,
@@ -71,7 +71,9 @@ import { assignableUsers } from "@/features/users/api";
 
 export default function Chat({
   userName,
-  role,
+  // retained in the prop contract; no longer used now that escalations run
+  // through the requester's ticket form instead of an admin approval modal
+  role: _role,
   displayRole: _displayRole,
   perms: _perms,
   onNavigate: _onNavigate,
@@ -104,29 +106,13 @@ export default function Chat({
   const pipeline = useStageTelemetry();
   // v1.6.22 — per-request LLM provider selection (user toggle in the chat input bar)
   const [llmProvider, setLlmProvider] = useState<"auto" | "cloud" | "local">("auto");
-  const [approval, setApproval] = useState<{ id: string; question: string } | null>(null);
-  // v0.21.72 — admin polls the approval queue so requests from OTHER users surface too
-  useEffect(() => {
-    if (role !== "admin") return;
-    let alive = true;
-    async function poll() {
-      try {
-        const d = await listApprovals();
-        if (!alive) return;
-        const pending = (d.approvals ?? []).find((a: any) => a.status === "pending");
-        if (pending) setApproval((cur) => cur ?? { id: pending.id, question: pending.question });
-      } catch { /* ignore transient */ }
-    }
-    poll();
-    const iv = setInterval(() => { if (!approvalRef.current) poll(); }, 15000);
-    return () => { alive = false; clearInterval(iv); };
-  }, [role]);
-  // approval read through a ref inside the poll interval (effect deps stay [role])
-  const approvalRef = useRef(approval);
-  approvalRef.current = approval;
+  // v1.6.40 — the escalation is resolved by the requester filling the ticket form
+  // themselves, so remember which pending approval that form supersedes. On submit
+  // it is marked "cancelled" (NOT resumed), which prevents an admin from later
+  // approving the same escalation and creating a duplicate ticket.
+  const [escalationApprovalId, setEscalationApprovalId] = useState<string | null>(null);
   const [showSources] = useState(true);
   const [mobileHistory, setMobileHistory] = useState(false);
-
   const sessionRef = useRef<string>(crypto.randomUUID());
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -312,9 +298,19 @@ export default function Chat({
           },
           onApprovalRequest: (data) => {
             setStage("");
-            setApproval({ id: data.approval_id, question: data.question });
+            // v1.6.40 — the HITL approval modal is replaced by the ticket form:
+            // the requester fills in the details and creates the ticket directly.
+            setEscalationApprovalId(data.approval_id);
+            openTicketForm(undefined, {
+              subject: (data.question || "").slice(0, 120),
+              description: data.question || "",
+            });
+            alertTicket("before");
+            chatAlert("Escalation understood — fill in the ticket details and submit.");
             setMessages((prev) => prev.map((m) =>
-              m.id === assistantId ? { ...m, content: m.content + "⏸️ **Escalation needs administrator approval.**" } : m));
+              m.id === assistantId
+                ? { ...m, content: m.content + "\n\n📝 **Fill in the ticket form to escalate this.**" }
+                : m));
           },
           onCaution: (data) => {
             // v1.1.4 guardrail: blocked messages already have the policy text
@@ -497,12 +493,18 @@ export default function Chat({
       .catch(() => chatAlert("Feedback failed", "err"));
   }
 
-  function openTicketForm(_message: Message) {
+  function openTicketForm(
+    _message?: Message,
+    prefill?: { subject?: string; description?: string; domain?: string },
+  ) {
     // v0.21.99 — open an EMPTY form; the user writes their own subject/description.
+    // v1.6.40 — when the escalation comes from chat the same form is opened with the
+    // user's own request pre-filled, so they only complete the details. Nothing is
+    // auto-created: the user reviews and submits.
     setTicketForm({
-      subject: "",
-      description: "",
-      domain: "general",
+      subject: prefill?.subject ?? "",
+      description: prefill?.description ?? "",
+      domain: prefill?.domain ?? "general",
       priority: "medium",
       assignee: "",
       due_date: "",
@@ -557,6 +559,20 @@ export default function Chat({
       const destLabel = ticketForm.destination === "openproject" ? "OpenProject" : "Jira";
       const ticketId = created?.id ?? "";
       const link = created?.jira_link ?? "";
+
+      // v1.6.40 — the form supersedes the pending HITL escalation: mark it cancelled
+      // so it leaves the admin queue and cannot be approved later (which would create
+      // a second ticket). Best-effort — the ticket already exists either way.
+      if (escalationApprovalId) {
+        try {
+          await decideApproval(escalationApprovalId, "cancelled");
+        } catch { /* the ticket is already created; the queue entry is cosmetic */ }
+        setEscalationApprovalId(null);
+      }
+
+      // "after" signal: sound + haptics + in-app notice. The requester email is
+      // sent server-side by notifier.notify_ticket_created() in POST /api/tickets.
+      alertTicket("after");
       chatAlert(`${ticketId || "Ticket"} created in ${destLabel}`);
       // v1.6.8 — reflect the creation in the chat itself (assistant info message);
       // the backend also persisted it, so it survives reload.
@@ -697,93 +713,10 @@ export default function Chat({
           </div>
         </div>
 
-        {/* v0.22 — HITL escalation approval: centered confirmation modal */}
-        {role === "admin" && approval && (
-          <div
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[3px]"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Escalation approval"
-          >
-            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-amber-200/60 bg-[var(--card)] shadow-2xl dark:border-amber-900/50">
-              {/* Header */}
-              <div className="flex items-start gap-3 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50/60 px-5 py-4 dark:border-amber-900/40 dark:from-amber-950/40 dark:to-orange-950/20">
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
-                  <Shield className="size-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold text-amber-950 dark:text-amber-200">
-                      Escalation Approval Required
-                    </h3>
-                    <span className="inline-flex items-center rounded-full bg-amber-200/70 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/70 dark:text-amber-300">
-                      HITL &middot; Pending
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-amber-800/80 dark:text-amber-400/80">
-                    Human-in-the-loop review before the ticket is created.
-                  </p>
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="space-y-3 px-5 py-4">
-                <div>
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    User Request
-                  </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200">
-                    &ldquo;{approval.question}&rdquo;
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 rounded-xl bg-blue-50/70 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600 dark:bg-blue-950/30 dark:text-slate-300">
-                  <Sparkles className="mt-0.5 size-3.5 shrink-0 text-blue-500" />
-                  <span>
-                    Approving will <strong>automatically create a Jira ticket</strong> and notify the requester via email.
-                    Rejecting will inform the user that the escalation was not approved.
-                  </span>
-                </div>
-              </div>
-
-              {/* Footer actions */}
-              <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900/40">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const d = await decideApproval(approval.id, "rejected");
-                    setMessages((prev) => prev.map((m) =>
-                      m.id === approval.id
-                        ? { ...m, content: m.content + `
-
-❌ **Rejected** — ${(d.messages ?? ["Ticket creation was rejected by the administrator."]).join(" ")}` }
-                        : m));
-                    setApproval(null);
-                  }}
-                  className="rounded-xl border border-slate-300/80 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-2xs transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  Reject
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const d = await decideApproval(approval.id, "approved");
-                    setMessages((prev) => prev.map((m) =>
-                      m.id === approval.id
-                        ? { ...m, content: m.content + `
-
-✅ **Approved** — ${d.ticket_id ? `Ticket ${d.ticket_id} created. ` : ""}${(d.messages ?? []).join(" ")}` }
-                        : m));
-                    setApproval(null);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:from-emerald-700 hover:to-teal-700"
-                >
-                  <CheckCircle2 className="size-3.5" />
-                  Approve &amp; Create Ticket
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* v1.6.40 — the HITL approval modal was removed. An escalation now opens the
+            pre-filled Create Ticket form for the requester, who fills in the details and
+            submits; the pending approval is marked `cancelled` (never resumed, so no
+            duplicate ticket). Admins keep the notification bell for awareness. */}
 
         {/* Composer — compact single-row */}
         <div className="shrink-0 border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">

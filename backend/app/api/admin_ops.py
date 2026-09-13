@@ -229,11 +229,38 @@ def decide_approval(approval_id: str, payload: dict, user: str = Depends(get_cur
     create_ticket node (single source of truth for state transitions).
     Returns the graph's final state (ticket_id + confirmation message).
     """
+    decision = (payload.get("decision") or "").lower()
+    if decision not in ("approved", "rejected", "cancelled"):
+        raise HTTPException(
+            status_code=400, detail="decision must be approved|rejected|cancelled"
+        )
+
+    # v1.6.40 — "cancelled" means the requester chose to fill the ticket form
+    # themselves instead of going through approval. It must NOT resume the graph
+    # (resuming would create a second, duplicate ticket), so it needs no admin
+    # rights — only the requester of that escalation (or an admin) may do it.
+    if decision == "cancelled":
+        with SessionLocal() as s:
+            from sqlalchemy import text as _t
+            who = s.execute(
+                _t("SELECT username FROM approvals WHERE id = :i AND status = 'pending'"),
+                {"i": approval_id},
+            ).scalar()
+        if not who or (who != user and get_role(user) != "admin"):
+            raise HTTPException(status_code=403, detail="You may only cancel your own escalation.")
+        with SessionLocal() as s:
+            from sqlalchemy import text as _t
+            s.execute(
+                _t("UPDATE approvals SET status = 'cancelled', decided_by = :by, decided_at = NOW() "
+                   "WHERE id = :i AND status = 'pending'"),
+                {"by": user, "i": approval_id},
+            )
+            s.commit()
+        return {"ok": True, "approval_id": approval_id, "status": "cancelled",
+                "ticket_id": None, "message": "Escalation cancelled — no ticket was created."}
+
     if get_role(user) != "admin":
         raise HTTPException(status_code=403, detail="Administrator permission required.")
-    decision = (payload.get("decision") or "").lower()
-    if decision not in ("approved", "rejected"):
-        raise HTTPException(status_code=400, detail="decision must be approved|rejected")
 
     with SessionLocal() as s:
         from sqlalchemy import text as _t

@@ -85,7 +85,12 @@ export async function listApprovals(): Promise<{ approvals: any[] }> {
   return r.json();
 }
 
-export async function decideApproval(id: string, decision: "approved" | "rejected") {
+// v1.6.40 — "cancelled" lets the requester supersede their own escalation with a
+// direct ticket-form submission (no graph resume, so no duplicate ticket).
+export async function decideApproval(
+  id: string,
+  decision: "approved" | "rejected" | "cancelled",
+) {
   const r = await apiFetch(`${BASE}/api/approvals/${id}`, {
     method: "PUT",
     headers: { ...authHeaders(), "Content-Type": "application/json" },

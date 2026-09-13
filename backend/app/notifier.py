@@ -105,13 +105,26 @@ def send_alert(alert_type: str, subject: str, body: str,
     threading.Thread(target=_run, daemon=True).start()
 
 
-def user_email(username: str) -> str | None:
+def user_email(username: str | None) -> str | None:
+    """Resolve a user's email address (v1.6.40: case-insensitive).
+
+    The lookup used to be an exact `username = :u` match. Usernames routinely
+    differ in case between the identity source and the users row (LDAP
+    sAMAccountName is usually lower-case), so `user_email("aungaung")` returned
+    None for a row stored as "AungAung" and the "ticket created" mail was skipped
+    while every in-app signal still fired. Matching case-insensitively removes a
+    silent, hard-to-notice failure from the escalation path.
+    """
+    if not username:
+        return None
     from app.persistence.database import SessionLocal
     from sqlalchemy import text as _t
     try:
         with SessionLocal() as s:
-            row = s.execute(_t("SELECT email FROM users WHERE username = :u"),
-                            {"u": username}).first()
+            row = s.execute(
+                _t("SELECT email FROM users WHERE lower(username) = lower(:u) LIMIT 1"),
+                {"u": username},
+            ).first()
         return row[0] if row and row[0] else None
     except Exception:  # noqa: BLE001
         return None
