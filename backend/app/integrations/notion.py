@@ -161,7 +161,10 @@ def test_connection() -> dict:
             r = client.post(
                 f"{_API}/search",
                 headers=_headers(cfg),
-                json={"page_size": 1},
+                # page_size=100 rather than 1: the previous probe always reported
+                # "1 page(s) visible" even when several were shared, because it only
+                # ever asked for one result. Same single request, honest number.
+                json={"page_size": 100, "filter": {"property": "object", "value": "page"}},
             )
         if r.status_code == 401:
             return {"ok": False, "message": "Invalid token (HTTP 401) — check the integration secret"}
@@ -173,9 +176,10 @@ def test_connection() -> dict:
         body = r.json()
         results = body.get("results") or []
         if results:
+            more = " (more than 100 — pagination continues during sync)" if body.get("has_more") else ""
             return {
                 "ok": True,
-                "message": f"Connected — {len(results)} page(s)/database(s) visible to the integration",
+                "message": f"Connected — {len(results)} page(s) visible to the integration{more}",
             }
         return {
             "ok": True,
