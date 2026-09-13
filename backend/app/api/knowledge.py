@@ -278,6 +278,38 @@ def article_delete(page_id: str, user: str = Depends(get_current_user),
 
 
 # --------------------------------------------------------------------------
+# P3c — KB re-classification audit
+#   /api/knowledge/reclassify          start a run (background thread)
+#   /api/knowledge/reclassify/status   progress + the proposed diff
+# The LLM classifies every article; the admin reviews the diff before applying.
+# --------------------------------------------------------------------------
+
+
+@router.post("/api/knowledge/reclassify")
+def reclassify_start(req: dict | None = None,
+                     user: str = Depends(get_current_user),
+                     role: str = Depends(require_role("admin", "agent"))) -> dict:
+    """Start re-classifying the KB with the LLM. `{"apply": true}` also applies it."""
+    from app.knowledge.reclassify import start_reclassify
+
+    body = req or {}
+    try:
+        limit = max(1, min(1000, int(body.get("limit") or 250)))
+    except (TypeError, ValueError):
+        limit = 250
+    return start_reclassify(limit=limit, apply=bool(body.get("apply")))
+
+
+@router.get("/api/knowledge/reclassify/status")
+def reclassify_progress(user: str = Depends(get_current_user),
+                        role: str = Depends(require_role("admin", "agent"))) -> dict:
+    """Poll progress; `changes` is the proposed (or applied) diff."""
+    from app.knowledge.reclassify import reclassify_status
+
+    return reclassify_status()
+
+
+# --------------------------------------------------------------------------
 # Settings (Phase 10.1)
 #   /api/settings            user prefs (GET/PUT)
 #   /api/admin/settings      RAG-tuning overrides (admin only, GET/PUT/DELETE)

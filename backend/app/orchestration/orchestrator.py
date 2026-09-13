@@ -120,7 +120,10 @@ def run_rag(query: str, history: list[dict] | None = None, top_k: int | None = N
     """
     from app.runtime import get as runtime_get
 
-    domain, domain_conf = classify_domain(query)      # (classifier, outside diagram block)
+    # P3 — LLM classifier first; keyword classifier as the guaranteed fallback.
+    from app.classifier.llm_classifier import classify_domain_smart
+
+    domain, domain_conf, _reason = classify_domain_smart(query)  # (classifier, outside diagram block)
     rewritten = _query_rewrite(query, history)         # 1. Query Rewrite
     if top_k is not None:
         used_top_k = int(top_k)

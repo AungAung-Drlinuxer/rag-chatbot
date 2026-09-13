@@ -80,6 +80,24 @@ def _effective_domain(art: dict) -> str:
 
     # Title signal first (more reliable than body keywords) — v0.10.8.
     title = art.get("title", "") or ""
+
+    # P3 — ask the LLM (it understands topic, not just substrings) using the title
+    # plus a body sample, and keep the keyword cascade underneath. Ingest is async
+    # (Celery) so the extra call costs no user-visible latency, and any LLM failure
+    # falls through to the keyword path below.
+    try:
+        from app.classifier.llm_classifier import classify_domain_llm
+
+        sample = f"{title}\n\n{(art.get('body') or '')[:1200]}"
+        got = classify_domain_llm(sample)
+        if got:
+            d, conf, reason = got
+            if conf >= 0.6:
+                logger.info("ingest classify: %r -> %s (%.2f, %s)", title[:50], d, conf, reason)
+                return d
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("ingest LLM classify unavailable (%s) — keyword path", exc)
+
     d, conf = classify_domain(title)
     if conf >= 0.75:
         return d

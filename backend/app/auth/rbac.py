@@ -5,6 +5,8 @@ usernames (e.g. `dev`) to admin so the whole flow stays testable without a direc
 """
 from __future__ import annotations
 
+import time
+
 from fastapi import Depends, HTTPException, status
 
 from app.auth.deps import get_current_user
@@ -104,18 +106,71 @@ def require_role(*roles: str):
 
 
 def jira_route(domain: str | None) -> dict:
-    """Per-domain Jira routing: domain → {project, assignee}. Falls back to defaults."""
+    """Per-domain Jira routing: domain → {project, assignee}.
+
+    P4 — the admin edits `jira_project` / `jira_assignee` per domain in the
+    Knowledge page's "Domains & Routing Engine", but this function only read the
+    `DOMAIN_JIRA_ROUTING` env string, which was empty — so those fields were a
+    silent no-op and every ticket went to the global default. Verified live before
+    the fix: DOMAIN_JIRA_ROUTING was unset while all 11 domains advertised
+    jira_project=ITHD.
+
+    Resolution order:
+      1. `DOMAIN_JIRA_ROUTING` env (an explicit operator override, unchanged)
+      2. the domain's DB row from classifier_domains (what the UI edits)
+      3. nothing — the caller's global default applies
+    """
+    d = (domain or "").strip().lower()
+
+    # 1) explicit env override
     project, assignee = None, None
     for chunk in SETTINGS.domain_jira_routing.split(";"):
         if "=" not in chunk:
             continue
-        d, rest = chunk.split("=", 1)
-        if d.strip() == (domain or ""):
+        key, rest = chunk.split("=", 1)
+        if key.strip() == d:
             parts = [p.strip() for p in rest.split(",")]
             project = parts[0] if len(parts) > 0 else None
             assignee = parts[1] if len(parts) > 1 else None
             break
-    return {"project": project, "assignee": assignee}
+    if project:
+        return {"project": project, "assignee": assignee}
+
+    # 2) the admin-managed per-domain row
+    if d:
+        try:
+            for row in _domain_routing_map().get(d, []):
+                return {"project": row[0], "assignee": row[1]}
+        except Exception:  # noqa: BLE001
+            pass
+    return {"project": None, "assignee": None}
+
+
+_DOMAIN_ROUTE_CACHE: dict[str, object] = {"at": 0.0, "data": {}}
+_DOMAIN_ROUTE_TTL = 60.0
+
+
+def _domain_routing_map() -> dict:
+    """domain_key → [(project, assignee)] from classifier_domains, cached 60s."""
+    now = time.time()
+    cached = _DOMAIN_ROUTE_CACHE
+    if cached["data"] and (now - float(cached["at"])) < _DOMAIN_ROUTE_TTL:
+        return cached["data"]  # type: ignore[return-value]
+
+    from sqlalchemy import text
+
+    from app.persistence.database import SessionLocal
+
+    out: dict = {}
+    with SessionLocal() as s:
+        rows = s.execute(text(
+            "SELECT domain_key, jira_project, jira_assignee FROM classifier_domains "
+            "WHERE is_active = true AND jira_project IS NOT NULL AND jira_project <> ''"
+        )).fetchall()
+    for key, proj, asg in rows:
+        out.setdefault((key or "").lower(), []).append((proj, asg))
+    cached["at"], cached["data"] = now, out
+    return out
 
 
 # --- v0.21.57 — effective role (role_override aware) + capability enforcement -----

@@ -36,6 +36,7 @@ import {
 
 import { PageShell, PageHeader } from "@/components/ui/page";
 import { providerOf } from "@/lib/kbProvider";
+import ReclassifyPanel from "../components/ReclassifyPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -596,6 +597,13 @@ export default function Knowledge({
                   </Button>
                 )}
               </div>
+
+              {/* P3c — LLM re-classification audit. Gated on manage_domains, since
+                  this changes domain assignment (the same capability as the
+                  Domains & Routing engine). */}
+              {canManageDomains && (
+                <ReclassifyPanel onApplied={() => { void loadList(chip, query); void loadBrowse(); }} />
+              )}
 
               <Card className="rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">

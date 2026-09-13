@@ -76,10 +76,18 @@ class RAGState(TypedDict):
 
 def _node_classify(state: RAGState) -> dict:
     from app.observability.telemetry import start_span
-    from app.orchestration.orchestrator import classify_domain
+
+    # P3 — LLM classification first (accurate, handles Burmese and generic
+    # questions); the keyword classifier remains the fallback so an LLM outage or
+    # an air-gapped deployment degrades instead of failing.
+    from app.classifier.llm_classifier import classify_domain_smart
 
     with start_span("graph.classify_domain", {"question": state["question"][:60]}):
-        domain, _conf = classify_domain(state["question"])
+        domain, _conf, reason = classify_domain_smart(state["question"])
+    # NB: only declared RAGState keys may be returned to LangGraph, so the reason is
+    # logged rather than added to the state (an undeclared key is dropped and would
+    # silently make the trace lie).
+    logger.debug("classified %r -> %s (%s)", state["question"][:40], domain, reason)
     return {"domain": domain}
 
 
