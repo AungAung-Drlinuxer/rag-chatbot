@@ -171,7 +171,10 @@ def _build_local_ollama():
 
     llm = ChatOllama(model=SETTINGS.fallback_llm_model, base_url=SETTINGS.ollama_url,
                      streaming=True, temperature=0.1,
-                     num_predict=1024,  # v1.6.24 — 256 cut local answers short; 1024 allows complete guides
+                     # v1.6.29 — user request: allow up-to-4096-token local answers
+                     # (1024 still cut long runbooks). KV cache scales with num_ctx
+                     # (unchanged), so output length does not add memory pressure.
+                     num_predict=4096,
                      num_ctx=4096)
     # v1.6.24 — local models tend to under-elaborate; append the depth rule so the
     # answer length approaches the cloud engine's quality.
