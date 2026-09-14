@@ -58,3 +58,23 @@ export async function listArticles(queryString: string) {
   const r = await apiFetch(`${BASE}/api/articles-list?${queryString}`, { headers: authHeaders() });
   return r.json(); // { articles }
 }
+
+// --- v1.6.47 — bulk operations for the Manage table -------------------------
+// Moving or deleting 229 articles one row at a time is not a workflow.
+export async function bulkMoveArticles(page_ids: string[], domain: string) {
+  const r = await apiFetch(`${BASE}/api/knowledge/articles/bulk-move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ page_ids, domain }),
+  });
+  return { status: r.status, data: await r.json() };
+}
+
+export async function bulkDeleteArticles(page_ids: string[]) {
+  const r = await apiFetch(`${BASE}/api/knowledge/articles/bulk-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ page_ids }),
+  });
+  return { status: r.status, data: await r.json() };
+}

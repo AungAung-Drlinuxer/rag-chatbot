@@ -32,6 +32,13 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
     }
   }, []);
 
+  // P0#4 — refresh the article list and the domain counts the moment an apply
+  // completes, instead of leaving the admin to notice the list is stale.
+  useEffect(() => {
+    if (st?.state === "done" && st.applied && onApplied) onApplied();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [st?.state, st?.applied]);
+
   useEffect(() => {
     if (open) void poll();
     return () => {
@@ -59,6 +66,7 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
   }
 
   const running = st?.state === "running";
+  const lowCount = (st?.changes ?? []).filter((c) => c.confidence < 0.75).length;
   const pct = st && st.total > 0 ? Math.round((st.done / st.total) * 100) : 0;
 
   if (!open) {
@@ -126,7 +134,8 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
                 ? `Failed: ${st.error}`
                 : st.applied
                   ? `Applied ${st.applied_count ?? st.changed} change(s) across ${st.total} article(s).`
-                  : `${st.changed} of ${st.total} article(s) should change.`}
+                  : `${st.changed} of ${st.total} article(s) should change` +
+                    (lowCount > 0 ? ` · ${lowCount} need review (<75%)` : "")}
           </span>
         )}
       </div>
@@ -147,24 +156,48 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
                 <th className="px-3 py-2 font-semibold">Article</th>
                 <th className="px-3 py-2 font-semibold">Now</th>
                 <th className="px-3 py-2 font-semibold">Suggested</th>
+                <th className="px-3 py-2 font-semibold">Confidence</th>
                 <th className="px-3 py-2 font-semibold">Why</th>
               </tr>
             </thead>
             <tbody>
-              {st.changes.map((c) => (
-                <tr key={c.page_id} className="border-t border-[var(--border)]/60">
-                  <td className="max-w-[240px] truncate px-3 py-2 font-medium">{c.title}</td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline" className="text-[10px]">{c.current}</Badge>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline" className="border-blue-200 bg-blue-50 text-[10px] text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
-                      {c.suggested} · {Math.round(c.confidence * 100)}%
-                    </Badge>
-                  </td>
-                  <td className="max-w-[280px] px-3 py-2 text-muted-foreground">{c.reason}</td>
-                </tr>
-              ))}
+              {st.changes.map((c) => {
+                /* P0#3 — confidence drives the review. A 0.70 suggestion and a 1.00
+                   suggestion are not the same claim, and the re-classification run
+                   moved 165 articles, so the admin needs the uncertain ones pushed to
+                   the front rather than buried in a flat list. */
+                const low = c.confidence < 0.75;
+                return (
+                  <tr key={c.page_id} className={`border-t border-[var(--border)]/60 ${low ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}>
+                    <td className="max-w-[240px] truncate px-3 py-2 font-medium">
+                      {low && <AlertTriangle className="mr-1 inline size-3 text-amber-500" />}
+                      {c.title}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant="outline" className="text-[10px]">{c.current}</Badge>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-[10px] text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+                        {c.suggested}
+                      </Badge>
+                    </td>
+                    <td className="w-24 px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          <div
+                            className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`}
+                            style={{ width: `${Math.round(c.confidence * 100)}%` }}
+                          />
+                        </div>
+                        <span className={`text-[10px] font-semibold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                          {Math.round(c.confidence * 100)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="max-w-[280px] px-3 py-2 text-muted-foreground">{c.reason}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

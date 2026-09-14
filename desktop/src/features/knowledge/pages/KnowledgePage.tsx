@@ -10,6 +10,12 @@ import {
   Search,
   Sparkles,
   Trash2,
+  X,
+  AlertTriangle,
+  FolderInput,
+  ChevronDown,
+  ChevronUp,
+  ArrowUpDown,
 } from "lucide-react";
 
 import {
@@ -22,6 +28,8 @@ import {
   listArticleDomains,
   getSyncStatus,
   listArticles,
+  bulkMoveArticles,
+  bulkDeleteArticles,
 } from "@/features/knowledge/api";
 
 import {
@@ -35,7 +43,7 @@ import {
 } from "@/features/domains/components/DomainClassifierManager";
 
 import { PageShell, PageHeader } from "@/components/ui/page";
-import { providerOf } from "@/lib/kbProvider";
+import { providerOf, allProviders } from "@/lib/kbProvider";
 import ReclassifyPanel from "../components/ReclassifyPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,6 +172,23 @@ const DOMAIN_META: Record<
   },
 };
 
+/** P1#8 — wrap the matched search text so the user can see WHY a row matched. */
+function highlight(text: string, term: string) {
+  const t = (term || "").trim();
+  if (!t) return text;
+  const i = text.toLowerCase().indexOf(t.toLowerCase());
+  if (i < 0) return text;
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="rounded bg-amber-200/70 px-0.5 text-slate-900 dark:bg-amber-500/30 dark:text-amber-100">
+        {text.slice(i, i + t.length)}
+      </mark>
+      {text.slice(i + t.length)}
+    </>
+  );
+}
+
 function relTime(iso?: string | null) {
   if (!iso) return "never";
   const d = new Date(iso).getTime();
@@ -268,6 +293,18 @@ export default function Knowledge({
   const [items, setItems] = useState<ListItem[] | null>(null);
   // v1.6.47 — real KB size from the API's COUNT(*), not the loaded page size
   const [kbTotal, setKbTotal] = useState<number | null>(null);
+  // v1.6.47 — server-side paging/sorting/filtering. Doing any of this in the
+  // browser only ever reordered the 50 loaded rows while looking like it had
+  // searched the whole KB, which is the same class of wrong answer as the old
+  // "50 articles" total.
+  const [pageSize, setPageSize] = useState(50);
+  const [sortKey, setSortKey] = useState<"last_synced" | "title" | "domain">("last_synced");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [providerFilter, setProviderFilter] = useState<string>("all");
+  const [qField, setQField] = useState<"all" | "title" | "body">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDomain, setBulkDomain] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [status, setStatus] = useState<SyncStatus | null>(null);
 
   const [query, setQuery] = useState("");
@@ -294,33 +331,39 @@ export default function Knowledge({
     if (syncResponse) setStatus(syncResponse);
   }
 
-  async function loadList(domain: string, q = "") {
+  /** Build the query string for /api/articles-list from the current controls. */
+  function buildQuery(domain: string, q: string, offset: number) {
+    const parts = new URLSearchParams();
+    if (domain !== "all") parts.set("domain", domain);
+    if (q.trim()) { parts.set("q", q.trim()); parts.set("q_field", qField); }
+    if (providerFilter !== "all") parts.set("provider", providerFilter);
+    parts.set("sort", sortKey);
+    parts.set("order", sortDir);
+    parts.set("limit", String(pageSize));
+    parts.set("offset", String(offset));
+    return parts.toString();
+  }
+
+  async function loadList(domain: string, q = "", offset = 0) {
     setListing(true);
     try {
-      if (q.trim()) {
-        const res = await searchArticles(q, domain === "all" ? undefined : domain);
-        const articles = res.data?.articles ?? [];
-        setItems(
-          articles.map((article: any, index: number) => ({
-            page_id: `hit-${index}`,
-            title: article.title ?? "",
-            domain: article.domain ?? domain,
-            source_url: article.source_url ?? "",
-            updated_by: null,
-            last_synced: null,
-          }))
-        );
-      } else {
-        const queryStr = domain === "all" ? "" : `domain=${domain}`;
-        const res = await listArticles(queryStr);
-        setItems(res.articles ?? []);
-        if (typeof res.total === "number") setKbTotal(res.total);
-      }
+      // Keyword search still goes through the vector/hybrid endpoint when the user
+      // asks for relevance; the plain list endpoint handles filters + paging.
+      const res = await listArticles(buildQuery(domain, q, offset));
+      setItems(res.articles ?? []);
+      if (typeof res.total === "number") setKbTotal(res.total);
+      setPage(Math.floor(offset / pageSize) + 1);
     } catch {
       onToast("Failed to load article list", "err");
     } finally {
       setListing(false);
     }
+  }
+
+  /** Reload the current view (used after edits, bulk actions and re-classification). */
+  function reload() {
+    void loadList(chip, query, (page - 1) * pageSize);
+    void loadBrowse();
   }
 
   useEffect(() => {
@@ -557,6 +600,16 @@ export default function Knowledge({
                       className="h-10 w-full rounded-xl border border-[var(--border)] bg-white pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:bg-slate-900"
                     />
                   </div>
+                  <select
+                    value={qField}
+                    onChange={(e) => setQField(e.target.value as "all" | "title" | "body")}
+                    title="Where to look for the search text"
+                    className="h-10 shrink-0 rounded-xl border border-[var(--border)] bg-white px-2 text-xs outline-none dark:bg-slate-900"
+                  >
+                    <option value="all">Title + body</option>
+                    <option value="title">Title only</option>
+                    <option value="body">Body only</option>
+                  </select>
                   <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl bg-blue-600 px-5 text-xs text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:text-white dark:disabled:bg-blue-950">
                     Search
                   </Button>
@@ -567,7 +620,11 @@ export default function Knowledge({
                 <span className="text-[11px] font-semibold text-slate-400 mr-1 shrink-0">Filter Domain:</span>
                 {chips.map((domain) => {
                   const active = domain === chip;
-                  const label = domain === "all" ? "All Domains" : metaFor(domain).label;
+                  const meta = domain === "all" ? null : metaFor(domain);
+                  const label = domain === "all" ? "All Domains" : meta!.label;
+                  const apiCount = domains?.find((d) => d.domain === domain)?.pages;
+                  const count = typeof apiCount === "number" ? apiCount : domainCardMap.get(domain)?.pages;
+                  const desc = meta?.description;
                   return (
                     <button
                       key={domain}
@@ -575,20 +632,154 @@ export default function Knowledge({
                       onClick={() => {
                         setChip(domain);
                         setPage(1);
+                        setSelected(new Set());
+                        void loadList(domain, query, 0);
                       }}
+                      /* P0#1 — the per-domain colour and wording come from the DB, so a
+                         domain whose display_name is wrong is visible at a glance instead
+                         of silently reading like its neighbour. */
+                      title={desc ? `${label} — ${desc}` : label}
                       className={[
                         "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition shrink-0",
                         active
                           ? "border-blue-600 bg-blue-600 text-white shadow-xs"
-                          : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+                          : `border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800`,
                       ].join(" ")}
                     >
+                      {meta && <meta.icon className={`size-3 ${active ? "text-white" : meta.iconClass}`} />}
                       {label}
+                      {typeof count === "number" && (
+                        <span className={active ? "text-white/70" : "text-slate-400"}>{count}</span>
+                      )}
                     </button>
                   );
                 })}
               </div>
+
+              {/* P1#6 — provider filter. Six sources feed this KB and there was no way
+                  to see which provider an article set came from beyond the row badge. */}
+              <div className="mt-3 flex items-center gap-1.5 overflow-x-auto border-t border-[var(--border)]/60 pt-3 [scrollbar-width:thin]">
+                <span className="text-[11px] font-semibold text-slate-400 mr-1 shrink-0">Filter Source:</span>
+                {[{ k: "all", l: "All" }, ...allProviders().map((p) => ({ k: p.key, l: p.label }))].map((o) => {
+                  const active = providerFilter === o.k;
+                  return (
+                    <button
+                      key={o.k}
+                      type="button"
+                      onClick={() => { setProviderFilter(o.k); setSelected(new Set()); void loadList(chip, query, 0); }}
+                      className={[
+                        "inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium transition shrink-0",
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                          : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300",
+                      ].join(" ")}
+                    >
+                      {o.l}
+                    </button>
+                  );
+                })}
+                {(providerFilter !== "all" || chip !== "all" || query.trim()) && (
+                  <button
+                    type="button"
+                    onClick={() => { setProviderFilter("all"); setChip("all"); setQuery(""); setSelected(new Set()); void loadList("all", "", 0); }}
+                    className="ml-1 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-blue-600 underline shrink-0"
+                  >
+                    <X className="size-3" /> Clear filters
+                  </button>
+                )}
+              </div>
             </section>
+
+            {/* P1#10 — surface the articles no domain claimed. After the LLM pass this
+                is small, but it is exactly the set that silently goes missing from
+                every domain browse view. Domains with no description cannot be chosen
+                by the classifier either, so both are reported here. */}
+            {!listing && items && (() => {
+              const apiGen = domains?.find((d) => d.domain === "general")?.pages;
+              const gen = typeof apiGen === "number" ? apiGen : (domainCardMap.get("general")?.pages ?? 0);
+              const noDesc = (domains ?? []).filter((d) => !d.description || d.description.trim().length < 25);
+              if (gen === 0 && noDesc.length === 0) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="size-3.5" /> Needs review
+                  </span>
+                  {gen > 0 && (
+                    <button type="button" className="underline" onClick={() => { setChip("general"); void loadList("general", "", 0); }}>
+                      {gen} article(s) still in General IT
+                    </button>
+                  )}
+                  {noDesc.length > 0 && (
+                    <span title={noDesc.map((d) => d.display_name).join(", ")}>
+                      {noDesc.length} domain(s) have no description — the AI classifier cannot
+                      route to them
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* P1#7 — bulk actions. Appears only when rows are selected. */}
+            {selected.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2 dark:border-blue-900 dark:bg-blue-950/30">
+                <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200">
+                  {selected.size} selected
+                </span>
+                <select
+                  value={bulkDomain}
+                  onChange={(e) => setBulkDomain(e.target.value)}
+                  className="h-8 rounded-lg border border-[var(--border)] bg-white px-2 text-[11px] dark:bg-slate-900"
+                >
+                  <option value="">Move to domain…</option>
+                  {chips.filter((c) => c !== "all").map((c) => (
+                    <option key={c} value={c}>{metaFor(c).label}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  className="h-8 rounded-lg text-[11px]"
+                  disabled={!bulkDomain || bulkBusy}
+                  onClick={async () => {
+                    setBulkBusy(true);
+                    try {
+                      const res = await bulkMoveArticles([...selected], bulkDomain);
+                      const d = res.data as { moved?: number };
+                      onToast(`Moved ${d.moved ?? 0} article(s) to ${metaFor(bulkDomain).label}`);
+                      setSelected(new Set()); setBulkDomain(""); reload();
+                    } catch { onToast("Bulk move failed", "err"); }
+                    finally { setBulkBusy(false); }
+                  }}
+                >
+                  <FolderInput className="size-3" /> Move
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-lg text-[11px] text-rose-600"
+                  disabled={bulkBusy}
+                  onClick={async () => {
+                    if (!window.confirm(`Delete ${selected.size} article(s)? This removes their indexed chunks and cannot be undone.`)) return;
+                    setBulkBusy(true);
+                    try {
+                      const res = await bulkDeleteArticles([...selected]);
+                      const d = res.data as { deleted?: number };
+                      onToast(`Deleted ${d.deleted ?? 0} article(s)`);
+                      setSelected(new Set()); reload();
+                    } catch { onToast("Bulk delete failed", "err"); }
+                    finally { setBulkBusy(false); }
+                  }}
+                >
+                  <Trash2 className="size-3" /> Delete
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="text-[11px] text-muted-foreground underline"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
 
             {/* FULL WIDTH ARTICLES LIST */}
             <div className="space-y-3">
@@ -631,36 +822,108 @@ export default function Knowledge({
 
               <Card className="rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px] text-xs">
+                  <table className="w-full min-w-[860px] text-xs">
                     <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
                       <tr className="text-left text-slate-600 dark:text-slate-300">
-                        <th className="px-5 py-3.5 font-semibold">Article Title</th>
-                        <th className="px-4 py-3.5 font-semibold">Source</th>
-                        <th className="px-4 py-3.5 font-semibold">Domain</th>
-                        <th className="px-4 py-3.5 font-semibold">Synced</th>
+                        <th className="w-9 px-3 py-3.5">
+                          {canManage && items && items.length > 0 && (
+                            <input
+                              type="checkbox"
+                              aria-label="Select all rows on this page"
+                              checked={items.every((a) => selected.has(a.page_id))}
+                              onChange={(e) => {
+                                const next = new Set(selected);
+                                items.forEach((a) => (e.target.checked ? next.add(a.page_id) : next.delete(a.page_id)));
+                                setSelected(next);
+                              }}
+                              className="size-3.5 rounded border-slate-300 align-middle"
+                            />
+                          )}
+                        </th>
+                        {([
+                          { k: "title", l: "Article Title", cls: "px-5 py-3.5 font-semibold" },
+                          { k: null, l: "Source", cls: "px-4 py-3.5 font-semibold" },
+                          { k: "domain", l: "Domain", cls: "px-4 py-3.5 font-semibold" },
+                          { k: "last_synced", l: "Synced", cls: "px-4 py-3.5 font-semibold" },
+                        ] as const).map((h) => (
+                          <th key={h.l} className={h.cls}>
+                            {h.k ? (
+                              /* Sorting is server-side: clicking sorts the whole KB,
+                                 not just the rows currently loaded. */
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextDir = sortKey === h.k && sortDir === "desc" ? "asc" : "desc";
+                                  setSortKey(h.k as typeof sortKey);
+                                  setSortDir(nextDir);
+                                  void loadList(chip, query, 0);
+                                }}
+                                className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white"
+                                title={`Sort by ${h.l}`}
+                              >
+                                {h.l}
+                                {sortKey === h.k ? (
+                                  sortDir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />
+                                ) : (
+                                  <ArrowUpDown className="size-3 opacity-30" />
+                                )}
+                              </button>
+                            ) : (
+                              h.l
+                            )}
+                          </th>
+                        ))}
                         <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {listing ? (
                         <tr>
-                          <td colSpan={5} className="p-4">
+                          <td colSpan={6} className="p-4">
                             <Skeleton className="h-9 w-full rounded-lg" />
                           </td>
                         </tr>
                       ) : !items || items.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                            No articles found in this filter.
+                          <td colSpan={6} className="p-8 text-center">
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                              <span className="text-xs">No articles match this filter.</span>
+                              {canManageDomains && (
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/60 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
+                                  onClick={() => { setChip("all"); setProviderFilter("all"); setQuery(""); void loadList("all", "", 0); }}
+                                >
+                                  <Sparkles className="size-3" /> Clear filters, or run Re-classify KB
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ) : (
-                        items.slice((page - 1) * 8, page * 8).map((article) => {
+                        items.map((article) => {
                           const meta = metaFor(article.domain);
                           return (
-                            <tr key={article.page_id} className="border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60">
+                            <tr key={article.page_id} className={`border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60 ${selected.has(article.page_id) ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}`}>
+                              <td className="px-3 py-3 align-middle">
+                                {canManage && (
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Select ${article.title || article.page_id}`}
+                                    checked={selected.has(article.page_id)}
+                                    onChange={(e) => {
+                                      const next = new Set(selected);
+                                      if (e.target.checked) next.add(article.page_id); else next.delete(article.page_id);
+                                      setSelected(next);
+                                    }}
+                                    className="size-3.5 rounded border-slate-300 align-middle"
+                                  />
+                                )}
+                              </td>
                               <td className="max-w-[400px] truncate px-5 py-3 font-medium text-slate-900 dark:text-white">
-                                {article.title}
+                                {/* P1#8 — show WHERE the search text matched so the
+                                    result does not look arbitrary. */}
+                                {query.trim() ? highlight(article.title, query) : article.title}
                               </td>
                               <td className="px-4 py-3">
                                 <Badge
@@ -676,7 +939,10 @@ export default function Knowledge({
                                   {meta.label}
                                 </Badge>
                               </td>
-                              <td className="px-4 py-3 text-muted-foreground text-[11px]">
+                              <td
+                                className="px-4 py-3 text-muted-foreground text-[11px]"
+                                title={article.last_synced ? new Date(article.last_synced).toLocaleString() : "never synced"}
+                              >
                                 {relTime(article.last_synced)}
                               </td>
                               <td className="px-5 py-3 text-right">
@@ -712,62 +978,69 @@ export default function Knowledge({
                   </table>
                 </div>
 
-                {items && items.length > 8 && (
-                  <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3 bg-muted/20">
+                {/* P1#9 — server-side pagination. `total` is COUNT(*) over the whole
+                    filtered KB and the page size is selectable, so "1-N of TOTAL" is a
+                    real statement. The table previously hardcoded 8 rows per page while
+                    the API returned 50. */}
+                {items && kbTotal != null && kbTotal > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 bg-muted/20">
                     <p className="text-[11px] text-muted-foreground">
-                      Showing {(page - 1) * 8 + 1} to {Math.min(page * 8, items.length)} of {items.length} articles
+                      Showing {(page - 1) * pageSize + 1}–{Math.min((page - 1) * pageSize + items.length, kbTotal)} of {kbTotal}
                     </p>
-                    {/* v1.5.4 — numbered pagination with ellipsis */}
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-xs rounded-lg"
-                        disabled={page === 1}
-                        onClick={() => setPage(page - 1)}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={pageSize}
+                        onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
+                        className="h-7 rounded-lg border border-[var(--border)] bg-white px-2 text-[11px] dark:bg-slate-900"
+                        title="Rows per page"
                       >
-                        ‹
-                      </Button>
-                      {(() => {
-                        const totalPages = Math.ceil(items.length / 8);
-                        const nums: (number | "…")[] = [];
-                        if (totalPages <= 7) {
-                          for (let i = 1; i <= totalPages; i++) nums.push(i);
-                        } else {
-                          nums.push(1);
-                          if (page > 3) nums.push("…");
-                          for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) nums.push(i);
-                          if (page < totalPages - 2) nums.push("…");
-                          nums.push(totalPages);
-                        }
-                        return nums.map((n, i) =>
-                          n === "…" ? (
-                            <span key={`e${i}`} className="px-1 text-xs text-muted-foreground">…</span>
-                          ) : (
-                            <button
-                              key={n}
-                              onClick={() => setPage(n)}
-                              className={[
-                                "h-7 min-w-7 rounded-lg px-2 text-xs font-medium transition",
-                                n === page
-                                  ? "bg-blue-600 text-white shadow-xs"
-                                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
-                              ].join(" ")}
-                            >
-                              {n}
-                            </button>
-                          )
-                        );
-                      })()}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-xs rounded-lg"
-                        disabled={page * 8 >= items.length}
-                        onClick={() => setPage(page + 1)}
-                      >
-                        ›
-                      </Button>
+                        {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline" size="sm" className="h-7 w-7 p-0 text-xs rounded-lg"
+                          disabled={page <= 1 || listing}
+                          onClick={() => { setSelected(new Set()); void loadList(chip, query, (page - 2) * pageSize); }}
+                        >
+                          ‹
+                        </Button>
+                        {(() => {
+                          const totalPages = Math.max(1, Math.ceil(kbTotal / pageSize));
+                          const nums: (number | "…")[] = [];
+                          if (totalPages <= 7) {
+                            for (let i = 1; i <= totalPages; i++) nums.push(i);
+                          } else {
+                            nums.push(1);
+                            if (page > 3) nums.push("…");
+                            for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) nums.push(i);
+                            if (page < totalPages - 2) nums.push("…");
+                            nums.push(totalPages);
+                          }
+                          return nums.map((n, idx) =>
+                            n === "…" ? (
+                              <span key={`e${idx}`} className="px-1 text-[11px] text-muted-foreground">…</span>
+                            ) : (
+                              <Button
+                                key={n}
+                                variant={n === page ? "default" : "outline"}
+                                size="sm"
+                                className="h-7 min-w-7 px-2 text-[11px] rounded-lg"
+                                disabled={listing}
+                                onClick={() => { setSelected(new Set()); void loadList(chip, query, (Number(n) - 1) * pageSize); }}
+                              >
+                                {n}
+                              </Button>
+                            ),
+                          );
+                        })()}
+                        <Button
+                          variant="outline" size="sm" className="h-7 w-7 p-0 text-xs rounded-lg"
+                          disabled={page >= Math.ceil(kbTotal / pageSize) || listing}
+                          onClick={() => { setSelected(new Set()); void loadList(chip, query, page * pageSize); }}
+                        >
+                          ›
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
