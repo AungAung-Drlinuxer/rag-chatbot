@@ -266,6 +266,8 @@ export default function Knowledge({
   };
 
   const [items, setItems] = useState<ListItem[] | null>(null);
+  // v1.6.47 — real KB size from the API's COUNT(*), not the loaded page size
+  const [kbTotal, setKbTotal] = useState<number | null>(null);
   const [status, setStatus] = useState<SyncStatus | null>(null);
 
   const [query, setQuery] = useState("");
@@ -312,6 +314,7 @@ export default function Knowledge({
         const queryStr = domain === "all" ? "" : `domain=${domain}`;
         const res = await listArticles(queryStr);
         setItems(res.articles ?? []);
+        if (typeof res.total === "number") setKbTotal(res.total);
       }
     } catch {
       onToast("Failed to load article list", "err");
@@ -493,7 +496,11 @@ export default function Knowledge({
                   activeTab === "articles" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
                 ].join(" ")}
               >
-                {items ? items.length : "…"}
+                {kbTotal != null
+                  ? `${kbTotal}${items && items.length < kbTotal ? ` · ${items.length} shown` : ""}`
+                  : items
+                    ? items.length
+                    : "…"}
               </span>
             </button>
 

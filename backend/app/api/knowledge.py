@@ -222,15 +222,23 @@ def articles_list(domain: str | None = None, q: str | None = None, limit: int = 
     sql = ("SELECT page_id, title, domain, source_url, updated_by, last_synced "
            f"FROM kb_meta WHERE {' AND '.join(where)} "
            "ORDER BY last_synced DESC NULLS LAST LIMIT :lim")
+    # v1.6.47 — `total` used to be `len(articles)`, i.e. the number of ROWS RETURNED
+    # by a query capped at `limit` (default 50). The Knowledge page header therefore
+    # read "Knowledge Base Articles 50" for a KB of 229 articles — a wrong fact, not
+    # just a truncated view. Count with the same WHERE clause so the number is the
+    # real size of what this user may see.
+    count_sql = f"SELECT count(*) FROM kb_meta WHERE {' AND '.join(where)}"
+    count_params = {k: v for k, v in params.items() if k != "lim"}
     with SessionLocal() as s:
         rows = s.execute(_text(sql), params).mappings().all()
+        total = s.execute(_text(count_sql), count_params).scalar() or 0
     articles = [
         {"page_id": r["page_id"], "title": r["title"], "domain": r["domain"] or "general",
          "source_url": r["source_url"], "updated_by": r["updated_by"],
          "last_synced": r["last_synced"].isoformat() if r["last_synced"] else None}
         for r in rows
     ]
-    return {"articles": articles, "total": len(articles)}
+    return {"articles": articles, "total": int(total), "returned": len(articles)}
 
 
 @router.get("/api/sync-status")
