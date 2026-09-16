@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     # In-cluster service DNS for the rancher-mcp Deployment. Empty disables the
     # whole feature: the graph simply never runs an infrastructure lookup.
     mcp_rancher_url: str = "http://rancher-mcp:8080"
+    # Downstream (Rancher-managed) clusters come from a SECOND server process,
+    # because the upstream server refuses to combine kubeconfig access with
+    # per-request token auth. Used only when a Rancher token is configured.
+    mcp_mgmt_url: str = "http://rancher-mcp-mgmt:8080"
     mcp_enabled: bool = True
     mcp_timeout_s: float = 20.0
     # Bounded ReAct loop: each step is an LLM call plus tool calls, so this is the

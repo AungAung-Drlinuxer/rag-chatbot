@@ -179,7 +179,7 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
 INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama",
-                    "openproject", "xwiki", "notion", "clickup"}
+                    "openproject", "xwiki", "notion", "clickup", "mcp"}
 
 def _reload_after_change(key: str) -> None:
     """Drop any in-process cache that mirrors the integration config we just wrote."""
@@ -189,6 +189,11 @@ def _reload_after_change(key: str) -> None:
     if key == "jira":
         from app.integrations.jira import reload_jira_cfg
         reload_jira_cfg()
+    if key == "mcp":
+        # The MCP client caches its session, tool catalogue and URL; drop it so the
+        # next request picks up a new endpoint without a pod restart.
+        from app.mcp import client as _mcp_client
+        _mcp_client._client = None
 
 
 @router.get("/settings/integrations/{key}")
@@ -409,10 +414,36 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
             result = _cu_test()
             status = 200 if result.get("ok") else 502
             detail = result.get("message", "")
+        elif key == "mcp":
+            # Live probe of the MCP server: handshake + tool catalogue. Reports the
+            # curated subset so an admin can see the feature actually works rather
+            # than just "reachable".
+            from app.mcp import client as _mcp_client
+            _mcp_client._client = None  # always test the CURRENT saved config
+            cli = _mcp_client.get_client()
+            cli.initialize()
+            names = [t.get("name") for t in cli.list_tools()]
+            from app.mcp.infra_agent import CURATED_TOOLS
+            curated = [n for n in CURATED_TOOLS if n in names]
+            detail = ("connected — %d tool(s) available, %d curated for the assistant"
+                      % (len(names), len(curated)))
+            result = {"ok": True, "message": detail,
+                      "tools_available": len(names), "tools_curated": curated}
+            status = 200
         else:
             raise ValueError(f"no test for {key}")
         if status in (200, 201):
-            return {"ok": True, "status": status}
+            # Pass through any extra evidence the probe collected. MCP reports the
+            # tool catalogue here, and dropping it made the Settings card claim
+            # success while showing nothing about what was actually reachable.
+            payload = {"ok": True, "status": status}
+            if isinstance(result, dict):
+                for k, v in result.items():
+                    if k not in ("ok", "status"):
+                        payload[k] = v
+            if detail and "detail" not in payload:
+                payload["detail"] = detail
+            return payload
         return {"ok": False, "status": status, "detail": detail}
     except Exception as exc:
         return {"ok": False, "detail": str(exc)[:200]}

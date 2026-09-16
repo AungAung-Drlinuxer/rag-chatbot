@@ -1,0 +1,100 @@
+---
+# Phase 2 — DOWNSTREAM cluster access via the Rancher management API.
+#
+# WHY A SECOND DEPLOYMENT
+# The upstream server rejects the combination outright:
+#   "kubeconfig_paths cannot be combined with rancher_request_token_auth"
+# so a single process cannot serve both the local cluster (kubeconfig) and the
+# Rancher-managed downstream clusters (management API). This instance does the
+# latter; 10-deployment.yaml does the former. The backend selects between them
+# depending on whether a Rancher token has been configured in Settings.
+#
+# WHY PER-REQUEST TOKEN MODE
+# A static bearer token here would be one broadly-privileged identity shared by
+# every chatbot user and sitting in a Secret forever. With RequestTokenAuth the
+# backend forwards the token from Settings on each call instead, which means:
+#   - scope is exactly what that token's Rancher role allows (bind it to a
+#     read-only global role and no write is possible from here either)
+#   - it is revocable in Rancher without touching this Deployment
+#   - it is never written into a manifest or read back out of the app
+#   - a different token per tenant/per admin becomes possible later
+#
+# This instance exposes NO kubeconfig and therefore cannot reach anything the token
+# cannot. Verified: with RequestTokenAuth set and no static credentials the server
+# starts and reports `rancher=available`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rancher-mcp-mgmt-config
+  namespace: rag-chatbot
+data:
+  RANCHER_MCP_TOOLSETS: "kubernetes,rancher"
+  RANCHER_MCP_RANCHER_SERVER_URL: "https://rke2-cluster.drlinuxer.com"
+  RANCHER_MCP_RANCHER_REQUEST_TOKEN_AUTH: "true"
+  # Only turn this on if Rancher itself uses a certificate this pod cannot verify.
+  RANCHER_MCP_RANCHER_TLS_INSECURE: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rancher-mcp-mgmt
+  namespace: rag-chatbot
+  labels:
+    app.kubernetes.io/name: rancher-mcp-mgmt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rancher-mcp-mgmt
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rancher-mcp-mgmt
+    spec:
+      containers:
+        - name: rancher-mcp
+          image: harbor.drlinuxer.com/rag-chatbot/rancher-mcp:1.0.2
+          command: ["rancher-mcp-server"]
+          args: ["--port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: rancher-mcp-mgmt-config
+          # Identical safety posture to the local instance. Reads only; the token's
+          # Rancher role is the real authority.
+          env:
+            - name: RANCHER_MCP_READ_ONLY
+              value: "true"
+            - name: RANCHER_MCP_DISABLE_DESTRUCTIVE
+              value: "true"
+            - name: RANCHER_MCP_SHOW_SENSITIVE_DATA
+              value: "false"
+            - name: RANCHER_MCP_ENABLE_CONTAINER_EXEC
+              value: "false"
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rancher-mcp-mgmt
+  namespace: rag-chatbot
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rancher-mcp-mgmt
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

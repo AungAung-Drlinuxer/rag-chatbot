@@ -25,12 +25,67 @@ import threading
 import time
 
 import httpx
+from sqlalchemy import text
 
 from app.config import SETTINGS
+from app.persistence.database import SessionLocal
 
 logger = logging.getLogger("mcp.client")
 
 _ACCEPT = "application/json, text/event-stream"
+
+
+def get_mcp_cfg() -> dict:
+    """MCP config from system_settings key='mcp', falling back to environment.
+
+    DB-first so the Settings page is authoritative and an admin can repoint or
+    disable infrastructure access without a redeploy — same precedence the other
+    integrations use. The env value (SETTINGS.mcp_rancher_url) stays as the
+    default a fresh install starts from.
+    """
+    cfg: dict = {}
+    try:
+        with SessionLocal() as s:
+            row = s.execute(text("SELECT value FROM system_settings WHERE key = 'mcp'")).first()
+        val = row[0] if row else {}
+        if isinstance(val, str):
+            try:
+                val = json.loads(val)
+            except (TypeError, ValueError):
+                val = {}
+        cfg = val or {}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("mcp cfg read failed: %s", exc)
+
+    token = str(cfg.get("rancher_token") or "").strip()
+    # Instance selection. The upstream server refuses `kubeconfig_paths` together
+    # with `rancher_request_token_auth`, so ONE process cannot serve both the local
+    # cluster and the Rancher-managed downstream ones. Two deployments exist; a
+    # configured Rancher token is the signal to use the management instance, since
+    # that token is what makes downstream clusters reachable at all.
+    #
+    # With no token we stay on the kubeconfig instance, which works on a fresh
+    # install with no credential — infrastructure lookup keeps functioning instead of
+    # going dark until someone pastes a token.
+    explicit = str(cfg.get("url") or "").strip()
+    if explicit:
+        url, mode = explicit, "explicit"
+    elif token:
+        url, mode = SETTINGS.mcp_mgmt_url, "rancher"
+    else:
+        url, mode = SETTINGS.mcp_rancher_url, "kubeconfig"
+
+    enabled_raw = cfg.get("enabled")
+    enabled = (SETTINGS.mcp_enabled if enabled_raw is None
+               else str(enabled_raw).strip().lower() in ("1", "true", "yes", "on"))
+    return {
+        "url": url.rstrip("/"),
+        "mode": mode,
+        "enabled": enabled,
+        "timeout_s": float(cfg.get("timeout_s") or SETTINGS.mcp_timeout_s),
+        "rancher_url": str(cfg.get("rancher_url") or "").strip(),
+        "rancher_token": token,
+    }
 
 
 def _parse_body(raw: str) -> dict:
@@ -58,8 +113,14 @@ def _parse_body(raw: str) -> dict:
 
 class McpClient:
     def __init__(self, url: str | None = None, timeout: float | None = None) -> None:
-        self.url = (url or SETTINGS.mcp_rancher_url or "").rstrip("/")
-        self.timeout = float(timeout or SETTINGS.mcp_timeout_s)
+        cfg = get_mcp_cfg()
+        self.cfg = cfg
+        self.url = (url or cfg["url"] or "").rstrip("/")
+        self.timeout = float(timeout or cfg["timeout_s"])
+        # When set, every MCP call carries this Rancher token. The server runs with
+        # per-request token auth, so THIS token decides which clusters are visible —
+        # that is how downstream clusters are reached without per-cluster kubeconfigs.
+        self.rancher_token = cfg.get("rancher_token") or ""
         self._session: str | None = None
         self._rid = 0
         self._lock = threading.Lock()
@@ -81,6 +142,9 @@ class McpClient:
         headers = {"Content-Type": "application/json", "Accept": _ACCEPT}
         if self._session:
             headers["mcp-session-id"] = self._session
+        if self.rancher_token:
+            # Kept out of logs and never echoed back to a client.
+            headers["Authorization"] = "Bearer " + self.rancher_token
 
         with httpx.Client(timeout=self.timeout) as client:
             r = client.post(self.url + "/mcp", json=body, headers=headers)

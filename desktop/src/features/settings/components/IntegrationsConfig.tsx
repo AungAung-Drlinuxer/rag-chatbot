@@ -3,7 +3,7 @@ import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader
 import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
 import type { ProviderModel } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "notion" | "clickup";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "notion" | "clickup" | "mcp";
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -126,6 +126,29 @@ const META: Record<IntegrationKey, {
       { key: "min_chars", label: "Minimum task text length", placeholder: "120" },
       { key: "domain", label: "KB Domain Tag (use a real domain, e.g. general)", placeholder: "general" },
       { key: "max_tasks", label: "Max tasks per sync", placeholder: "500" },
+    ],
+  },
+  mcp: {
+    label: "MCP (Live Infrastructure)",
+    desc:
+      "Read-only access to your Kubernetes / Rancher estate via Model Context Protocol servers. " +
+      "Two servers run in-cluster: one reads THIS cluster through a read-only ServiceAccount " +
+      "(no credential needed), and a second reaches Rancher-managed downstream clusters through " +
+      "the management API. Leave the Rancher Token empty to stay on the ServiceAccount path; " +
+      "paste a token to switch to the Rancher API and see your downstream clusters. " +
+      "Bind that token to a READ-ONLY Rancher role — anything the token can do, the assistant " +
+      "can do. The URL is optional: leave it empty to let the app pick the right server. " +
+      "Every tool is read-only (read_only=true, disable_destructive=true) and the assistant " +
+      "only sees a curated subset of the tool catalogue.",
+    docs: "https://modelcontextprotocol.io/",
+    fields: [
+      { key: "enabled", label: "Enabled (true/false)", placeholder: "true" },
+      { key: "rancher_url", label: "Rancher Server URL", placeholder: "https://rke2-cluster.drlinuxer.com" },
+      { key: "rancher_token", label: "Rancher API Token (READ-ONLY role — needed for downstream clusters)",
+        placeholder: "token-xxxxx:xxxxxxxxxxxx", isSecret: true },
+      { key: "url", label: "MCP Server URL (optional — blank = auto-select)",
+        placeholder: "http://rancher-mcp:8080" },
+      { key: "timeout_s", label: "Per-call timeout (seconds)", placeholder: "20" },
     ],
   },
 };
@@ -269,7 +292,7 @@ export function IntegrationsConfig() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira", "openproject", "xwiki", "notion", "clickup", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
+        {(["confluence", "jira", "openproject", "xwiki", "notion", "clickup", "mcp", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
           <button
             key={k}
             onClick={() => switchTab(k)}

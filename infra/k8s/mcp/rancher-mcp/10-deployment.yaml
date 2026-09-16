@@ -21,9 +21,18 @@ metadata:
   namespace: rag-chatbot
 data:
   RANCHER_MCP_TOOLSETS: "kubernetes,rancher"
-  # No RANCHER_MCP_RANCHER_SERVER_URL / TOKEN here on purpose. To enable the
-  # Rancher-API toolsets later (multi-cluster via the management server), set both
-  # and point the token at a read-only global role.
+  # --- access mode ---------------------------------------------------------
+  # This instance is KUBECONFIG-ONLY: it answers about the cluster it runs in,
+  # using the read-only ServiceAccount from 20-rbac.yaml. No credential to manage,
+  # available on a fresh install.
+  #
+  # Downstream (Rancher-managed custom) clusters are served by the SEPARATE
+  # `rancher-mcp-mgmt` Deployment in 30-mgmt-deployment.yaml. They are two
+  # deployments because the server rejects the combination outright:
+  #   "kubeconfig_paths cannot be combined with rancher_request_token_auth"
+  # so one process cannot do both. The backend picks the instance based on whether a
+  # Rancher token has been configured in Settings.
+  RANCHER_MCP_RANCHER_TLS_INSECURE: "false"
 ---
 apiVersion: apps/v1
 kind: Deployment
