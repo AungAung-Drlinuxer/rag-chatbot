@@ -1,0 +1,88 @@
+---
+# Phase 0 — read-only identity for the MCP server.
+#
+# WHY A SERVICEACCOUNT AND NOT A RANCHER TOKEN
+# The server supports two access paths: the Rancher API (needs a bearer token,
+# which would be one broadly-privileged identity shared by every user of the
+# chatbot) or direct kubeconfig access. The kubeconfig path lets Kubernetes RBAC
+# be the authority: this ClusterRole grants get/list/watch only, so a wrong or
+# manipulated tool call cannot mutate anything, and the blast radius is bounded by
+# a role the platform team already governs. No credential needs to be handed to
+# the chatbot or stored in its settings.
+#
+# To reach DOWNSTREAM clusters later, add one read-only ServiceAccount per cluster
+# and mount each kubeconfig (the server exposes each as `kubeconfig:<context>`), or
+# supply a Rancher token bound to a read-only global role.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rancher-mcp-reader
+  namespace: rag-chatbot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rancher-mcp-readonly
+rules:
+  # Cluster inventory + workload introspection (this is what the assistant answers
+  # "what is wrong in cluster X" from).
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "endpoints", "nodes",
+                "namespaces", "events", "configmaps", "persistentvolumeclaims",
+                "replicationcontrollers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+  # Node/pod resource usage for kubernetes_top / kubernetes_capacity.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  # Discover what exists without granting the contents. Secrets are deliberately
+  # NOT listed: the server masks them with *** by default, but not being able to
+  # read them at all is a stronger guarantee.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Helm/release metadata read-only (common question: "what is deployed?").
+  - apiGroups: ["helm.cattle.io", "k3s.cattle.io", "cattle.io",
+               "management.cattle.io", "fleet.cattle.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rancher-mcp-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rancher-mcp-readonly
+subjects:
+  - kind: ServiceAccount
+    name: rancher-mcp-reader
+    namespace: rag-chatbot
+---
+# Long-lived token for the kubeconfig the server reads. The controller fills
+# `token` and `ca.crt` automatically, so no human ever handles the value and it is
+# never written into a manifest.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rancher-mcp-reader-token
+  namespace: rag-chatbot
+  annotations:
+    kubernetes.io/service-account.name: rancher-mcp-reader
+type: kubernetes.io/service-account-token

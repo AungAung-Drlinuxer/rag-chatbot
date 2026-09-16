@@ -141,6 +141,37 @@ def _node_tools(state: RAGState) -> dict:
         return out
 
     q = state["question"]
+
+    # --- Phase 1: live infrastructure lookup (read-only MCP) ---------------
+    # Placed before the ticket branches so "why is my pod pending" goes to the
+    # cluster rather than to the knowledge base. Gated three ways: a global switch,
+    # an intent check that distinguishes "what is a pod" from "why is MY pod
+    # pending", and an RBAC check so an end user cannot enumerate the platform.
+    try:
+        from app.config import SETTINGS as _S
+        if _S.mcp_enabled:
+            from app.auth.rbac import get_role
+            from app.mcp.infra_agent import detect_infra_intent, run_infra_agent
+
+            role = get_role(user)
+            if role in ("admin", "agent") and detect_infra_intent(q):
+                findings = run_infra_agent(q)
+                if findings:
+                    logger.info("infra agent answered %r (%d chars)", q[:40], len(findings))
+                    return {
+                        "tool_used": "mcp_infra",
+                        "context": (findings + "\n\n" + (state.get("context") or "")).strip(),
+                        # Live cluster evidence is authoritative for this question,
+                        # so a weak KB match must not drag the answer into caution.
+                        "confidence": 0.9,
+                        "decision": "answer",
+                        "needs_approval": False,
+                    }
+    except Exception as exc:  # noqa: BLE001
+        # Infrastructure lookup is an enhancement: any failure falls through to the
+        # normal KB path rather than failing the turn.
+        logger.warning("infra agent skipped (%s: %s)", type(exc).__name__, exc)
+
     if detect_ticket_status_intent(q):
         ctx, rows = fetch_ticket_context(user, q)
         if ctx:

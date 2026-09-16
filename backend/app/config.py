@@ -105,6 +105,19 @@ class Settings(BaseSettings):
     # fall back to vector order. Re-scoring the long tail does not change the
     # top-5 outcome, so the batch is bounded here.
     rerank_max_docs: int = 10
+
+    # --- Phase 0/1: MCP infrastructure access (read-only) -------------------
+    # In-cluster service DNS for the rancher-mcp Deployment. Empty disables the
+    # whole feature: the graph simply never runs an infrastructure lookup.
+    mcp_rancher_url: str = "http://rancher-mcp:8080"
+    mcp_enabled: bool = True
+    mcp_timeout_s: float = 20.0
+    # Bounded ReAct loop: each step is an LLM call plus tool calls, so this is the
+    # main latency governor. 4 covers gather -> drill down -> verify -> wrap up.
+    mcp_max_steps: int = 4
+    # Per-tool output budget. Raw k8s responses are huge; 6000 chars keeps the
+    # evidence while protecting the prompt window.
+    mcp_max_tool_chars: int = 6000
     rerank_enabled: bool = True
     rerank_model: str = "BAAI/bge-reranker-base"
     # v0.22.x — Option A split: "local" scores in-process (baked model),

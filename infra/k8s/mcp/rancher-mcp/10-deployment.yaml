@@ -1,0 +1,145 @@
+---
+# Phase 0 — rancher-mcp as a long-lived in-cluster HTTP service.
+#
+# Read-only by default and explicitly pinned in the Dockerfile env, so the worst
+# case for a wrong or manipulated tool call is a read. The chatbot's own write path
+# (create Jira ticket) stays behind the existing HITL approval gate; nothing here
+# can mutate infrastructure until someone deliberately flips these flags.
+#
+# Access is via the read-only ServiceAccount in 20-rbac.yaml (kubeconfig path),
+# NOT the Rancher API: that keeps Kubernetes RBAC as the authority instead of one
+# broadly-privileged shared bearer token. The server fails fast if a Rancher server
+# URL is configured without credentials ("rancher authentication required"), so the
+# Rancher env vars are deliberately absent here.
+#
+# It lives in the rag-chatbot namespace so the backend reaches it by DNS
+# (http://rancher-mcp:8080) — no ingress, no external exposure.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rancher-mcp-config
+  namespace: rag-chatbot
+data:
+  RANCHER_MCP_TOOLSETS: "kubernetes,rancher"
+  # No RANCHER_MCP_RANCHER_SERVER_URL / TOKEN here on purpose. To enable the
+  # Rancher-API toolsets later (multi-cluster via the management server), set both
+  # and point the token at a read-only global role.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rancher-mcp
+  namespace: rag-chatbot
+  labels:
+    app.kubernetes.io/name: rancher-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rancher-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rancher-mcp
+    spec:
+      serviceAccountName: rancher-mcp-reader
+      initContainers:
+        # Build a kubeconfig from the ServiceAccount's own token + CA. The token is
+        # injected by the controller into the secret, so it is never written by hand
+        # and never appears in this file.
+        - name: make-kubeconfig
+          image: harbor.drlinuxer.com/rag-chatbot/rancher-mcp:1.0.2
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              TOKEN="$(cat /sa/token)"
+              CA="$(base64 -w0 /sa/ca.crt)"
+              umask 077
+              # `kubernetes.default.svc` is the in-cluster API name and is present
+              # in the API server certificate's SANs, so TLS verifies.
+              #
+              # It must NOT be built from status.hostIP: that is the NODE address
+              # (10.10.10.118 here), which the certificate does not cover, and every
+              # call then fails with "x509: cannot validate certificate ... doesn't
+              # contain any IP SANs". Kubernetes injects KUBERNETES_SERVICE_HOST as
+              # the Service ClusterIP for exactly this reason, so it is read from the
+              # environment and only defaulted if absent.
+              API_HOST="${KUBERNETES_SERVICE_HOST:-kubernetes.default.svc}"
+              API_PORT="${KUBERNETES_SERVICE_PORT:-443}"
+              cat > /etc/rancher-mcp/kubeconfig <<EOF
+              apiVersion: v1
+              kind: Config
+              clusters:
+              - name: local
+                cluster:
+                  server: https://kubernetes.default.svc:${API_PORT}
+                  certificate-authority-data: ${CA}
+              users:
+              - name: rancher-mcp-reader
+                user:
+                  token: ${TOKEN}
+              contexts:
+              - name: local
+                context:
+                  cluster: local
+                  user: rancher-mcp-reader
+              current-context: local
+              EOF
+              echo "kubeconfig written ($(wc -c < /etc/rancher-mcp/kubeconfig) bytes)"
+          # NB: no KUBERNETES_SERVICE_HOST override here. Kubernetes already
+          # injects it as the API Service ClusterIP; overriding it with
+          # status.hostIP (the NODE address) is what broke TLS verification.
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/rancher-mcp
+            - name: sa-token
+              mountPath: /sa
+              readOnly: true
+      containers:
+        - name: rancher-mcp
+          image: harbor.drlinuxer.com/rag-chatbot/rancher-mcp:1.0.2
+          # Explicit command: see the ENTRYPOINT note in the Dockerfile.
+          command: ["rancher-mcp-server"]
+          args: ["--port", "8080", "--kubeconfig-paths", "/etc/rancher-mcp/kubeconfig"]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: rancher-mcp-config
+          resources:
+            # An HTTP proxy in front of the Kubernetes API: no model, no heavy CPU.
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/rancher-mcp
+      volumes:
+        - name: kubeconfig
+          emptyDir: {}
+        - name: sa-token
+          secret:
+            secretName: rancher-mcp-reader-token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rancher-mcp
+  namespace: rag-chatbot
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rancher-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
