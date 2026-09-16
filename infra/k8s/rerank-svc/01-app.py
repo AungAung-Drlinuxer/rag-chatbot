@@ -22,7 +22,7 @@ import os
 import threading
 import time
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 
 MODEL_NAME = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
@@ -68,7 +68,24 @@ def _warm() -> None:
 
 
 @app.get("/health")
-def health() -> dict:
+def health(response: Response) -> dict:
+    """Readiness/liveness endpoint.
+
+    v1.6.48 — this used to return HTTP 200 unconditionally, with the real state in
+    the body:
+        return {"ok": _ready, "model": MODEL_NAME}
+    The k8s probes are `httpGet`, which only inspect the STATUS CODE, so a pod that
+    was still loading (or had failed warmup) was marked READY and given traffic. The
+    first request then paid the lazy model load — tens of seconds on CPU — and the
+    backend's client gave up: `rerank attempt 1/3..3/3 failed (ReadTimeout)` and the
+    whole rerank stage silently degraded to raw vector order. That is what let four
+    near-identical chunks of one article occupy four of the five retrieved slots.
+
+    Returning 503 while not ready makes the readiness probe meaningful: traffic only
+    reaches pods whose model is resident.
+    """
+    if not _ready:
+        response.status_code = 503
     return {"ok": _ready, "model": MODEL_NAME}
 
 

@@ -23,7 +23,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: rerank
-          image: harbor.drlinuxer.com/rag-chatbot/rerank-svc:1.0.1
+          image: harbor.drlinuxer.com/rag-chatbot/rerank-svc:1.0.2
           imagePullPolicy: IfNotPresent
           env:
             - name: RERANK_MODEL
@@ -44,21 +44,43 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          # v1.6.50 — the LIVE deployment had drifted from this manifest: it was
+          # running requests cpu=200m / memory=800Mi and limits 2/3Gi, i.e. 40% of
+          # the CPU committed here, on a service that is entirely CPU-bound. Along
+          # with an 8s client budget against a 27s batch, that is why every rerank
+          # call timed out and the answer silently degraded to raw vector order.
           resources:
             requests: { cpu: "500m", memory: 2Gi }
             limits:   { cpu: "2",    memory: 4Gi }
+          # v1.6.50 — a startupProbe. Without one, a cold start is judged by the
+          # LIVENESS probe, so a slow model load can be killed mid-way and restarted,
+          # repeating the cycle. 30 x 5s = 150s of grace, and liveness/readiness stay
+          # parked until it passes.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+            timeoutSeconds: 2
           livenessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 60
             periodSeconds: 30
+            timeoutSeconds: 2
+          # /health returns 503 until the model is resident (fixed in 1.0.2). The
+          # probes only read the status code, so previously a pod that was still
+          # loading was marked READY and given traffic — the first request then paid
+          # the lazy model load and the caller timed out.
           readinessProbe:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 20
-            periodSeconds: 10
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
 ---
 apiVersion: v1
 kind: Service

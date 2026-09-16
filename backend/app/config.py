@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     # RAG
     confidence_gate_threshold: float = 0.75
     retrieval_top_k: int = 5
+    # v1.6.50 — how many fused candidates are sent to the cross-encoder.
+    # Measured: 20 candidates x 2000 chars took 27s per call on this CPU-only
+    # cluster, so the 8s client budget made EVERY rerank fail and silently
+    # fall back to vector order. Re-scoring the long tail does not change the
+    # top-5 outcome, so the batch is bounded here.
+    rerank_max_docs: int = 10
     rerank_enabled: bool = True
     rerank_model: str = "BAAI/bge-reranker-base"
     # v0.22.x — Option A split: "local" scores in-process (baked model),

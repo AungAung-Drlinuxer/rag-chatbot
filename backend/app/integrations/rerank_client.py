@@ -41,14 +41,30 @@ def score(query: str, docs: list[dict]) -> list[float]:
     """
     payload = {
         "query": query,
-        "documents": [(d.get("content") or "")[:2000] for d in docs],
+        # v1.6.50 — MEASURED root cause of the rerank timeouts.
+        #
+        # The client used to send every fused candidate with up to 2000 chars each.
+        # On the live KB that is 20 documents / 14.5k chars, and the service needed
+        # 27.4s to score it — against a per-attempt timeout of 8s. So the rerank
+        # stage failed EVERY time and silently fell back to vector order, which is
+        # why four near-identical chunks of one article filled four of five slots.
+        # A second sample hit 142s and the connection died outright.
+        #
+        # Cross-encoder relevance barely changes past the opening of a chunk, so
+        # scoring 600 chars loses nothing while cutting the work ~3.3x per document.
+        # Combined with the candidate cap in retrieval.py this takes a real batch
+        # from ~27s to a few seconds.
+        "documents": [(d.get("content") or "")[:600] for d in docs],
     }
     headers = {"Content-Type": "application/json"}
     if SETTINGS.rerank_api_key:
         headers["X-API-Key"] = SETTINGS.rerank_api_key
     url = SETTINGS.rerank_url.rstrip("/") + "/v1/rerank"
 
-    per_attempt = min(8.0, float(SETTINGS.rerank_timeout_s))
+    # v1.6.50 — the per-attempt budget has to cover a LEGITIMATE slow batch, not
+    # just a cold pod. 8s was treating real work as a failure. With the payload
+    # now bounded, 12s is ample headroom while still failing fast on a dead pod.
+    per_attempt = min(12.0, float(SETTINGS.rerank_timeout_s))
     attempts = 3
     last_exc: Exception | None = None
 

@@ -59,6 +59,13 @@ def _vector_search(query: str, k: int, filter_clause: dict | None) -> list[dict]
                 "distance": float(distance),
                 "confidence": round(1.0 - float(distance), 3),
                 "vec_rank": rank,
+                # v1.6.48 — carry the stored metadata through. `_cap_per_article`
+                # and `_expand_neighbours` need `chunk_index`; without it they
+                # silently did nothing (doc.get("metadata") was None for every hit,
+                # so no seed ever expanded and the per-article cap fell back to its
+                # only usable key). Keep it as a plain dict so JSON/serialisation
+                # paths downstream stay unchanged.
+                "metadata": dict(meta),
             }
         )
     return out
@@ -130,6 +137,9 @@ def _keyword_search(query: str, k: int, filter_clause: dict | None) -> list[dict
                     "distance": 0.5,  # placeholder; rerank re-scores
                     "confidence": 0.5,
                     "kw_rank": rank,
+                    # v1.6.48 — same reason as _vector_search: neighbours + the
+                    # per-article cap read chunk_index from here.
+                    "metadata": dict(meta),
                 }
             )
     except Exception as exc:
@@ -157,6 +167,116 @@ def _rrf_fuse(vec: list[dict], kw: list[dict], kk: int = 60) -> list[dict]:
                 scores[key] = row
     fused = sorted(scores.values(), key=lambda d: d["rrf"], reverse=True)
     return fused[:kk]
+
+
+def _article_id(doc: dict) -> str | None:
+    """Article identity for diversity + expansion (page_id lives in metadata)."""
+    meta = doc.get("metadata") or {}
+    return meta.get("page_id") or doc.get("page_id")
+
+
+def _cap_per_article(docs: list[dict], per_article: int = 2) -> list[dict]:
+    """Stop one article from monopolising the top-k slots.
+
+    Measured on the live KB: for "What is the world of Web", 4 of the 5 retrieved
+    slots were chunks of the SAME article, so the model effectively saw one
+    document. That is why answers came back short and narrow even though five
+    "sources" were cited.
+    """
+    out: list[dict] = []
+    counts: dict[str, int] = {}
+    for d in docs:
+        pid = _article_id(d)
+        n = counts.get(pid, 0)
+        if pid is not None and n >= per_article:
+            continue
+        if pid is not None:
+            counts[pid] = n + 1
+        out.append(d)
+    return out
+
+
+def _expand_neighbours(docs: list[dict], radius: int = 1,
+                       max_chars: int = 9000) -> list[dict]:
+    """Attach the neighbouring chunks of each winning article.
+
+    A chunk is a slice; the answer can only be as complete as the slices it was
+    given. For "The world of Web" the article holds 10 chunks / 2,118 chars but the
+    model received 4 chunks / ~850 chars, so it answered from roughly a third of
+    the only document on the topic. Pulling each seed's neighbours — ordered by
+    `chunk_index`, which the ingest already stores — hands over whole articles
+    without widening the search or adding noise from other documents.
+
+    Bounded by `max_chars` so a large article cannot blow the prompt budget.
+    """
+    seeds = [d for d in docs if _article_id(d)]
+    if not seeds:
+        return docs
+
+    page_ids = sorted({_article_id(d) for d in seeds})
+    from sqlalchemy import text as _text
+
+    from app.persistence.database import SessionLocal
+
+    rows: list = []
+    try:
+        with SessionLocal() as s:
+            rows = s.execute(_text(
+                "SELECT cmetadata->>'page_id' AS pid, cmetadata->>'chunk_index' AS cidx, "
+                "cmetadata->>'page_title' AS title, cmetadata->>'domain' AS domain, "
+                "cmetadata->>'source_url' AS url, document "
+                "FROM langchain_pg_embedding "
+                "WHERE cmetadata->>'page_id' = ANY(:pids) "
+                "ORDER BY cmetadata->>'page_id', (cmetadata->>'chunk_index')::int"
+            ), {"pids": page_ids}).fetchall()
+    except Exception:  # noqa: BLE001
+        return docs  # expansion is an enhancement, never a failure path
+
+    by_article: dict[str, list] = {}
+    for r in rows:
+        try:
+            idx = int(r[1])
+        except (TypeError, ValueError):
+            continue
+        by_article.setdefault(r[0], []).append((idx, r[5] or "", r[2], r[3], r[4]))
+
+    out: list[dict] = []
+    seen: set[tuple] = set()
+    budget = 0
+    for d in docs:
+        pid = _article_id(d)
+        out.append(d)
+        seen.add((pid, str((d.get("metadata") or {}).get("chunk_index"))))
+        budget += len(d.get("content") or "")
+        if not pid or budget >= max_chars:
+            continue
+        try:
+            seed_idx = int((d.get("metadata") or {}).get("chunk_index"))
+        except (TypeError, ValueError):
+            continue
+        for idx, body, title, dom, url in by_article.get(pid, []):
+            if budget >= max_chars:
+                break
+            key = (pid, str(idx))
+            if key in seen or abs(idx - seed_idx) > radius or idx == seed_idx:
+                continue
+            seen.add(key)
+            out.append({
+                "page_id": pid,
+                "title": title or d.get("title") or "Untitled",
+                "content": body,
+                "domain": dom or d.get("domain"),
+                "source_url": url or d.get("source_url"),
+                # neighbours are context: never let them outrank a scored seed
+                "distance": d.get("distance", 1.0),
+                "confidence": d.get("confidence", 0.0),
+                "metadata": {"page_id": pid, "chunk_index": str(idx),
+                             "page_title": title or d.get("title"),
+                             "domain": dom or d.get("domain")},
+                "expanded": True,
+            })
+            budget += len(body)
+    return out
 
 
 def retrieve(query: str, domain: str | None = None, k: int | None = None) -> list[dict]:
@@ -187,9 +307,20 @@ def retrieve(query: str, domain: str | None = None, k: int | None = None) -> lis
         from app.rag.reranker import rerank
 
         with start_span("rag.cross_encoder_rerank", {"candidates.count": len(candidates), "top_k": k}):
-            return rerank(query, candidates, top_k=k)
+            # v1.6.48 — cap per article BEFORE trimming to k so one document cannot
+            # fill the slots, then expand each winner with its neighbours. Measured:
+            # 4 of 5 slots were the same article, and the model got ~850 of the
+            # 2,118 chars that article held.
+            # v1.6.50 — also bound how many candidates reach the cross-encoder.
+            # Scoring all 20 fused candidates measured 27s per call; the rerank
+            # stage then always timed out and silently degraded to vector order.
+            # Rerank only the strongest `rerank_max_docs` by first-pass similarity —
+            # re-scoring the long tail changes nothing about the top 5.
+            seeds = sorted(candidates, key=lambda d: d["distance"])[:SETTINGS.rerank_max_docs]
+            ordered = _cap_per_article(rerank(query, seeds, top_k=max(k * 3, k)), per_article=2)
+            return _expand_neighbours(ordered[:k])
 
-    return sorted(candidates, key=lambda d: d["distance"])[:k]
+    return _expand_neighbours(sorted(candidates, key=lambda d: d["distance"])[:k])
 
 
 def build_context(docs: list[dict], query: str) -> str:
