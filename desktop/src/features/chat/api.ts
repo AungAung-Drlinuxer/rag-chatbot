@@ -7,12 +7,19 @@ export async function streamChat(
   history: { role: string; content: string }[],
   onEvent: (e: { event: string; data: any }) => void,
   llmProvider?: "auto" | "cloud" | "local",
+  /** v1.6.55 — "auto" | "kb" | "infra": what the answer may draw on. */
+  mode?: "auto" | "kb" | "infra",
   signal?: AbortSignal
 ) {
   const res = await apiFetch(`${BASE}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ message, session_id: sessionId, context: history, llm_provider: llmProvider ?? "auto" }),
+    body: JSON.stringify({
+      message, session_id: sessionId, context: history,
+      llm_provider: llmProvider ?? "auto",
+      // v1.6.55 — omitted entirely when "auto" so the server default applies.
+      mode: mode && mode !== "auto" ? mode : undefined,
+    }),
     signal,
   });
   if (res.status === 401) throw new Error("Session expired — please log in again");

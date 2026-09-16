@@ -32,6 +32,8 @@ class RAGOrchestrationResult:
     context: str = ""
     sources: list[dict] = field(default_factory=list)
     tool_used: str | None = None  # v0.18.0: which agentic tool answered (None = pure RAG)
+    # v1.6.55 — why the tool path ended: ok | failed | error | not_permitted
+    tool_note: str | None = None
     tool_rows: list[dict] = field(default_factory=list)  # structured rows from the tool
     # Telemetry for the LLM stage
     top_k: int = 0

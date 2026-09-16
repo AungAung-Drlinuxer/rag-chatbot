@@ -36,6 +36,11 @@ export type Message = {
   topK?: number;
   sources?: Source[];
   usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  /** v1.6.55 — set when the answer came from a live MCP tool, so the UI can
+   *  distinguish a documents answer from an infrastructure answer. */
+  toolUsed?: string;
+  /** ok | failed | error | not_permitted — why the tool path ended as it did. */
+  toolNote?: string;
   latencyMs?: number;
   serverId?: string;  // v0.21.90 — DB row id from the done event (feedback target)
   feedback?: 1 | -1;  // v0.21.90 — recorded rating (button state)

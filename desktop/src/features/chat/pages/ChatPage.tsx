@@ -105,6 +105,11 @@ export default function Chat({
   const pipeline = useStageTelemetry();
   // v1.6.22 — per-request LLM provider selection (user toggle in the chat input bar)
   const [llmProvider, setLlmProvider] = useState<"auto" | "cloud" | "local">("auto");
+  // v1.6.55 — WHAT the answer may draw on, separate from which model answers.
+  // Claude Desktop / opencode keep "chat" and "MCP tools" visibly distinct; without
+  // it a KB answer and an infrastructure answer look identical, and a failed tool
+  // lookup reads as "no such information in the knowledge base".
+  const [chatMode, setChatMode] = useState<"auto" | "kb" | "infra">("auto");
   // v1.6.40 — the escalation is resolved by the requester filling the ticket form
   // themselves, so remember which pending approval that form supersedes. On submit
   // it is marked "cancelled" (NOT resumed), which prevents an admin from later
@@ -192,6 +197,8 @@ export default function Chat({
         decision: m.meta?.decision,
         topK: m.meta?.top_k,
         usage: m.meta?.usage,
+        toolUsed: m.meta?.tool_used || undefined,
+        toolNote: m.meta?.tool_note || undefined,
         latencyMs: m.meta?.latency_ms,
         ragTrace: m.meta?.rag_trace || (m.meta?.latency_ms ? { stages: {}, totalMs: m.meta.latency_ms } : undefined),
         serverId: m.message_id || undefined,  // feedback target (v0.21.90)
@@ -269,6 +276,8 @@ export default function Chat({
                       confidence: meta.confidence != null ? Math.round(meta.confidence * 100) : undefined,
                       decision: meta.decision,
                       topK: meta.top_k,
+                      toolUsed: (meta as any).tool_used || undefined,
+                      toolNote: (meta as any).tool_note || undefined,
                       sources: (meta.hits ?? []).map((h: any) => ({
                         page_id: h.page_id ?? null,
                         title: h.title ?? "Untitled",
@@ -347,6 +356,7 @@ export default function Chat({
           },
         },
         llmProvider,
+        chatMode,
       );
       historyRef.current = [
         ...historyRef.current,
@@ -785,6 +795,40 @@ export default function Chat({
                 {llmProvider === "local" && (
                   <span className="ml-1 text-[9px] text-amber-600 dark:text-amber-400">
                     ⚠ slower · on-prem
+                  </span>
+                )}
+              </div>
+              {/* v1.6.55 — KNOWLEDGE vs TOOLS, the switch Claude Desktop / opencode
+                  expose. Answers are now distinguishable: a documents answer and a
+                  live-infrastructure answer are different claims about the world. */}
+              <div className="mb-1.5 flex items-center gap-1 px-1">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                  Answer from
+                </span>
+                {([
+                  { key: "auto", label: "Auto", title: "Decide per question — documents, or the live cluster when the question is about it" },
+                  { key: "kb", label: "Knowledge base", title: "Documents only. Never touches infrastructure tools" },
+                  { key: "infra", label: "Infrastructure", title: "Query the live Kubernetes / Rancher estate. Requires admin or agent role; if the lookup fails the answer says so instead of quoting documents" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    title={opt.title}
+                    onClick={() => setChatMode(opt.key)}
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
+                      chatMode === opt.key
+                        ? opt.key === "infra"
+                          ? "bg-emerald-600 text-white shadow-sm"
+                          : "bg-blue-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                {chatMode === "infra" && (
+                  <span className="ml-1 text-[9px] text-emerald-600 dark:text-emerald-400">
+                    ⚡ live cluster · read-only
                   </span>
                 )}
               </div>
@@ -1358,6 +1402,26 @@ function MessageBubble({
             )
           ) : (
             <div className="contents">
+              {/* v1.6.55 — provenance. An answer built from a live cluster query is a
+                  different claim from one read out of documents, and a FAILED lookup
+                  must not look like a knowledge gap. */}
+              {message.role === "assistant" && message.toolUsed && (
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                  {message.toolNote === "failed" || message.toolNote === "error" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                      ⚠ infrastructure lookup failed — no live data
+                    </span>
+                  ) : message.toolNote === "not_permitted" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      🔒 requires admin/agent role — answered from the knowledge base
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      ⚡ live infrastructure · read-only MCP
+                    </span>
+                  )}
+                </div>
+              )}
               {message.content ? (
                 <MarkdownMessage content={message.content} />
               ) : busy ? (

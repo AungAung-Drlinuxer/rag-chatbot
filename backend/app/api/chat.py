@@ -159,7 +159,8 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     return {"retrieval": "retrieve", "generating": "generate"}.get(s, s)
                 for ev in run_rag_graph_stream(req.message, history=req.context,
                                                top_k=req.top_k, user=user,
-                                               thread_id=session_id):
+                                               thread_id=session_id,
+                                               mode=req.mode):
                     if isinstance(ev, tuple) and ev[0] == "__FINAL__":
                         g = ev[1]
                     elif isinstance(ev, tuple) and len(ev) == 2:
@@ -178,6 +179,10 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                          "relevance": d.get("confidence")}
                         for d in g["docs"]
                     ], tool_used=g.get("tool_used"), tool_rows=g.get("ticket_rows") or [],
+                    # v1.6.55 — carry the OUTCOME, not just whether a tool ran. Without
+                    # this the meta fell back to "ok" whenever tool_used was set, so a
+                    # failed infrastructure lookup was reported to the UI as success.
+                    tool_note=g.get("tool_note"),
                     top_k=g["top_k"] or 5,
                     context_chars=len(g["context"]),
                     context_tokens_estimate=len(g["context"]) // 4,
@@ -274,6 +279,13 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         if guardrail_flag:
             meta["guardrail_flagged"] = guardrail_flag  # toxic-abuse marker for audit/UI
         meta["llm_provider"] = (req.llm_provider or "auto").strip().lower()  # v1.6.22 — echo requested provider
+        # v1.6.55 — echo WHAT the answer was allowed to draw on, and why the tool
+        # path ended as it did. Without this the UI cannot distinguish a real
+        # knowledge-base gap from a failed infrastructure lookup: both look like
+        # "I couldn't find it", which is exactly the confusion the mode switch fixes.
+        meta["mode"] = (req.mode or "auto").strip().lower()
+        meta["tool_note"] = getattr(result, "tool_note", None) or (
+            "ok" if result.tool_used else None)
         yield _sse("meta", meta)
 
         if result.decision == DECISION_CAUTION and not result.tool_used:
@@ -283,6 +295,20 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         # `stream_answer` now yields (token, usage) pairs; usage is non-None only on the
         # LAST pair (a zero-length sentinel) so the consumer can pick it up exactly once.
         context = result.context or build_context(result.docs, result.rewritten)
+
+        # v1.6.58 — a deterministic infrastructure lookup already produced an
+        # authoritative, formatted answer, so stream it verbatim instead of asking a
+        # (weak, free-tier) model to re-phrase cluster output. Measured: given the same
+        # data as context the model replied "I couldn't find information … in the
+        # knowledge base or live infrastructure data" and dropped the result. Routing
+        # it around generation removes that failure mode entirely.
+        if getattr(result, "tool_note", None) == "deterministic" and context:
+            for _chunk in _chunk_text(context, 120):
+                yield _sse("token", {"token": _chunk})
+            yield _sse("done", {"message_id": str(_uuid.uuid4()),
+                                "latency_ms": int((time.time() - t0) * 1000)})
+            return
+
         answer_parts: list[str] = []
         last_usage: dict | None = None
         from app.llm.client import get_active_model_name

@@ -33,6 +33,7 @@ logger = logging.getLogger("mcp.infra")
 #   "what is under pressure"       -> kubernetes_top, kubernetes_capacity
 CURATED_TOOLS: tuple[str, ...] = (
     "cluster_list",
+    "kubernetes_list",
     "kubernetes_workload_health",
     "kubernetes_events",
     "kubernetes_logs",
@@ -303,9 +304,120 @@ def run_infra_agent(question: str, max_steps: int | None = None) -> str:
     try:
         messages.append(HumanMessage(content="Summarise your findings now."))
         final = llm.invoke(messages)
-        return (getattr(final, "content", "") or "").strip()
+        text = (getattr(final, "content", "") or "").strip()
+        if text:
+            return text
     except Exception:  # noqa: BLE001
-        return ""
+        pass
+    return ""
+
+
+def _first_tool(tools, names: tuple[str, ...]):
+    by = {t.name: t for t in tools}
+    for n in names:
+        if n in by:
+            return by[n]
+    return None
+
+
+def _deterministic_lookup(question: str, tools):
+    """Answer a common infrastructure question WITHOUT the model choosing a tool.
+
+    WHY THIS EXISTS (measured, not defensive coding): the configured model here is a
+    free tier, and on this question it returned EMPTY content with no tool calls, so
+    the whole lookup yielded 0 chars in 9.3s. With the model out of the loop the
+    answer silently became a knowledge-base miss — exactly the confusion the mode
+    switch is meant to remove. So when tool-calling produces nothing, pick the
+    obvious tool deterministically and return real cluster data.
+
+    This is deliberately narrow: it handles the shapes an IT help desk actually asks
+    ("what is unhealthy", "what is in namespace X", "what events are firing") and
+    declines everything else rather than guessing.
+    """
+    q = (question or "").lower()
+    ns = None
+    m = re.search(r"\bnamespace\s+([a-z0-9][a-z0-9-]*)", q) or re.search(r"\bin\s+([a-z0-9][a-z0-9-]*)\s", q)
+    if m:
+        ns = m.group(1)
+
+    # kubernetes_list first when the question names a resource KIND: it answers
+    # "how many / which" directly. Measured caveats: it requires `cluster` and `kind`
+    # exactly (an unrecognised key fails schema validation) and the kind must be
+    # capitalised ("Deployment", not "deployments").
+    kind = None
+    for needle, proper in (("deployment", "Deployment"), ("statefulset", "StatefulSet"),
+                           ("daemonset", "DaemonSet"), ("pod", "Pod"),
+                           ("service", "Service"), ("ingress", "Ingress"),
+                           ("node", "Node"), ("namespace", "Namespace")):
+        if re.search(r"\b" + needle + r"s?\b", q):
+            kind = proper
+            break
+    if kind:
+        tool = _first_tool(tools, ("kubernetes_list",))
+        if tool:
+            try:
+                largs = {"cluster": "kubeconfig:local", "kind": kind}
+                if ns:
+                    largs["namespace"] = ns
+                return str(tool.invoke(largs))
+            except Exception as exc:  # noqa: BLE001
+                logger.info("deterministic kubernetes_list failed: %s", exc)
+
+    # Fall back to the workload-health summary: it needs ONLY `cluster` -- passing an
+    # unknown key fails schema validation, which is exactly why this path returned
+    # nothing before the fix -- and covers "is anything unhealthy / how many are
+    # ready" in a single call.
+    if re.search(r"unhealthy|not ready|failing|broken|crash|health|status|how many|count|which|list|pod|deployment", q):
+        tool = _first_tool(tools, ("kubernetes_workload_health",))
+        if tool:
+            try:
+                wargs = {"cluster": "kubeconfig:local"}
+                if ns:
+                    wargs["namespace"] = ns
+                return str(tool.invoke(wargs))
+            except Exception as exc:  # noqa: BLE001
+                logger.info("deterministic workload_health failed: %s", exc)
+
+    if re.search(r"event|warning", q):
+        tool = _first_tool(tools, ("kubernetes_events",))
+        if tool:
+            try:
+                eargs = {"cluster": "kubeconfig:local"}
+                if ns:
+                    eargs["namespace"] = ns
+                return str(tool.invoke(eargs))
+            except Exception as exc:  # noqa: BLE001
+                logger.info("deterministic kubernetes_events failed: %s", exc)
+    return ""
+
+
+def answer_infra(question: str) -> tuple[str, str]:
+    """(text, note). note is "ok" | "failed". The caller must not treat both alike."""
+    text = run_infra_agent(question)
+    if text:
+        return text, "ok"
+    # Model path produced nothing -> deterministic tool selection over the same
+    # read-only tools, then hand the raw evidence to the model to phrase.
+    tools = build_tools()
+    if tools:
+        raw = _deterministic_lookup(question, tools)
+        if raw and raw.strip():
+            logger.info("deterministic infra lookup produced %d chars", len(raw))
+            # Hand back a READY-MADE answer, not raw rows for the model to phrase.
+            #
+            # Measured: with the raw table in the context the free-tier model opened
+            # with "I couldn't find information … in the knowledge base or live
+            # infrastructure data" and dropped the real result entirely. The cluster
+            # output is already authoritative and already formatted, so phrasing it
+            # through a weak model only adds a way to lose it. The caller streams this
+            # verbatim when the note is "deterministic".
+            head = raw.strip()
+            if len(head) > 3500:
+                head = head[:3500] + "\n…[truncated]"
+            return ("**Live infrastructure** (read-only, queried directly — "
+                    "the model was not used to select the tool)\n\n```\n"
+                    + head + "\n```"), "deterministic"
+    return "", "failed"
 
 
 def agent_status() -> dict:

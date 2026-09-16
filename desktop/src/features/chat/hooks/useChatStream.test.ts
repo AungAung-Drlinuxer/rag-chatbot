@@ -87,7 +87,21 @@ describe("runChatStream", () => {
       onApprovalRequest: vi.fn(), onDone: vi.fn(),
     });
     expect(streamChat).toHaveBeenCalledWith(
-      "why", "sess-9", [{ role: "user", content: "hi" }], expect.any(Function), undefined, undefined
+      // 5th = llmProvider, 6th = mode (v1.6.55, what the answer may draw on),
+      // 7th = AbortSignal. Both optionals are undefined when the caller omits them.
+      "why", "sess-9", [{ role: "user", content: "hi" }], expect.any(Function),
+      undefined, undefined, undefined
+    );
+  });
+
+  it("forwards the answer-source mode through to streamChat", async () => {
+    (globalThis as any).__emit = () => {};
+    await runChatStream("why", "sess-9", [], {
+      onMeta: vi.fn(), onToken: vi.fn(), onStage: vi.fn(),
+      onApprovalRequest: vi.fn(), onDone: vi.fn(),
+    }, "auto", "infra");
+    expect(streamChat).toHaveBeenCalledWith(
+      "why", "sess-9", [], expect.any(Function), "auto", "infra", undefined
     );
   });
 });

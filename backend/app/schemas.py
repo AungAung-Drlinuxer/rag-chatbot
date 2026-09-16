@@ -23,6 +23,14 @@ class ChatRequest(StrictModel):
     # with Ollama failover), "cloud" (force primary only), or "local"
     # (force on-prem Ollama). None/"auto" preserves the standard failover chain.
     llm_provider: str | None = None
+    # v1.6.55 — WHAT THE ANSWER MAY DRAW ON, separate from which model answers.
+    #   "kb"    knowledge base only (documents) — no infrastructure tools
+    #   "infra" infrastructure tools required (live cluster state)
+    #   None/"auto"  decide per question
+    # Claude Desktop / opencode separate "chat" from "MCP tools"; the composer needs
+    # the same explicit switch, otherwise a KB answer is indistinguishable from an
+    # infrastructure answer and a silent tool failure looks like a KB miss.
+    mode: str | None = None
 
 
 class EscalateRequest(StrictModel):

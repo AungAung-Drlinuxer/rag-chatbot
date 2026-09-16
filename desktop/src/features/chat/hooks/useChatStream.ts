@@ -23,6 +23,8 @@ export async function runChatStream(
   history: { role: string; content: string }[],
   h: StreamHandlers,
   llmProvider?: "auto" | "cloud" | "local",
+  /** v1.6.55 — "auto" | "kb" | "infra": what the answer may draw on. */
+  mode?: "auto" | "kb" | "infra",
   signal?: AbortSignal
 ): Promise<string> {
   let streamed = "";
@@ -56,6 +58,6 @@ export async function runChatStream(
     } else if (e.event === "done") {
       h.onDone(e.data ?? {});
     }
-  }, llmProvider, signal);
+  }, llmProvider, mode, signal);
   return streamed;
 }

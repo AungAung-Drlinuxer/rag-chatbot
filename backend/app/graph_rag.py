@@ -50,6 +50,13 @@ MAX_RETRIES = 0  # v0.22.2 — latency: single retrieve; no rewrite loop (35s ->
 
 
 class RAGState(TypedDict):
+    # v1.6.55 — "kb" | "infra" | None (auto). Declared here because LangGraph only
+    # carries keys the state type declares.
+    mode: str | None
+    # Why the tool path ended the way it did: "ok" | "failed" | "error" |
+    # "not_permitted". Surfaced to the UI so a tool failure is never mistaken for a
+    # knowledge-base gap.
+    tool_note: str | None
     question: str
     history: list[dict] | None
     user: str | None
@@ -142,35 +149,81 @@ def _node_tools(state: RAGState) -> dict:
 
     q = state["question"]
 
-    # --- Phase 1: live infrastructure lookup (read-only MCP) ---------------
-    # Placed before the ticket branches so "why is my pod pending" goes to the
-    # cluster rather than to the knowledge base. Gated three ways: a global switch,
-    # an intent check that distinguishes "what is a pod" from "why is MY pod
-    # pending", and an RBAC check so an end user cannot enumerate the platform.
-    try:
-        from app.config import SETTINGS as _S
-        if _S.mcp_enabled:
-            from app.auth.rbac import get_role
-            from app.mcp.infra_agent import detect_infra_intent, run_infra_agent
+    # --- v1.6.55: live infrastructure lookup (read-only MCP) ---------------
+    # `mode` makes the choice explicit instead of guessing, mirroring how Claude
+    # Desktop / opencode separate plain chat from MCP tools:
+    #   "kb"    -> never run tools; the answer is documents only
+    #   "infra" -> tools are REQUIRED; if they fail, say so rather than silently
+    #              answering from the KB (which reads to the user as "no such
+    #              information" when the truth is "the lookup broke")
+    #   auto    -> intent + RBAC decide, as before
+    mode = (state.get("mode") or "auto").lower()
+    wants_tools = mode in ("infra", "auto")
+    if wants_tools:
+        try:
+            from app.config import SETTINGS as _S
+            if _S.mcp_enabled:
+                from app.auth.rbac import get_role
+                from app.mcp.infra_agent import answer_infra, detect_infra_intent
 
-            role = get_role(user)
-            if role in ("admin", "agent") and detect_infra_intent(q):
-                findings = run_infra_agent(q)
-                if findings:
-                    logger.info("infra agent answered %r (%d chars)", q[:40], len(findings))
-                    return {
-                        "tool_used": "mcp_infra",
-                        "context": (findings + "\n\n" + (state.get("context") or "")).strip(),
-                        # Live cluster evidence is authoritative for this question,
-                        # so a weak KB match must not drag the answer into caution.
-                        "confidence": 0.9,
-                        "decision": "answer",
-                        "needs_approval": False,
-                    }
-    except Exception as exc:  # noqa: BLE001
-        # Infrastructure lookup is an enhancement: any failure falls through to the
-        # normal KB path rather than failing the turn.
-        logger.warning("infra agent skipped (%s: %s)", type(exc).__name__, exc)
+                role = get_role(user)
+                if role not in ("admin", "agent"):
+                    # An end user never reaches platform tooling.
+                    if mode == "infra":
+                        return {"tool_used": None, "tool_note": "not_permitted",
+                                "confidence": 0.2, "decision": "answer",
+                                "context": ("The user's role has no access to live "
+                                            "infrastructure tools. Answer only from the "
+                                            "knowledge base.\n\n"
+                                            + (state.get("context") or ""))}
+                elif mode == "infra" or detect_infra_intent(q):
+                    findings, note = answer_infra(q)
+                    if findings:
+                        logger.info("infra agent answered %r (%d chars, %s)",
+                                    q[:40], len(findings), note)
+                        # v1.6.57 — the precedence matters. Appending live data AFTER
+                        # the KB context let the model open with "I couldn't find this
+                        # in the knowledge base…" and then ignore the cluster data
+                        # entirely (measured). When the lookup succeeded, the live
+                        # evidence IS the answer, so the KB context is dropped rather
+                        # than offered as a competing, more familiar frame.
+                        ctx = ("LIVE INFRASTRUCTURE DATA — answer from this, it is the "
+                               "authoritative current state. Do NOT say the knowledge base "
+                               "lacks the information.\n\n" + findings)
+                        return {
+                            "tool_used": "mcp_infra",
+                            "tool_note": note,
+                            "context": ctx,
+                            "confidence": 0.9,
+                            "decision": "answer",
+                            "needs_approval": False,
+                        }
+                    if mode == "infra":
+                        # Forced mode: report the failure in the answer's own context so
+                        # the model can say the lookup failed, instead of presenting a
+                        # KB gap as if it were the whole truth.
+                        logger.warning("infra mode requested but the agent returned nothing")
+                        return {
+                            "tool_used": "mcp_infra",
+                            "tool_note": "failed",
+                            "context": ("Infrastructure mode was requested but the live "
+                                        "cluster lookup returned no result. State plainly "
+                                        "that the infrastructure lookup failed and that "
+                                        "no live data was retrieved.\n\n"
+                                        + (state.get("context") or "")).strip(),
+                            "confidence": 0.4,
+                            "decision": "answer",
+                            "needs_approval": False,
+                        }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("infra agent skipped (%s: %s)", type(exc).__name__, exc)
+            if mode == "infra":
+                return {"tool_used": "mcp_infra", "tool_note": "error",
+                        "context": ("Infrastructure mode was requested but the lookup "
+                                    "failed. Say so plainly; do not substitute a "
+                                    "knowledge-base answer.\n\n"
+                                    + (state.get("context") or "")).strip(),
+                        "confidence": 0.3, "decision": "answer", "needs_approval": False}
 
     if detect_ticket_status_intent(q):
         ctx, rows = fetch_ticket_context(user, q)
@@ -453,7 +506,7 @@ STAGE_LABELS = {
 
 def run_rag_graph_stream(query: str, history: list[dict] | None = None,
                          top_k: int | None = None, user: str | None = None,
-                         thread_id: str | None = None):
+                         thread_id: str | None = None, mode: str | None = None):
     """Generator version: yields (stage_label) as each node completes, then the
     final dict at the end (same shape as run_rag_graph). Powers SSE progress
     feedback so the UI can show what the pipeline is doing (v0.21.90)."""
@@ -464,6 +517,8 @@ def run_rag_graph_stream(query: str, history: list[dict] | None = None,
         "domain": "", "rewritten": "", "docs": [], "confidence": 0.0,
         "decision": "caution", "retries": 0, "context": "", "source": "graph",
         "tool_used": None, "needs_approval": False,
+        # v1.6.55 — "kb" | "infra" | None(auto), chosen in the composer.
+        "mode": mode, "tool_note": None,
         "thread_id": thread_id or user or "default",
         "approval_status": "pending", "ticket_id": None,
         "escalation_messages": [], "ticket_rows": [],
