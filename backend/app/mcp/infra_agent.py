@@ -41,6 +41,64 @@ CURATED_TOOLS: tuple[str, ...] = (
     "kubernetes_capacity",
 )
 
+# Proxmox VE — TIER-1 READS ONLY.
+#
+# Proxmox can destroy virtual machines, and the Kubernetes cluster this app runs on
+# is itself hosted on that Proxmox, so a wrong call here could take out the platform
+# serving the chatbot. Three independent layers keep that from happening:
+#   1. the server process is deployed with its destructive env gate CLOSED, and the
+#      package enforces that in code before any HTTP request leaves the pod
+#   2. only the read tools below are ever handed to the model
+#   3. MUTATING_RE is a belt-and-braces filter applied on top of (2), so version
+#      drift that renames a tool cannot silently expose a write by matching a stale
+#      allowlist entry
+# Names taken from the server's ACTUAL catalogue (measured: 42 tools at 0.5.1 — the
+# README advertises 96 for 0.11.0, so the allowlist was written against reality, not
+# documentation). Every entry below is a pure read.
+PROXMOX_CURATED_TOOLS: tuple[str, ...] = (
+    "proxmox_status",
+    "proxmox_list_vms",
+    "proxmox_list_containers",
+    "proxmox_get_resource",
+    "proxmox_get_vm_config",
+    "proxmox_get_container_config",
+    "proxmox_list_storage",
+    "proxmox_list_snapshots",
+    "proxmox_list_backups",
+    "proxmox_list_templates",
+    "proxmox_resource_usage",
+    "proxmox_recent_tasks",
+    "proxmox_get_task_status",
+    "proxmox_service_status",
+    "proxmox_guest_network",
+    "proxmox_audit_permissions",
+)
+
+# Second gate on top of the curated allowlists: a tool must ALSO not match this.
+#
+# It is a deny-list rather than a "mutating verb" list because the first attempt at
+# that was wrong in both directions — measured against the server's real catalogue:
+#   MISSED  proxmox_read_file            (reads inside a guest filesystem)
+#   MISSED  proxmox_cleanup_smoke_resources  (deletes resources; "cleanup" is a verb)
+#   FALSE   proxmox_list_snapshots       (a READ that merely has "snapshot" as a noun)
+# So this matches on the operation, not on any occurrence of a word. Anything read
+# from inside a guest is refused too: that is host/tenant data, not inventory.
+DENY_TOOLS_RE = re.compile(
+    r"(destroy|delete|remove|create|clone|migrate|resize|rollback|restore|"
+    r"cleanup|reboot|shutdown|suspend|resume|"
+    r"force_stop|start_resource|stop_resource|"
+    r"service_start|service_stop|service_restart|run_backup|"
+    r"snapshot_resource|provision|"
+    r"write|exec|read_file|list_directory|stat_path|upload|download|"
+    r"set[_-]|update|enable|disable|next_vmid|validate|wait_task)",
+    re.IGNORECASE,
+)
+
+CURATED_BY_SERVER: dict[str, tuple[str, ...]] = {
+    "rancher": CURATED_TOOLS,
+    "proxmox": PROXMOX_CURATED_TOOLS,
+}
+
 # Cheap intent gate — no LLM call, same discipline as app/tools/ticket_tool.py.
 # Deliberately requires an infrastructure noun; a bare "cluster" should not hijack
 # an ordinary knowledge question.
@@ -125,42 +183,61 @@ def _json_schema_to_args(schema: dict):
 
 
 def build_tools():
-    """LangChain tools for the curated MCP tools, or [] if the server is down."""
+    """LangChain tools across every ENABLED MCP server. Never raises.
+
+    Tool names are namespaced upstream (`kubernetes_*` vs `proxmox_*`), so the
+    catalogues concatenate without collisions. A server that is down or disabled
+    simply contributes nothing.
+    """
     from langchain_core.tools import StructuredTool
 
-    client = get_client()
-    try:
-        catalogue = {t.get("name"): t for t in client.list_tools()}
-    except Exception as exc:  # noqa: BLE001
-        logger.info("mcp tool catalogue unavailable: %s: %s", type(exc).__name__, exc)
-        return []
+    from app.mcp.client import get_client, get_mcp_servers
 
     tools = []
-    for name in CURATED_TOOLS:
-        spec = catalogue.get(name)
-        if not spec:
-            continue  # not offered by this deployment; skip rather than invent
-        desc = (spec.get("description") or name)[:900]
-        schema = spec.get("inputSchema") or {}
+    for spec in get_mcp_servers():
+        if not spec.get("enabled") or not spec.get("url"):
+            continue
+        curated = CURATED_BY_SERVER.get(spec["name"], ())
+        if not curated:
+            continue
+        client = get_client(spec["name"])
         try:
-            args_schema = _json_schema_to_args(schema)
-        except Exception:  # noqa: BLE001
+            catalogue = {t.get("name"): t for t in client.list_tools()}
+        except Exception as exc:  # noqa: BLE001
+            logger.info("mcp[%s] catalogue unavailable: %s: %s",
+                        spec["name"], type(exc).__name__, exc)
             continue
 
-        def _run(_name=name, **kwargs):
-            # Drop None so the server sees only what the model actually set.
-            args = {k: v for k, v in kwargs.items() if v is not None}
+        for name in curated:
+            spec_tool = catalogue.get(name)
+            if not spec_tool:
+                continue  # not offered by this build; skip rather than invent
+            # Belt-and-braces: never hand the model a state-changing tool, even if
+            # an upstream rename made a mutating tool match the allowlist.
+            if DENY_TOOLS_RE.search(name):
+                logger.warning("mcp[%s] refusing non-read tool %s", spec["name"], name)
+                continue
+            desc = (spec_tool.get("description") or name)[:900]
+            schema = spec_tool.get("inputSchema") or {}
             try:
-                return _truncate(client.call_tool(_name, args),
-                                 int(SETTINGS.mcp_max_tool_chars))
-            except Exception as exc:  # noqa: BLE001
-                # Return the error as tool output: the model can recover, and the
-                # loop never dies on one bad call.
-                return f"TOOL ERROR ({_name}): {type(exc).__name__}: {str(exc)[:200]}"
+                args_schema = _json_schema_to_args(schema)
+            except Exception:  # noqa: BLE001
+                continue
 
-        tools.append(StructuredTool.from_function(
-            func=_run, name=name, description=desc, args_schema=args_schema,
-        ))
+            def _run(_name=name, _client=client, **kwargs):
+                # Drop None so the server sees only what the model actually set.
+                args = {k: v for k, v in kwargs.items() if v is not None}
+                try:
+                    return _truncate(_client.call_tool(_name, args),
+                                     int(SETTINGS.mcp_max_tool_chars))
+                except Exception as exc:  # noqa: BLE001
+                    # Return the error as tool output: the model can recover, and the
+                    # loop never dies on one bad call.
+                    return f"TOOL ERROR ({_name}): {type(exc).__name__}: {str(exc)[:200]}"
+
+            tools.append(StructuredTool.from_function(
+                func=_run, name=name, description=desc, args_schema=args_schema,
+            ))
     return tools
 
 
@@ -232,18 +309,39 @@ def run_infra_agent(question: str, max_steps: int | None = None) -> str:
 
 
 def agent_status() -> dict:
-    """Diagnostics for the Settings page / health panel."""
-    client = get_client()
-    try:
-        tools = client.list_tools()
-        return {
-            "configured": bool(client.url),
-            "url": client.url,
-            "reachable": True,
-            "tools_available": len(tools),
-            "tools_curated": [n for n in CURATED_TOOLS if any(t.get("name") == n for t in tools)],
-        }
-    except Exception as exc:  # noqa: BLE001
-        return {"configured": bool(client.url), "url": client.url, "reachable": False,
-                "error": f"{type(exc).__name__}: {str(exc)[:160]}",
-                "tools_curated": list(CURATED_TOOLS)}
+    """Diagnostics for the Settings page / health panel: per-server reachability,
+    tool counts and which curated tools each one actually offers."""
+    from app.mcp.client import get_client, get_mcp_servers
+
+    servers = []
+    for spec in get_mcp_servers():
+        entry = {"name": spec["name"], "url": spec["url"],
+                 "enabled": bool(spec.get("enabled")), "mode": spec.get("mode")}
+        curated = CURATED_BY_SERVER.get(spec["name"], ())
+        entry["tools_curated"] = list(curated)
+        if not spec.get("enabled") or not spec.get("url"):
+            entry["reachable"] = False
+            entry["skipped"] = "disabled"
+            servers.append(entry)
+            continue
+        try:
+            names = [t.get("name") for t in get_client(spec["name"]).list_tools()]
+            entry["reachable"] = True
+            entry["tools_available"] = len(names)
+            entry["tools_curated"] = [n for n in curated if n in names]
+        except Exception as exc:  # noqa: BLE001
+            entry["reachable"] = False
+            entry["error"] = f"{type(exc).__name__}: {str(exc)[:160]}"
+        servers.append(entry)
+
+    live = [s for s in servers if s.get("reachable")]
+    return {
+        "servers": servers,
+        "servers_reachable": len(live),
+        # Back-compat with the earlier single-server shape used by the Settings test.
+        "configured": bool(servers),
+        "url": servers[0]["url"] if servers else "",
+        "reachable": bool(live),
+        "tools_available": sum(s.get("tools_available") or 0 for s in live),
+        "tools_curated": sorted({n for s in live for n in (s.get("tools_curated") or [])}),
+    }

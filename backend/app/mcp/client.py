@@ -24,6 +24,10 @@ import logging
 import threading
 import time
 
+import queue
+import threading
+import time
+
 import httpx
 from sqlalchemy import text
 
@@ -85,6 +89,10 @@ def get_mcp_cfg() -> dict:
         "timeout_s": float(cfg.get("timeout_s") or SETTINGS.mcp_timeout_s),
         "rancher_url": str(cfg.get("rancher_url") or "").strip(),
         "rancher_token": token,
+        # Proxmox VE (opt-in; see get_mcp_servers for why it defaults off).
+        "proxmox_enabled": cfg.get("proxmox_enabled"),
+        "proxmox_url": str(cfg.get("proxmox_url") or SETTINGS.mcp_proxmox_url).strip(),
+        # No proxmox_token here on purpose — see get_mcp_servers().
     }
 
 
@@ -121,13 +129,103 @@ class McpClient:
         # per-request token auth, so THIS token decides which clusters are visible —
         # that is how downstream clusters are reached without per-cluster kubeconfigs.
         self.rancher_token = cfg.get("rancher_token") or ""
+        # Transport per server. supergateway's streamable-HTTP mode crashes its own
+        # Node process on a tools/list (unhandled "No connection established"),
+        # measured against proxmox-mcp; its SSE mode survives the same sequence. So
+        # bridged stdio servers are spoken to over SSE, everything else over the
+        # streamable-HTTP endpoint.
+        self.transport = "http"
+        # SSE state.
+        self._sse_q: dict[int, queue.Queue] = {}
+        self._sse_endpoint: str | None = None
+        self._sse_started = False
         self._session: str | None = None
         self._rid = 0
         self._lock = threading.Lock()
         self._tools_cache: tuple[float, list[dict]] | None = None
 
+    # -- SSE transport (legacy MCP SSE: GET /sse -> POST /message) ----------
+    def _sse_open(self) -> None:
+        """Open the event stream and learn the message endpoint."""
+        if self._sse_started:
+            return
+        holder: dict = {}
+        ready = threading.Event()
+
+        def _read():
+            try:
+                with httpx.Client(timeout=httpx.Timeout(30.0, read=None)) as client:
+                    with client.stream("GET", self.url + "/sse",
+                                       headers={"Accept": "text/event-stream"}) as r:
+                        r.raise_for_status()
+                        event = None
+                        for line in r.iter_lines():
+                            if line is None:
+                                continue
+                            if line.startswith("event:"):
+                                event = line[6:].strip()
+                            elif line.startswith("data:"):
+                                data = line[5:].strip()
+                                if event == "endpoint" and "message" in data:
+                                    # The endpoint arrives as a bare path with the
+                                    # session id in the query string.
+                                    holder["endpoint"] = data
+                                    ready.set()
+                                else:
+                                    try:
+                                        msg = json.loads(data)
+                                    except ValueError:
+                                        msg = {}
+                                    rid = msg.get("id")
+                                    if isinstance(rid, int) and rid in self._sse_q:
+                                        self._sse_q[rid].put(msg)
+            except Exception as exc:  # noqa: BLE001
+                logger.info("mcp sse stream ended: %s: %s", type(exc).__name__, exc)
+            finally:
+                ready.set()
+                self._sse_started = False
+
+        threading.Thread(target=_read, daemon=True, name="mcp-sse").start()
+        if not ready.wait(20) or not holder.get("endpoint"):
+            raise RuntimeError("MCP SSE endpoint not advertised")
+        self._sse_endpoint = holder["endpoint"]
+        self._sse_started = True
+
+    def _rpc_sse(self, method: str, params: dict | None, notify: bool = False,
+                 timeout: float | None = None) -> dict:
+        self._sse_open()
+        with self._lock:
+            self._rid += 1
+            rid = self._rid
+        body: dict = {"jsonrpc": "2.0", "method": method}
+        if not notify:
+            body["id"] = rid
+        if params is not None:
+            body["params"] = params
+
+        if notify:
+            with httpx.Client(timeout=self.timeout) as client:
+                client.post(self.url + self._sse_endpoint, json=body).raise_for_status()
+            return {}
+
+        q: queue.Queue = queue.Queue()
+        self._sse_q[rid] = q
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                client.post(self.url + self._sse_endpoint, json=body).raise_for_status()
+            msg = q.get(timeout=timeout or self.timeout)
+        except queue.Empty:
+            raise RuntimeError(f"MCP SSE timeout waiting for {method}")
+        finally:
+            self._sse_q.pop(rid, None)
+        if "error" in msg:
+            raise RuntimeError(f"MCP error: {str(msg['error'])[:200]}")
+        return msg
+
     # -- transport ---------------------------------------------------------
     def _rpc(self, method: str, params: dict | None, notify: bool = False) -> dict:
+        if self.transport == "sse":
+            return self._rpc_sse(method, params, notify=notify)
         if not self.url:
             raise RuntimeError("MCP url not configured")
         with self._lock:
@@ -211,13 +309,77 @@ class McpClient:
             return False
 
 
-_client: McpClient | None = None
-_client_lock = threading.Lock()
+def get_mcp_servers() -> list[dict]:
+    """Every configured MCP server, in priority order.
+
+    Multi-server because the estate has more than one domain of truth: Rancher/
+    Kubernetes (read-only ServiceAccount, or the management API for downstream
+    clusters) and Proxmox VE. Tool names are namespaced upstream by each server
+    (`kubernetes_*`, `proxmox_*`), so the catalogues concatenate without collisions.
+
+    Each entry: {name, url, enabled, token, mode}.
+    """
+    cfg = get_mcp_cfg()
+    servers: list[dict] = []
+
+    # --- Rancher / Kubernetes ------------------------------------------------
+    servers.append({
+        "name": "rancher",
+        "url": cfg["url"],
+        "enabled": cfg["enabled"],
+        "token": cfg.get("rancher_token") or "",
+        "mode": cfg.get("mode", "kubeconfig"),
+        "transport": "http",
+    })
+
+    # --- Proxmox VE ----------------------------------------------------------
+    # Default OFF. Proxmox can DESTROY virtual machines, and on this estate the
+    # Kubernetes cluster this app runs on is itself hosted there — an enabled-by-
+    # default destructive surface could take out the platform running the chatbot.
+    # It stays opt-in, and the server process pins its destructive gate closed.
+    px_enabled_raw = cfg.get("proxmox_enabled")
+    px_enabled = str(px_enabled_raw).strip().lower() in ("1", "true", "yes", "on")
+    servers.append({
+        "name": "proxmox",
+        "url": str(cfg.get("proxmox_url") or SETTINGS.mcp_proxmox_url).rstrip("/"),
+        "enabled": px_enabled,
+        # The Proxmox server reads its API token from the process environment (a
+        # Kubernetes Secret), not from a request header, so there is no per-request
+        # token to forward. Keeping one in Settings would imply the app can apply it;
+        # it cannot without write access to K8s Secrets, which is a privilege not
+        # worth taking for this. The hypervisor credential stays with the platform
+        # team, rotatable with kubectl/SealedSecrets.
+        "token": "",
+        "mode": "proxmox",
+        # A bridged stdio server: its streamable-HTTP mode crashes on tools/list, so
+        # it is spoken to over SSE (see McpClient.transport).
+        "transport": "sse",
+    })
+    return servers
 
 
-def get_client() -> McpClient:
-    global _client
-    with _client_lock:
-        if _client is None:
-            _client = McpClient()
-        return _client
+# Per-URL client registry: each server keeps its own MCP session, tool cache and
+# credential, so a failure or a repoint on one cannot affect the other.
+_clients: dict[str, McpClient] = {}
+_clients_lock = threading.Lock()
+
+
+def get_client(name: str = "rancher") -> McpClient:
+    """Client for a named server (see get_mcp_servers())."""
+    servers = {s["name"]: s for s in get_mcp_servers()}
+    spec = servers.get(name) or next(iter(servers.values()))
+    url = spec["url"] or ""
+    with _clients_lock:
+        cli = _clients.get(url)
+        if cli is None:
+            cli = McpClient(url=url)
+            cli.rancher_token = spec.get("token") or ""
+            cli.transport = spec.get("transport") or "http"
+            _clients[url] = cli
+        return cli
+
+
+def reset_clients() -> None:
+    """Drop every cached session (after a settings change)."""
+    with _clients_lock:
+        _clients.clear()

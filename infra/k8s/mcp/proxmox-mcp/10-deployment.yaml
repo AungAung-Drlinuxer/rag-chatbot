@@ -1,0 +1,109 @@
+---
+# Proxmox VE MCP — read-only, in-cluster HTTP service.
+#
+# SAFETY POSTURE (read this before changing anything)
+# Proxmox can destroy virtual machines, and THIS Kubernetes cluster is hosted on
+# that same Proxmox. A wrong call could therefore take out the platform serving the
+# chatbot. Defences, outermost first:
+#   1. PROXMOX_ENABLE_DESTRUCTIVE is ABSENT from this manifest on purpose. The
+#      package demands `confirm: true` + `destructive: true` + this process-level
+#      env opt-in before a destructive tool will act, and fails closed in code
+#      before any HTTP request leaves the pod. Leaving it unset makes the entire
+#      destructive tier unreachable no matter what the model asks for.
+#   2. Only Tier-1 read tools are curated into the assistant (see
+#      app/mcp/infra_agent.py PROXMOX_CURATED_TOOLS).
+#   3. The application layer independently drops any tool whose name implies
+#      mutation, so an upstream rename cannot widen the surface via a stale allowlist.
+#   4. The Proxmox API token should be bound to a read-only role (PVEAuditor) so the
+#      credential itself cannot write, even outside this app.
+#
+# WHERE THE CREDENTIAL LIVES
+# In a Kubernetes Secret, NOT in the app's settings table. A hypervisor token is far
+# too powerful to sit in application storage that the app can read back, and the
+# Proxmox server needs it at PROCESS START (it is a stdio server wrapped in a bridge;
+# there is no per-request token passthrough like Rancher's). Keeping it in a Secret
+# means the platform team owns it — rotate with kubectl/SealedSecrets and the app
+# never holds it. The Settings card manages enable/disable, the URL and a live test.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: proxmox-mcp-credentials
+  namespace: rag-chatbot
+type: Opaque
+stringData:
+  # Fill these in (or seal them) before enabling. Recommended: create a
+  # PVEAuditor-scoped API token in Proxmox, e.g.
+  #   pve-audit@pve!mcp  with role PVEAuditor on /
+  # (these are placeholder empties — never commit a real value)
+  PROXMOX_URL: ""
+  PROXMOX_TOKEN_ID: ""
+  PROXMOX_TOKEN_SECRET: ""
+  PROXMOX_TLS_INSECURE: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxmox-mcp-config
+  namespace: rag-chatbot
+data: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxmox-mcp
+  namespace: rag-chatbot
+  labels:
+    app.kubernetes.io/name: proxmox-mcp
+spec:
+  # Starts at zero. The operator scales it to 1 after filling the Secret: an
+  # enabled-by-default hypervisor integration is exactly the kind of thing that
+  # should require a deliberate act.
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: proxmox-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: proxmox-mcp
+    spec:
+      containers:
+        - name: proxmox-mcp
+          image: harbor.drlinuxer.com/rag-chatbot/proxmox-mcp:1.0.2
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: proxmox-mcp-credentials
+          # NOTE: PROXMOX_ENABLE_DESTRUCTIVE is absent by design. Do not add it.
+          resources:
+            # Node + bridge: no model, no training runtime. Modest is honest.
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          # The bridge is started with --healthEndpoint /healthz, so readiness is a
+          # real HTTP check of the whole chain (bridge -> MCP child), not just a
+          # socket that accepts. The container's startup banner claims
+          # "Health endpoints: (none)"; the flag exists and is the stronger signal.
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxmox-mcp
+  namespace: rag-chatbot
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: proxmox-mcp
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

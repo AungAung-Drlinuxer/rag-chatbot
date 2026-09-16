@@ -139,7 +139,14 @@ const META: Record<IntegrationKey, {
       "Bind that token to a READ-ONLY Rancher role — anything the token can do, the assistant " +
       "can do. The URL is optional: leave it empty to let the app pick the right server. " +
       "Every tool is read-only (read_only=true, disable_destructive=true) and the assistant " +
-      "only sees a curated subset of the tool catalogue.",
+      "only sees a curated subset of the tool catalogue. Proxmox VE is separate and OFF by " +
+      "default: it can destroy virtual machines, and this cluster is itself hosted there. " +
+      "Enable it only after putting a read-only (PVEAuditor) API token in the " +
+      "'proxmox-mcp-credentials' Secret and scaling the proxmox-mcp deployment to 1 — the " +
+      "hypervisor credential deliberately does NOT live in this form, because the Proxmox " +
+      "server reads it from its environment and a token that powerful belongs with the " +
+      "platform team. Its destructive tier is unreachable: the process-level opt-in is " +
+      "never set, so those tools fail closed in code.",
     docs: "https://modelcontextprotocol.io/",
     fields: [
       { key: "enabled", label: "Enabled (true/false)", placeholder: "true" },
@@ -149,6 +156,9 @@ const META: Record<IntegrationKey, {
       { key: "url", label: "MCP Server URL (optional — blank = auto-select)",
         placeholder: "http://rancher-mcp:8080" },
       { key: "timeout_s", label: "Per-call timeout (seconds)", placeholder: "20" },
+      { key: "proxmox_enabled", label: "Proxmox VE enabled (true/false)", placeholder: "false" },
+      { key: "proxmox_url", label: "Proxmox MCP Server URL",
+        placeholder: "http://proxmox-mcp:8000" },
     ],
   },
 };

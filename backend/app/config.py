@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     # because the upstream server refuses to combine kubeconfig access with
     # per-request token auth. Used only when a Rancher token is configured.
     mcp_mgmt_url: str = "http://rancher-mcp-mgmt:8080"
+    # Proxmox VE MCP (stdio server fronted by an HTTP bridge). Off by default:
+    # it can destroy VMs, and this cluster is itself hosted on that Proxmox.
+    mcp_proxmox_url: str = "http://proxmox-mcp:8080"
     mcp_enabled: bool = True
     mcp_timeout_s: float = 20.0
     # Bounded ReAct loop: each step is an LLM call plus tool calls, so this is the
