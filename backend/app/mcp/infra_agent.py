@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import json
 import logging
+import contextvars
 import re
+import time
 
 from app.config import SETTINGS
 from app.mcp.client import get_client
@@ -31,6 +33,35 @@ logger = logging.getLogger("mcp.infra")
 #   "is anything broken"           -> kubernetes_workload_health, kubernetes_events
 #   "why did this pod fail"        -> kubernetes_logs, kubernetes_describe
 #   "what is under pressure"       -> kubernetes_top, kubernetes_capacity
+# v1.6.65 — per-turn tool-call record.
+#
+# A KB answer can show its sources; a live-infrastructure answer has nothing to show
+# unless the calls themselves are recorded. A ContextVar keeps this correct under
+# concurrency (the same process serves many chats) and needs no plumbing through
+# every function signature.
+_TOOL_CALLS: contextvars.ContextVar[list | None] = contextvars.ContextVar(
+    "mcp_tool_calls", default=None)
+
+
+def _begin_call_log() -> list:
+    log: list = []
+    _TOOL_CALLS.set(log)
+    return log
+
+
+def _record_call(name: str, ms: int, nbytes: int, server: str = "") -> None:
+    log = _TOOL_CALLS.get()
+    if log is None:
+        return
+    log.append({
+        "name": name,
+        "ms": int(ms),
+        "bytes": int(nbytes),
+        "server": server or "mcp",
+        "at": time.strftime("%H:%M:%S"),
+    })
+
+
 CURATED_TOOLS: tuple[str, ...] = (
     "cluster_list",
     "kubernetes_list",
@@ -225,13 +256,17 @@ def build_tools():
             except Exception:  # noqa: BLE001
                 continue
 
-            def _run(_name=name, _client=client, **kwargs):
+            def _run(_name=name, _client=client, _server=spec["name"], **kwargs):
                 # Drop None so the server sees only what the model actually set.
                 args = {k: v for k, v in kwargs.items() if v is not None}
+                _t0 = time.monotonic()
                 try:
-                    return _truncate(_client.call_tool(_name, args),
-                                     int(SETTINGS.mcp_max_tool_chars))
+                    out = _truncate(_client.call_tool(_name, args),
+                                    int(SETTINGS.mcp_max_tool_chars))
+                    _record_call(_name, (time.monotonic() - _t0) * 1000, len(out), _server)
+                    return out
                 except Exception as exc:  # noqa: BLE001
+                    _record_call(_name, (time.monotonic() - _t0) * 1000, 0, _server)
                     # Return the error as tool output: the model can recover, and the
                     # loop never dies on one bad call.
                     return f"TOOL ERROR ({_name}): {type(exc).__name__}: {str(exc)[:200]}"
@@ -410,8 +445,12 @@ def _deterministic_lookup(question: str, tools):
     return ""
 
 
-def answer_infra(question: str) -> tuple[str, str]:
-    """(text, note). note is "deterministic" | "ok" | "failed".
+def answer_infra(question: str) -> tuple[str, str, list]:
+    """(text, note, calls). note is "deterministic" | "ok" | "failed".
+
+    `calls` is the per-turn record of what was queried (name, duration, size, server,
+    time). It is the evidence a live-infrastructure answer must show — the KB path has
+    its source list, this is the equivalent.
 
     Deterministic FIRST, the model second. Measured reason for the order: when the
     model was primary it echoed the instruction meant for it ("LIVE INFRASTRUCTURE
@@ -420,6 +459,7 @@ def answer_infra(question: str) -> tuple[str, str]:
     the common shapes from code produces a clean, complete answer with no model in the
     loop, and it is faster and cheaper besides.
     """
+    _begin_call_log()
     tools = build_tools()
     if tools:
         raw = _deterministic_lookup(question, tools)
@@ -429,15 +469,16 @@ def answer_infra(question: str) -> tuple[str, str]:
             head = raw.strip()
             if len(head) > 3500:
                 head = head[:3500] + "\n…[truncated]"
-            return ("**Live infrastructure** — read-only, queried directly from the "
-                    "cluster (not from documents).\n\n```\n" + head + "\n```"), "deterministic"
+            return (("**Live infrastructure** — read-only, queried directly from the "
+                     "cluster (not from documents).\n\n```\n" + head + "\n```"),
+                    "deterministic", _TOOL_CALLS.get() or [])
 
     # Fall back to the model choosing tools, for questions the deterministic shapes
     # above do not cover.
     text = run_infra_agent(question)
     if text:
-        return text, "ok"
-    return "", "failed"
+        return text, "ok", _TOOL_CALLS.get() or []
+    return "", "failed", _TOOL_CALLS.get() or []
 
 
 def agent_status() -> dict:

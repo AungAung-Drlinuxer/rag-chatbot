@@ -152,6 +152,13 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     "retrieve": "retrieve",
                     "gate": "rerank",
                     "context": "generate",
+                    # NOTE: `tools` stays mapped to "generate" here on purpose. The
+                    # graph runs this node on EVERY request (it decides whether to
+                    # escalate), so emitting its node-stage as "tools" made a plain
+                    # documents answer render the live step set — measured:
+                    # ['...', 'generate', 'tools', 'retrieve', 'generate'] for mode=kb.
+                    # The distinct live stage is emitted below, from the one place that
+                    # actually knows the answer came from the estate.
                     "tools": "generate",
                 }
                 # aliases for the post-graph chat.py-emitted events
@@ -183,6 +190,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     # this the meta fell back to "ok" whenever tool_used was set, so a
                     # failed infrastructure lookup was reported to the UI as success.
                     tool_note=g.get("tool_note"),
+                    tool_calls=g.get("tool_calls") or [],
                     top_k=g["top_k"] or 5,
                     context_chars=len(g["context"]),
                     context_tokens_estimate=len(g["context"]) // 4,
@@ -204,10 +212,24 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     result.docs = []
                     result.sources = []
                     result.top_k = 0
-                yield _sse("stage", {"stage": _canon_stage("retrieval"),
-                                     "detail": ("Ticket status lookup (live)"
-                                                if result.tool_used == "tickets"
-                                                else f"LangGraph pass {g['retries']} — confidence {g['confidence']:.0%}")})
+                # Detail text names what is actually happening: for a live answer that
+                # is a cluster query, not document retrieval.
+                _calls = getattr(result, "tool_calls", None) or []
+                if result.tool_used == "mcp_infra" and _calls:
+                    _detail = ("Querying " + ", ".join(c["name"] for c in _calls[:3]))
+                elif result.tool_used == "tickets":
+                    _detail = "Ticket status lookup (live)"
+                else:
+                    _detail = (f"LangGraph pass {g['retries']} — "
+                               f"confidence {g['confidence']:.0%}")
+                # Only a LIVE answer may carry the "tools" stage. The graph's `tools`
+                # node runs on EVERY request (it decides whether to escalate), so
+                # emitting this unconditionally would make a documents answer render the
+                # live step set — measured: a mode=kb question produced
+                # ['...', 'generate', 'tools', 'retrieve', 'generate'].
+                yield _sse("stage", {"stage": _canon_stage("tools") if (
+                    result.tool_used == "mcp_infra") else _canon_stage("retrieval"),
+                    "detail": _detail})
             except Exception as graph_err:
                 logger.warning("langgraph path failed (%s) — falling back to linear pipeline", graph_err)
                 result = None
@@ -306,6 +328,29 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         meta["mode"] = (req.mode or "auto").strip().lower()
         meta["tool_note"] = getattr(result, "tool_note", None) or (
             "ok" if result.tool_used else None)
+        # v1.6.65 — what was actually queried, and what that answer IS.
+        #
+        # A KB answer's evidence is its sources. A live-infrastructure answer's evidence
+        # is the calls: which tool, how long, how much came back, when. And it must NOT
+        # carry a retrieval confidence percentage — 90% is a statement about how well a
+        # document matched a query, which is meaningless for a fact read off the cluster.
+        # Presenting "90% confidence" about live state is a category error, and the UI
+        # now renders scope + time + read-only instead.
+        meta["tool_calls"] = getattr(result, "tool_calls", None) or []
+        if result.tool_used == "mcp_infra":
+            servers = sorted({c.get("server") for c in meta["tool_calls"] if c.get("server")})
+            meta["evidence"] = {
+                "kind": "live",
+                "servers": servers or ["mcp"],
+                "read_only": True,
+                "at": meta["tool_calls"][-1]["at"] if meta["tool_calls"] else None,
+                "calls": len(meta["tool_calls"]),
+                "total_ms": sum(c.get("ms") or 0 for c in meta["tool_calls"]),
+                "total_bytes": sum(c.get("bytes") or 0 for c in meta["tool_calls"]),
+            }
+            # The percentage is a retrieval artefact; drop it rather than let the UI
+            # present it as certainty about the cluster.
+            meta["confidence"] = None
         yield _sse("meta", meta)
 
         if result.decision == DECISION_CAUTION and not result.tool_used:

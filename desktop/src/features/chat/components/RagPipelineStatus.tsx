@@ -27,7 +27,10 @@ export type StageKey =
   | "rewrite"
   | "retrieve"
   | "rerank"
-  | "generate";
+  | "generate"
+  // v1.6.65 — a live-infrastructure answer runs a DIFFERENT pipeline: no document
+  // retrieval, no rerank; it selects a tool and queries the estate.
+  | "tools";
 
 type StepDef = {
   key: StageKey;
@@ -79,6 +82,42 @@ const STEPS: StepDef[] = [
   },
 ];
 
+/**
+ * v1.6.65 — the step set for a LIVE INFRASTRUCTURE answer.
+ *
+ * Why a second set exists: the tracker used to render the RAG pipeline for every
+ * answer, so an answer read off the cluster displayed "Query rewrite → Retrieval →
+ * Rerank" — stages that never ran, implying the answer came from documents. The backend
+ * emits a "tools" stage for these answers, which is what selects this set.
+ */
+const STEPS_LIVE: StepDef[] = [
+  {
+    key: "understanding",
+    label: "Understanding",
+    icon: "🛡️",
+    description:
+      "Input guardrails screen the message, and the role is checked — live tools " +
+      "require the admin or agent role.",
+  },
+  {
+    key: "tools",
+    label: "Cluster query",
+    icon: "⚡",
+    description:
+      "A read-only MCP tool queries the live estate. Nothing is written, and only the " +
+      "curated read tools are reachable.",
+  },
+  {
+    key: "generate",
+    label: "Answer",
+    icon: "🧩",
+    description:
+      "The result is presented from the cluster's own output, with the calls it came " +
+      "from shown as evidence.",
+  },
+];
+
+
 /* Map free-text backend stage details onto StageKeys.
    The backend sends human strings like:
    "Analyzing your question", "Refining the search query",
@@ -90,6 +129,10 @@ const STAGE_MATCHERS: [StageKey, RegExp][] = [
   ["retrieve", /search|retriev|knowledge base|fus/i],
   ["rerank", /rerank|scor|confidence/i],
   ["generate", /generat|context|answer|llm|model/i],
+  // v1.6.65 — must be checked before "generate": a live lookup's detail reads
+  // "Querying kubernetes_workload_health", and without this it fell through to the
+  // RAG step set, so a cluster answer was drawn as if it came from documents.
+  ["tools", /quer|cluster|mcp|tool/i],
 ];
 
 export function matchStageKey(detail: string): StageKey | null {
@@ -145,6 +188,18 @@ export default function RagPipelineStatus({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // v1.6.19 — collapsed by default once completed, or configurable via defaultOpen
   const [open, setOpen] = useState(active ? true : defaultOpen);
+  // v1.6.65 — which pipeline is actually running. A live-infrastructure answer does
+  // not retrieve or rerank documents, so rendering those steps described a pipeline
+  // that never ran. Detected from the backend stage (the "tools" key or a detail
+  // string like "Querying <tool>").
+  const isLive = useMemo(
+    () =>
+      Boolean(telemetry && "tools" in telemetry) ||
+      matchStageKey(stage) === "tools" ||
+      /quer|cluster query/i.test(stage || ""),
+    [telemetry, stage],
+  );
+  const steps = isLive ? STEPS_LIVE : STEPS;
   const [tableOpen, setTableOpen] = useState(false);
 
   /* ---- simulation mode: walk the steps every 900ms ------------------ */
@@ -155,11 +210,11 @@ export default function RagPipelineStatus({
       return;
     }
     let i = 0;
-    setDemoStage(STEPS[0].key);
+    setDemoStage(steps[0].key);
     timerRef.current = setInterval(() => {
       i += 1;
-      if (i < STEPS.length) {
-        setDemoStage(STEPS[i].key);
+      if (i < steps.length) {
+        setDemoStage(steps[i].key);
       } else {
         if (timerRef.current) clearInterval(timerRef.current);
         setDemoStage(null);
@@ -182,13 +237,13 @@ export default function RagPipelineStatus({
   // measured stage as done so the trace reads left-to-right with checks.
   const lastMeasured = useMemo(() => {
     let last = -1;
-    STEPS.forEach((s, i) => {
+    steps.forEach((s, i) => {
       if (telemetry?.[s.key] != null) last = i;
     });
     return last;
   }, [telemetry]);
   const activeIdx = liveKey
-    ? STEPS.findIndex((s) => s.key === liveKey)
+    ? steps.findIndex((s) => s.key === liveKey)
     : lastMeasured;
 
   // keep rendering after completion (finished trace); only hide when nothing
@@ -292,7 +347,7 @@ export default function RagPipelineStatus({
         <div className="border-t border-slate-100 p-4 dark:border-slate-800/80">
           {/* ---- horizontal bubbles with status & duration ---- */}
           <div className="flex items-start overflow-x-auto pb-3 pt-1">
-            {STEPS.map((step, idx) => {
+            {steps.map((step, idx) => {
               const isActive = active && idx === activeIdx;
               const isDone = active ? activeIdx > idx : (telemetry?.[step.key] != null || idx <= lastMeasured);
               const ms = telemetry?.[step.key];
@@ -373,7 +428,7 @@ export default function RagPipelineStatus({
             </button>
             {tableOpen && (
               <ul className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800/60 dark:border-slate-800/60">
-                {STEPS.map((step, idx) => {
+                {steps.map((step, idx) => {
                   const isActive = active && idx === activeIdx;
                   const isDone = active ? activeIdx > idx : (telemetry?.[step.key] != null || idx <= lastMeasured);
                   const ms = telemetry?.[step.key];
@@ -441,6 +496,10 @@ export function useStageTelemetry() {
   // in-bubble AgentActivity indicator can show the matching icon + label live.
   const [currentStage, setCurrentStage] = useState<StageKey | null>(null);
   const telemetryRef = useRef<StageTelemetry>({});
+  // v1.6.65 — the hook must know which pipeline is running, otherwise it
+  // records a bogus "rewrite" duration for a live answer that never rewrote a query.
+  const liveRef = useRef(false);
+  const stepsFor = () => (liveRef.current ? STEPS_LIVE : STEPS);
   const elapsedRef = useRef<number>(0);
   const startedAt = useRef<number>(0);
   const stageAt = useRef<number>(0);
@@ -462,8 +521,8 @@ export function useStageTelemetry() {
       const now = performance.now();
       const lastDone = prevStage.current;
       if (lastDone) {
-        const idx = STEPS.findIndex((s) => s.key === lastDone);
-        const running = STEPS[idx + 1];
+        const idx = stepsFor().findIndex((s) => s.key === lastDone);
+        const running = stepsFor()[idx + 1];
         if (running) {
           const runMs = Math.max(1, Math.round(now - stageAt.current));
           telemetryRef.current = { ...telemetryRef.current, [running.key]: runMs };
@@ -482,7 +541,7 @@ export function useStageTelemetry() {
 
   const onStage = (detail: string, stageKey?: string) => {
     const now = performance.now();
-    const completed = stageKey && STEPS.some((s) => s.key === stageKey)
+    const completed = stageKey && stepsFor().some((s) => s.key === stageKey)
       ? (stageKey as StageKey)
       : matchStageKey(detail);
     if (completed) {
@@ -494,8 +553,8 @@ export function useStageTelemetry() {
     prevStage.current = completed;
     // The NEXT stage starts now — that is what the user should see as "current".
     if (completed) {
-      const idx = STEPS.findIndex((s) => s.key === completed);
-      setCurrentStage(STEPS[idx + 1]?.key ?? completed);
+      const idx = stepsFor().findIndex((s) => s.key === completed);
+      setCurrentStage(stepsFor()[idx + 1]?.key ?? completed);
     } else {
       setCurrentStage("understanding");
     }

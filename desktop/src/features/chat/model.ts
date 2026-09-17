@@ -39,8 +39,15 @@ export type Message = {
   /** v1.6.55 — set when the answer came from a live MCP tool, so the UI can
    *  distinguish a documents answer from an infrastructure answer. */
   toolUsed?: string;
-  /** ok | failed | error | not_permitted — why the tool path ended as it did. */
+  /** ok | failed | error | not_permitted | deterministic — why the tool path ended. */
   toolNote?: string;
+  /** v1.6.65 — the calls behind a live-infrastructure answer (its "sources"). */
+  toolCalls?: { name: string; ms?: number; bytes?: number; server?: string; at?: string }[];
+  /** v1.6.65 — scope/time of a live answer, replacing a retrieval confidence %. */
+  evidence?: {
+    kind?: string; servers?: string[]; read_only?: boolean; at?: string | null;
+    calls?: number; total_ms?: number; total_bytes?: number;
+  } | null;
   latencyMs?: number;
   serverId?: string;  // v0.21.90 — DB row id from the done event (feedback target)
   feedback?: 1 | -1;  // v0.21.90 — recorded rating (button state)

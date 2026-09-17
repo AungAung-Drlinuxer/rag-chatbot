@@ -13,6 +13,7 @@ import {
   Search,
   Shield,
   ShieldAlert,
+  Info,
   Sparkles,
   Ticket,
   User,
@@ -41,6 +42,8 @@ import {
 } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import ComposerControls from "@/features/chat/components/ComposerControls";
+import EvidenceCard from "@/features/chat/components/EvidenceCard";
+import SessionPanel from "@/features/chat/components/SessionPanel";
 import {
   type Message,
   type Source,
@@ -111,6 +114,12 @@ export default function Chat({
   // it a KB answer and an infrastructure answer look identical, and a failed tool
   // lookup reads as "no such information in the knowledge base".
   const [chatMode, setChatMode] = useState<"auto" | "kb" | "infra">("auto");
+  // v1.6.65 — "Ask this in Infrastructure mode" re-sends a previous question without
+  // making the user retype it. State updates are async, so the override travels in a
+  // ref that sendMessage consumes once.
+  const askOverrideRef = useRef<{ question: string; mode: "auto" | "kb" | "infra" } | null>(null);
+  // v1.6.65 — mobile access to "what produced this answer".
+  const [panelOpen, setPanelOpen] = useState(false);
   // v1.6.40 — the escalation is resolved by the requester filling the ticket form
   // themselves, so remember which pending approval that form supersedes. On submit
   // it is marked "cancelled" (NOT resumed), which prevents an admin from later
@@ -200,6 +209,8 @@ export default function Chat({
         usage: m.meta?.usage,
         toolUsed: m.meta?.tool_used || undefined,
         toolNote: m.meta?.tool_note || undefined,
+        toolCalls: m.meta?.tool_calls || undefined,
+        evidence: m.meta?.evidence || null,
         latencyMs: m.meta?.latency_ms,
         ragTrace: m.meta?.rag_trace || (m.meta?.latency_ms ? { stages: {}, totalMs: m.meta.latency_ms } : undefined),
         serverId: m.message_id || undefined,  // feedback target (v0.21.90)
@@ -228,7 +239,13 @@ export default function Chat({
 
   async function sendMessage(event?: FormEvent) {
     event?.preventDefault();
-    const question = input.trim();
+    const override = askOverrideRef.current;
+    askOverrideRef.current = null;
+    const question = (override?.question ?? input).trim();
+    // The mode for THIS send: an override (one-click re-ask) wins over the composer
+    // selection, which is what lets "Ask this in Infrastructure mode" work without
+    // first mutating the control and waiting for a re-render.
+    const sendMode = override?.mode ?? chatMode;
     if (!question || isTyping) return;
 
     // v0.21.36 — append attachment links to the outgoing message
@@ -279,6 +296,8 @@ export default function Chat({
                       topK: meta.top_k,
                       toolUsed: (meta as any).tool_used || undefined,
                       toolNote: (meta as any).tool_note || undefined,
+                      toolCalls: (meta as any).tool_calls || undefined,
+                      evidence: (meta as any).evidence || null,
                       sources: (meta.hits ?? []).map((h: any) => ({
                         page_id: h.page_id ?? null,
                         title: h.title ?? "Untitled",
@@ -357,7 +376,7 @@ export default function Chat({
           },
         },
         llmProvider,
-        chatMode,
+        sendMode,
       );
       historyRef.current = [
         ...historyRef.current,
@@ -384,6 +403,27 @@ export default function Chat({
       Trims messages after the chosen user turn (both the user
       turn and its assistant answer) and resends the question.
   ---------------------------------------------------------- */
+  /**
+   * v1.6.65 — re-ask this question against the LIVE estate.
+   *
+   * The whole point of an explicit mode switch is that the user can act on it. Getting
+   * a documents answer and wanting the cluster's own answer used to mean retyping the
+   * question and switching modes; this does both in one click.
+   */
+  function askLiveFromMessage(target: Message) {
+    if (isTyping) return;
+    const idx = messages.findIndex((m) => m.id === target.id);
+    if (idx < 0) return;
+    let question = "";
+    for (let i = idx; i >= 0; i -= 1) {
+      if (messages[i].role === "user") { question = messages[i].content.trim(); break; }
+    }
+    if (!question) return;
+    setChatMode("infra");
+    askOverrideRef.current = { question, mode: "infra" };
+    void sendMessage();
+  }
+
   function retryFromMessage(target: Message) {
     if (isTyping || target.role !== "user") return;
     const idx = messages.findIndex((m) => m.id === target.id);
@@ -647,6 +687,27 @@ export default function Chat({
   // S1.1 — derived once per render: real retrieval stats + cited sources for the panel.
   const sources = latestSources(messages);
   const retrieval = latestRetrieval(messages);
+  // v1.6.65 — "what produced this answer" for the detail strip. A live-infrastructure
+  // answer has no retrieval numbers, so the same panel used to read 0 / "—" throughout.
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const lastIsLive = lastAssistant?.toolUsed === "mcp_infra";
+  const SERVER_LABEL: Record<string, string> = {
+    rancher: "Rancher / Kubernetes",
+    proxmox: "Proxmox VE",
+  };
+  const detailSummary = {
+    live: lastIsLive,
+    serverLabels: (lastAssistant?.evidence?.servers ?? []).map((x) => SERVER_LABEL[x] ?? x),
+    at: lastAssistant?.evidence?.at ?? null,
+    calls: lastAssistant?.evidence?.calls ?? lastAssistant?.toolCalls?.length ?? undefined,
+    totalMs: lastAssistant?.evidence?.total_ms,
+    readOnly: lastAssistant?.evidence?.read_only ?? true,
+    chunks: retrieval?.chunks ?? null,
+    cited: retrieval?.cited ?? (sources.length || null),
+    rerankUsed: retrieval?.rerank_used ?? null,
+    role: retrieval?.role ?? null,
+    aclScoped: retrieval?.acl_scoped ?? null,
+  };
   // S1.2 — exactly one progress surface: the live pipeline card. While it is on
   // screen (isTyping) the in-bubble placeholder degrades to a neutral skeleton so
   // the user never reads two competing "in progress" animations.
@@ -689,7 +750,31 @@ export default function Chat({
               RBAC protected
             </div>
           </div>
+        
+            {/* v1.6.65 — the panel was `hidden xl:flex`, so on a phone (where this app
+                is mostly used) "what produced this answer" was unreachable. This opens
+                it inline BELOW the header, so it participates in layout and can never
+                occlude the composer. */}
+            <button
+              type="button"
+              onClick={() => setPanelOpen((v) => !v)}
+              title="What produced this answer"
+              aria-label="Toggle answer detail"
+              className={`rounded-lg p-2 transition xl:hidden ${
+                panelOpen ? "bg-muted text-foreground" : "hover:bg-muted text-muted-foreground"
+              }`}
+            >
+              <Info className="size-4" />
+            </button>
         </header>
+
+        {/* v1.6.65 — inline (not a floating sheet) so it can never cover the composer,
+            and mode-aware so a live answer is not described with retrieval numbers. */}
+        {panelOpen && (
+          <div className="shrink-0 border-b border-[var(--border)] bg-[var(--card)] px-4 py-3 xl:hidden">
+            <SessionPanel summary={detailSummary} />
+          </div>
+        )}
 
         {/* Messages */}
         <div ref={messagesContainerRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
@@ -715,6 +800,7 @@ export default function Chat({
                     onOpenTicketForm={() => openTicketForm(m)}
                     onSubmitEdit={(mid, text) => handleEditSubmit(mid, text)}
                     onRetryQuestion={() => retryFromMessage(m)}
+            onAskLive={() => askLiveFromMessage(m)}
                   />
                 ))}
                 {/* In-flight RAG execution status shown ONLY while actively generating before message persists */}
@@ -1234,6 +1320,7 @@ function MessageBubble({
   onOpenTicketForm,
   onSubmitEdit,
   onRetryQuestion,
+  onAskLive,
   busy = false,
   liveStageText,
   liveElapsedMs,
@@ -1244,6 +1331,8 @@ function MessageBubble({
   onOpenTicketForm: () => void;
   onSubmitEdit?: (messageId: string, newText: string) => void;
   onRetryQuestion?: () => void;
+  /** v1.6.65 — re-ask the same question against the live estate (KB answers only). */
+  onAskLive?: () => void;
   busy?: boolean;
   /** v1.6.38 — live pipeline stage (detail text) for the animated indicator */
   liveStageText?: string;
@@ -1404,6 +1493,37 @@ function MessageBubble({
           )}
 
           {/* Inline Knowledge Base Sources in answer card */}
+          {/* v1.6.65 — act on the mode switch. A documents answer to an
+              infrastructure-flavoured question is often not what was wanted; this
+              re-asks the SAME question against the live estate in one click instead of
+              making the user retype it and change the mode. Shown only when this answer
+              did NOT come from the estate. */}
+          {!isUser && onAskLive && message.content && message.toolUsed !== "mcp_infra"
+            && message.toolNote !== "not_permitted" && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={onAskLive}
+                title="Ask the same question against the live Kubernetes / Rancher estate (read-only)"
+                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/60 px-2.5 py-1 text-[10px] font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
+              >
+                <Zap className="size-3" />
+                Ask this in Infrastructure mode
+              </button>
+            </div>
+          )}
+
+          {/* v1.6.65 — the live answer's evidence. A documents answer gets source
+              cards; without this a cluster answer had NOTHING to show, so the user had
+              to take live state on faith. */}
+          {!isUser && message.toolUsed === "mcp_infra" && (
+            <EvidenceCard
+              evidence={message.evidence}
+              calls={message.toolCalls}
+              raw={message.content}
+            />
+          )}
+
           {/* v1.6.60 — sources are documents, so they are evidence only for a
               documents answer. A live-infrastructure answer is evidenced by the
               cluster, and listing KB articles under it claims a provenance the answer
@@ -1524,7 +1644,12 @@ function MessageBubble({
               </button>
             </span>
           )}
-          {!isUser && message.confidence != null && (
+          {/* v1.6.65 — no confidence badge for a live-infrastructure answer. The
+              percentage measures how well a DOCUMENT matched a query, which says
+              nothing about a fact read off the cluster; the EvidenceCard carries the
+              honest substitutes (scope, time, read-only). The backend already nulls
+              the value — this guard keeps a stale/cached payload from showing it. */}
+          {!isUser && message.toolUsed !== "mcp_infra" && message.confidence != null && (
             <ConfidenceBadge confidence={message.confidence} />
           )}
           {!isUser && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
