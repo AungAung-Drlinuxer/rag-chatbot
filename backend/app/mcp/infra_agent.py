@@ -261,8 +261,14 @@ def build_tools():
                 args = {k: v for k, v in kwargs.items() if v is not None}
                 _t0 = time.monotonic()
                 try:
-                    out = _truncate(_client.call_tool(_name, args),
-                                    int(SETTINGS.mcp_max_tool_chars))
+                    # NO truncation here. The cap used to be applied inside the tool, and
+                    # a JSON object list cut mid-object with a "…[truncated]" marker is no
+                    # longer parseable — so the summariser returned None and the raw JSON
+                    # was dumped at the user (the reported bug). Truncation now happens
+                    # where the consumer needs it: the model's tool result and the answer
+                    # body. The deterministic path gets the whole payload and can reduce
+                    # it properly.
+                    out = _client.call_tool(_name, args)
                     _record_call(_name, (time.monotonic() - _t0) * 1000, len(out), _server)
                     return out
                 except Exception as exc:  # noqa: BLE001
@@ -333,7 +339,10 @@ def run_infra_agent(question: str, max_steps: int | None = None) -> str:
                 except Exception as exc:  # noqa: BLE001
                     result = f"TOOL ERROR ({name}): {type(exc).__name__}"
             logger.info("mcp step %d: %s -> %d chars", step + 1, name, len(str(result)))
-            messages.append(ToolMessage(content=str(result),
+            # Truncate at the MODEL's boundary, not in the tool: the tool must return the
+            # whole payload so the deterministic path can summarise it properly.
+            messages.append(ToolMessage(content=_truncate(
+                                            str(result), int(SETTINGS.mcp_max_tool_chars)),
                                         tool_call_id=call.get("id") or name))
     # Out of steps: ask for a wrap-up with whatever evidence exists.
     try:
@@ -345,6 +354,182 @@ def run_infra_agent(question: str, max_steps: int | None = None) -> str:
     except Exception:  # noqa: BLE001
         pass
     return ""
+
+
+
+# ---------------------------------------------------------------------------
+# Readable output: kubectl-style questions and JSON summarisation (v1.6.69)
+# ---------------------------------------------------------------------------
+
+# `kubectl get <kind>` shorthand -> the resource kind the API expects. People paste
+# commands straight from their terminal ("Kubectl get nodes"), and short names/plurals
+# are what they type.
+_KUBECTL_KINDS: dict[str, str] = {
+    "node": "Node", "nodes": "Node", "no": "Node",
+    "pod": "Pod", "pods": "Pod", "po": "Pod",
+    "deployment": "Deployment", "deployments": "Deployment", "deploy": "Deployment",
+    "svc": "Service", "service": "Service", "services": "Service",
+    "ingress": "Ingress", "ingresses": "Ingress",
+    "statefulset": "StatefulSet", "statefulsets": "StatefulSet", "sts": "StatefulSet",
+    "daemonset": "DaemonSet", "daemonsets": "DaemonSet", "ds": "DaemonSet",
+    "namespace": "Namespace", "namespaces": "Namespace", "ns": "Namespace",
+    "pvc": "PersistentVolumeClaim", "pv": "PersistentVolume",
+    "configmap": "ConfigMap", "cm": "ConfigMap",
+    "secret": "Secret", "secrets": "Secret",
+    "job": "Job", "jobs": "Job", "cronjob": "CronJob",
+    "event": "Event", "events": "Event",
+}
+
+
+def parse_kubectl(q: str) -> dict | None:
+    """Extract intent from a pasted kubectl command. None when it is not one.
+
+    WHY: "Kubectl get nodes" is a completely natural thing for an IT helpdesk user to
+    type — it is what they already do in a terminal. Before this it matched only the
+    bare word "node", fell through to kubernetes_list, and the answer was 6 KB of raw
+    JSON (a Node object with its full annotations). Recognising the command shape lets
+    the question reach the right tool with the right namespace.
+    """
+    m = re.search(r"kubectl\s+get\s+([a-zA-Z][a-zA-Z0-9-]*)", q, re.I)
+    if not m:
+        return None
+    kind = _KUBECTL_KINDS.get(m.group(1).lower())
+    if not kind:
+        return None
+    ns = None
+    nm = re.search(r"(?:-n|--namespace[=\s])\s*([a-z0-9][a-z0-9-]*)", q, re.I)
+    if nm:
+        ns = nm.group(1)
+    # "kubectl get pods -A" / "--all-namespaces" means every namespace.
+    all_ns = bool(re.search(r"-A\b|--all-namespaces", q))
+    return {"kind": kind, "namespace": ns, "all_namespaces": all_ns}
+
+
+def _age(ts: str | None) -> str:
+    if not ts:
+        return "-"
+    try:
+        from datetime import datetime, timezone
+        t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        d = int((datetime.now(timezone.utc) - t).total_seconds())
+        if d < 3600: return f"{d // 60}m"
+        if d < 86400: return f"{d // 3600}h"
+        return f"{d // 86400}d"
+    except Exception:  # noqa: BLE001
+        return "-"
+
+
+def _loads_tolerant(raw: str):
+    """json.loads that survives a TRUNCATED object list.
+
+    WHY: tool output is capped (mcp_max_tool_chars) so a large list arrives cut mid-
+    object, json.loads raises, and the summariser returned None — which fell straight
+    back to dumping the raw JSON. That is exactly the failure the summariser exists to
+    prevent, so the parse has to cope with the cut rather than giving up on it.
+    """
+    try:
+        return json.loads(raw)
+    except Exception:  # noqa: BLE001
+        pass
+    s = (raw or "").strip()
+    if not s.startswith("["):
+        return None
+    depth, last = 0, -1
+    in_str, esc = False, False
+    for i, ch in enumerate(s):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                last = i
+    if last > 0:
+        try:
+            return json.loads(s[: last + 1] + "]")
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def summarise_json(raw: str) -> str | None:
+    """Turn a JSON list of Kubernetes objects into a compact readable table.
+
+    WHY: the tools return full objects — every annotation, every managedFields entry.
+    Dumping that is technically an answer and practically useless: the screenshot that
+    prompted this showed a wall of JSON where a table of NAME / STATUS / ROLES / AGE was
+    wanted. The verbatim payload is still available in the evidence card.
+    """
+    data = _loads_tolerant(raw)
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list) or not data or not isinstance(data[0], dict):
+        return None
+
+    rows = []
+    for o in data[:80]:
+        md = o.get("metadata") or {}
+        st = o.get("status") or {}
+        name = md.get("name") or "?"
+        kind = o.get("kind") or "?"
+        # Node/pod readiness, then the phase, then nothing.
+        state = ""
+        for c in (st.get("conditions") or []):
+            if c.get("type") in ("Ready", "ReadyForContainers"):
+                state = "Ready" if str(c.get("status")) == "True" else "NotReady"
+                break
+        if not state:
+            state = st.get("phase") or (st.get("containerStatuses") or [{}])[0].get("ready")
+            state = "Ready" if state is True else ("NotReady" if state is False else (state or ""))
+        if not state and st:
+            # Workload kinds carry replica counts instead of a Ready condition:
+            # avail/desired is what "is it healthy" actually means for a Deployment,
+            # and without this every Deployment row read "Status: -".
+            avail = st.get("availableReplicas")
+            want = (o.get("spec") or {}).get("replicas")
+            if avail is not None or want is not None:
+                a, w = avail if avail is not None else 0, want if want is not None else 0
+                state = f"{a}/{w}" + ("" if a == w else "  ⚠")
+            elif st.get("numberReady") is not None:
+                want = (o.get("spec") or {}).get("replicas")
+                state = f"{st.get('numberReady')}/{want if want is not None else '?'}"
+        state = state or "-"
+        roles = ",".join(
+            k.split("node-role.kubernetes.io/")[-1]
+            for k in (md.get("labels") or {}) if "node-role.kubernetes.io/" in k
+        ) or "-"
+        ip = next((a.get("address") for a in (st.get("addresses") or [])
+                   if a.get("type") == "InternalIP"), "-")
+        ver = (st.get("nodeInfo") or {}).get("kubeletVersion") or "-"
+        node = (st.get("nodeName") or (o.get("spec") or {}).get("nodeName") or "-")
+        rows.append((name, kind, state, roles, ip, ver, node, _age(md.get("creationTimestamp"))))
+
+    # Show the columns that actually carry information for this kind.
+    is_node = all(r[1] == "Node" for r in rows)
+    if is_node:
+        head = "| Name | Status | Roles | Internal IP | Version | Age |"
+        sep = "|---|---|---|---|---|---|"
+        body = [f"| {r[0]} | {r[2]} | {r[3]} | {r[4]} | {r[5]} | {r[7]} |" for r in rows]
+    else:
+        head = "| Name | Kind | Status | Node | Age |"
+        sep = "|---|---|---|---|---|"
+        body = [f"| {r[0]} | {r[1]} | {r[2]} | {r[6]} | {r[7]} |" for r in rows]
+
+    total = len(data)
+    cut = " (list was truncated at the tool-output cap)" if len(rows) >= 80 else ""
+    note = (f"\n\n_Showing {len(rows)} of {total}{cut}._" if total > len(rows) or cut else "")
+    return (f"**{total} object(s)**\n\n{head}\n{sep}\n" + "\n".join(body) + note)
 
 
 def _first_tool(tools, names: tuple[str, ...]):
@@ -370,6 +555,27 @@ def _deterministic_lookup(question: str, tools):
     declines everything else rather than guessing.
     """
     q = (question or "").lower()
+
+    # --- explicit kubectl command first: it states exactly what is wanted -----
+    kb = parse_kubectl(question or "")
+    if kb:
+        ns = kb.get("namespace")
+        # Nodes live at cluster scope; everything else is namespaced.
+        tool = _first_tool(tools, ("kubernetes_list",))
+        if tool:
+            try:
+                largs = {"cluster": "kubeconfig:local", "kind": kb["kind"]}
+                if ns and kb["kind"] not in ("Node", "Namespace", "PersistentVolume"):
+                    largs["namespace"] = ns
+                out = str(tool.invoke(largs))
+                if out.strip() and out.strip() not in ("[]", "{}"):
+                    # Full objects are unreadable; summarise unless the tool already
+                    # returned something human-formatted.
+                    summary = summarise_json(out)
+                    return summary if summary else out
+            except Exception as exc:  # noqa: BLE001
+                logger.info("kubectl-style lookup failed: %s", exc)
+
     ns = None
     # Namespace extraction, both orders. The first pattern is the common phrasing
     # ("in the rag-chatbot namespace") and MUST be tried first: the naive
@@ -396,6 +602,18 @@ def _deterministic_lookup(question: str, tools):
     # large JSON array that renders as an unreadable wall of text in the answer.
     # Measured: the list output was 6,031 chars of JSON and the UI showed a code block
     # of "[…]" — technically correct, useless to a human.
+    # Node questions: the capacity table is already human-formatted, so take it before
+    # falling through to a Node list that would need summarising.
+    if re.search(r"\bnode", q) and re.search(r"status|health|ready|capacity|how many|count|list|show", q):
+        tool = _first_tool(tools, ("kubernetes_capacity",))
+        if tool:
+            try:
+                out = str(tool.invoke({"cluster": "kubeconfig:local"}))
+                if out.strip() and out.strip() not in ("[]", "{}"):
+                    return out
+            except Exception as exc:  # noqa: BLE001
+                logger.info("deterministic capacity failed: %s", exc)
+
     if re.search(r"unhealthy|not ready|failing|broken|crash|health|status|how many|count|which|list|pod|deployment|workload", q):
         tool = _first_tool(tools, ("kubernetes_workload_health",))
         if tool:
@@ -428,7 +646,9 @@ def _deterministic_lookup(question: str, tools):
                     largs["namespace"] = ns
                 out = str(tool.invoke(largs))
                 if out.strip() and out.strip() not in ("[]", "{}"):
-                    return out
+                    # Never hand back a wall of JSON: summarise to a table when the
+                    # payload is a raw object list.
+                    return summarise_json(out) or out
             except Exception as exc:  # noqa: BLE001
                 logger.info("deterministic kubernetes_list failed: %s", exc)
 
