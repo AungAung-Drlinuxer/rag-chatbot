@@ -194,6 +194,16 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     result.docs = []
                     result.sources = []
                     result.confidence = max(result.confidence, 0.95)
+                # v1.6.60 — same contract for a live-infrastructure answer. The answer
+                # came from the cluster, not from documents, so listing KB articles
+                # underneath it is misleading: it implies the answer was derived from
+                # them (the UI even showed "Kubernetes Health Check · KB · 51% match"
+                # under a live workload table). Sources are evidence for a claim; when
+                # the claim is live state, documents are not the evidence.
+                if result.tool_used == "mcp_infra":
+                    result.docs = []
+                    result.sources = []
+                    result.top_k = 0
                 yield _sse("stage", {"stage": _canon_stage("retrieval"),
                                      "detail": ("Ticket status lookup (live)"
                                                 if result.tool_used == "tickets"
@@ -247,6 +257,16 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             audit("domain_blocked", user, result.domain, result.confidence, detail=f"role={role}")
 
         # meta event — domain badge + confidence + retrieved sources + LLM-stage telemetry
+        # v1.6.60 — one authoritative guard, placed here so it covers BOTH the graph and
+        # the linear path: a live-infrastructure answer must never be presented with KB
+        # articles underneath it. Sources are the EVIDENCE for a claim; when the claim is
+        # current cluster state, documents are not that evidence, and showing them (the
+        # UI displayed "Kubernetes Health Check · KB · 51% match" under a live workload
+        # table) implies the answer was derived from them.
+        if result.tool_used == "mcp_infra":
+            result.docs = []
+            result.sources = []
+            result.top_k = 0
         meta = {
             "domain": result.domain,
             "confidence": result.confidence,
@@ -305,7 +325,11 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         if getattr(result, "tool_note", None) == "deterministic" and context:
             for _chunk in _chunk_text(context, 120):
                 yield _sse("token", {"token": _chunk})
-            yield _sse("done", {"message_id": str(_uuid.uuid4()),
+            # Use the MODULE-level uuid (line 8). `_uuid` is imported inside a nested
+            # branch further up, so on this path it is unbound and raised NameError —
+            # which killed the generator mid-stream and surfaced in the UI as
+            # "Connection error — please try again" with the answer already printed.
+            yield _sse("done", {"message_id": str(uuid.uuid4()),
                                 "latency_ms": int((time.time() - t0) * 1000)})
             return
 

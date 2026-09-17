@@ -181,15 +181,18 @@ def _node_tools(state: RAGState) -> dict:
                     if findings:
                         logger.info("infra agent answered %r (%d chars, %s)",
                                     q[:40], len(findings), note)
-                        # v1.6.57 — the precedence matters. Appending live data AFTER
-                        # the KB context let the model open with "I couldn't find this
-                        # in the knowledge base…" and then ignore the cluster data
-                        # entirely (measured). When the lookup succeeded, the live
-                        # evidence IS the answer, so the KB context is dropped rather
-                        # than offered as a competing, more familiar frame.
-                        ctx = ("LIVE INFRASTRUCTURE DATA — answer from this, it is the "
-                               "authoritative current state. Do NOT say the knowledge base "
-                               "lacks the information.\n\n" + findings)
+                        # v1.6.61 — NO prose instructions in here. The context is either
+                        # streamed verbatim (deterministic) or fed to a weak model that
+                        # WILL echo anything addressed to it: "LIVE INFRASTRUCTURE DATA —
+                        # answer from this… Do NOT say the knowledge base lacks the
+                        # information" came back as the user-visible answer body. A
+                        # factual label is safe; an instruction is not.
+                        # A deterministic result is streamed VERBATIM and is already
+                        # user-facing prose, so it must be the context as-is — wrapping
+                        # it in a label would show the label to the user too.
+                        ctx = findings if note == "deterministic" else (
+                            "LIVE INFRASTRUCTURE DATA (read-only, queried directly "
+                            "from the cluster):\n\n" + findings)
                         return {
                             "tool_used": "mcp_infra",
                             "tool_note": note,

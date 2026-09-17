@@ -40,6 +40,7 @@ import {
   submitFeedback as pushFeedback,
 } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
+import ComposerControls from "@/features/chat/components/ComposerControls";
 import {
   type Message,
   type Source,
@@ -769,69 +770,15 @@ export default function Chat({
                 </div>
               )}
               {/* v1.6.22 — LLM provider toggle (Auto / Cloud / Local) */}
-              <div className="mb-1.5 flex items-center gap-1 px-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                  AI Engine
-                </span>
-                {([
-                  { key: "auto", label: "Auto", title: "OpenRouter first, on-prem Ollama fallback" },
-                  { key: "cloud", label: "Cloud only", title: "Force OpenRouter — never fall back to local" },
-                  { key: "local", label: "Local only", title: "Force on-prem Ollama (air-gap / cost-saving)" },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    title={opt.title}
-                    onClick={() => setLlmProvider(opt.key)}
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
-                      llmProvider === opt.key
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                {llmProvider === "local" && (
-                  <span className="ml-1 text-[9px] text-amber-600 dark:text-amber-400">
-                    ⚠ slower · on-prem
-                  </span>
-                )}
-              </div>
-              {/* v1.6.55 — KNOWLEDGE vs TOOLS, the switch Claude Desktop / opencode
-                  expose. Answers are now distinguishable: a documents answer and a
-                  live-infrastructure answer are different claims about the world. */}
-              <div className="mb-1.5 flex items-center gap-1 px-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                  Answer from
-                </span>
-                {([
-                  { key: "auto", label: "Auto", title: "Decide per question — documents, or the live cluster when the question is about it" },
-                  { key: "kb", label: "Knowledge base", title: "Documents only. Never touches infrastructure tools" },
-                  { key: "infra", label: "Infrastructure", title: "Query the live Kubernetes / Rancher estate. Requires admin or agent role; if the lookup fails the answer says so instead of quoting documents" },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    title={opt.title}
-                    onClick={() => setChatMode(opt.key)}
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
-                      chatMode === opt.key
-                        ? opt.key === "infra"
-                          ? "bg-emerald-600 text-white shadow-sm"
-                          : "bg-blue-600 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                {chatMode === "infra" && (
-                  <span className="ml-1 text-[9px] text-emerald-600 dark:text-emerald-400">
-                    ⚡ live cluster · read-only
-                  </span>
-                )}
-              </div>
+              {/* v1.6.60 — one quiet row instead of two rows of chips. Six coloured
+                  pills clipped and wrapped on a phone, for settings that change once a
+                  session. See components/ComposerControls.tsx. */}
+              <ComposerControls
+                mode={chatMode}
+                onModeChange={setChatMode}
+                engine={llmProvider}
+                onEngineChange={setLlmProvider}
+              />
               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-2 shadow-xs transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900/80 dark:focus-within:bg-slate-900">
                 <button
                   type="button"
@@ -1457,7 +1404,12 @@ function MessageBubble({
           )}
 
           {/* Inline Knowledge Base Sources in answer card */}
-          {!isUser && (message.sources?.length ?? 0) > 0 && (
+          {/* v1.6.60 — sources are documents, so they are evidence only for a
+              documents answer. A live-infrastructure answer is evidenced by the
+              cluster, and listing KB articles under it claims a provenance the answer
+              does not have. The backend no longer sends them; this guard means a stale
+              conversation or a cached payload cannot reintroduce them either. */}
+          {!isUser && message.toolUsed !== "mcp_infra" && (message.sources?.length ?? 0) > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
               <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">

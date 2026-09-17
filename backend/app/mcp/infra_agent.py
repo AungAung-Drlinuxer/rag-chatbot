@@ -336,14 +336,46 @@ def _deterministic_lookup(question: str, tools):
     """
     q = (question or "").lower()
     ns = None
-    m = re.search(r"\bnamespace\s+([a-z0-9][a-z0-9-]*)", q) or re.search(r"\bin\s+([a-z0-9][a-z0-9-]*)\s", q)
-    if m:
-        ns = m.group(1)
+    # Namespace extraction, both orders. The first pattern is the common phrasing
+    # ("in the rag-chatbot namespace") and MUST be tried first: the naive
+    # `namespace\s+(\w+)` matched the word AFTER "namespace", so "…namespace right
+    # now" yielded ns="right" and the lookup queried a namespace that does not exist —
+    # the tool returned nothing and the answer reported a failed lookup for a question
+    # the cluster could answer. Stopwords guard the remaining slots.
+    _NS_STOP = {"the", "a", "an", "my", "this", "that", "which", "what", "in", "on",
+                "right", "now", "and", "or", "is", "are", "of", "for", "to", "please"}
+    # Try each phrasing and take the first NON-STOPWORD capture. An `or` chain over
+    # re.search() short-circuits on the first pattern that matches at all, so
+    # "in namespace kube-system" matched pattern 1 as "in", was rejected as a
+    # stopword, and never reached the pattern that had the real name.
+    for _pat in (r"\b([a-z0-9][a-z0-9-]*)\s+namespace\b",
+                 r"\bnamespace[:\s]+([a-z0-9][a-z0-9-]*)",
+                 r"\bin\s+([a-z0-9][a-z0-9-]*-[a-z0-9-]+)\b"):
+        mm = re.search(_pat, q)
+        if mm and mm.group(1) not in _NS_STOP:
+            ns = mm.group(1)
+            break
 
-    # kubernetes_list first when the question names a resource KIND: it answers
-    # "how many / which" directly. Measured caveats: it requires `cluster` and `kind`
-    # exactly (an unrecognised key fails schema validation) and the kind must be
-    # capitalised ("Deployment", not "deployments").
+    # Prefer the workload-health summary: it returns a READABLE, pre-formatted table
+    # (NAME / NAMESPACE / KIND / READY …) in one call, where kubernetes_list returns a
+    # large JSON array that renders as an unreadable wall of text in the answer.
+    # Measured: the list output was 6,031 chars of JSON and the UI showed a code block
+    # of "[…]" — technically correct, useless to a human.
+    if re.search(r"unhealthy|not ready|failing|broken|crash|health|status|how many|count|which|list|pod|deployment|workload", q):
+        tool = _first_tool(tools, ("kubernetes_workload_health",))
+        if tool:
+            try:
+                wargs = {"cluster": "kubeconfig:local"}
+                if ns:
+                    wargs["namespace"] = ns
+                out = str(tool.invoke(wargs))
+                if out.strip() and out.strip() not in ("[]", "{}"):
+                    return out
+            except Exception as exc:  # noqa: BLE001
+                logger.info("deterministic workload_health failed: %s", exc)
+
+    # Specific resource kind -> kubernetes_list, for questions the summary cannot
+    # answer (e.g. a Service or Ingress inventory).
     kind = None
     for needle, proper in (("deployment", "Deployment"), ("statefulset", "StatefulSet"),
                            ("daemonset", "DaemonSet"), ("pod", "Pod"),
@@ -359,24 +391,11 @@ def _deterministic_lookup(question: str, tools):
                 largs = {"cluster": "kubeconfig:local", "kind": kind}
                 if ns:
                     largs["namespace"] = ns
-                return str(tool.invoke(largs))
+                out = str(tool.invoke(largs))
+                if out.strip() and out.strip() not in ("[]", "{}"):
+                    return out
             except Exception as exc:  # noqa: BLE001
                 logger.info("deterministic kubernetes_list failed: %s", exc)
-
-    # Fall back to the workload-health summary: it needs ONLY `cluster` -- passing an
-    # unknown key fails schema validation, which is exactly why this path returned
-    # nothing before the fix -- and covers "is anything unhealthy / how many are
-    # ready" in a single call.
-    if re.search(r"unhealthy|not ready|failing|broken|crash|health|status|how many|count|which|list|pod|deployment", q):
-        tool = _first_tool(tools, ("kubernetes_workload_health",))
-        if tool:
-            try:
-                wargs = {"cluster": "kubeconfig:local"}
-                if ns:
-                    wargs["namespace"] = ns
-                return str(tool.invoke(wargs))
-            except Exception as exc:  # noqa: BLE001
-                logger.info("deterministic workload_health failed: %s", exc)
 
     if re.search(r"event|warning", q):
         tool = _first_tool(tools, ("kubernetes_events",))
@@ -392,31 +411,32 @@ def _deterministic_lookup(question: str, tools):
 
 
 def answer_infra(question: str) -> tuple[str, str]:
-    """(text, note). note is "ok" | "failed". The caller must not treat both alike."""
-    text = run_infra_agent(question)
-    if text:
-        return text, "ok"
-    # Model path produced nothing -> deterministic tool selection over the same
-    # read-only tools, then hand the raw evidence to the model to phrase.
+    """(text, note). note is "deterministic" | "ok" | "failed".
+
+    Deterministic FIRST, the model second. Measured reason for the order: when the
+    model was primary it echoed the instruction meant for it ("LIVE INFRASTRUCTURE
+    DATA — answer from this… Do NOT say the knowledge base lacks the information")
+    back to the user as the answer body and emitted "[]" instead of the data. Driving
+    the common shapes from code produces a clean, complete answer with no model in the
+    loop, and it is faster and cheaper besides.
+    """
     tools = build_tools()
     if tools:
         raw = _deterministic_lookup(question, tools)
-        if raw and raw.strip():
+        # A tool can succeed and still return nothing; an empty array is not an answer.
+        if raw and raw.strip() not in ("[]", "{}", "null") and len(raw.strip()) > 20:
             logger.info("deterministic infra lookup produced %d chars", len(raw))
-            # Hand back a READY-MADE answer, not raw rows for the model to phrase.
-            #
-            # Measured: with the raw table in the context the free-tier model opened
-            # with "I couldn't find information … in the knowledge base or live
-            # infrastructure data" and dropped the real result entirely. The cluster
-            # output is already authoritative and already formatted, so phrasing it
-            # through a weak model only adds a way to lose it. The caller streams this
-            # verbatim when the note is "deterministic".
             head = raw.strip()
             if len(head) > 3500:
                 head = head[:3500] + "\n…[truncated]"
-            return ("**Live infrastructure** (read-only, queried directly — "
-                    "the model was not used to select the tool)\n\n```\n"
-                    + head + "\n```"), "deterministic"
+            return ("**Live infrastructure** — read-only, queried directly from the "
+                    "cluster (not from documents).\n\n```\n" + head + "\n```"), "deterministic"
+
+    # Fall back to the model choosing tools, for questions the deterministic shapes
+    # above do not cover.
+    text = run_infra_agent(question)
+    if text:
+        return text, "ok"
     return "", "failed"
 
 
