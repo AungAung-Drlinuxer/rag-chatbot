@@ -132,19 +132,55 @@ CURATED_BY_SERVER: dict[str, tuple[str, ...]] = {
 }
 
 # Cheap intent gate — no LLM call, same discipline as app/tools/ticket_tool.py.
-# Deliberately requires an infrastructure noun; a bare "cluster" should not hijack
-# an ordinary knowledge question.
-_INFRA_STRONG = re.compile(
-    r"\b(kubeconfig|kubectl|kubernetes|k8s|cluster|namespace|pod|pods|node|nodes|"
-    r"deployment|deployments|statefulset|daemonset|replicaset|ingress|helm|"
-    r"rancher|workload|oomkill|crashloop|evicted|pending pod|readiness|liveness|"
-    r"cpu usage|memory usage|capacity|disk pressure)\b",
+#
+# v1.6.73 — rebuilt after auditing 51 question forms. The old gate required one of a
+# short list of nouns and only matched some of them in the singular, so `\bcluster\b`
+# missed "clusters" and `\bworkload\b` missed "workloads". Eleven ordinary questions
+# were declined and therefore answered from the knowledge base instead of the cluster:
+#   "list the clusters" · "what clusters do you manage?" · "what is the cluster status?"
+#   "what is the node capacity?" · "what is running in the rag-chatbot namespace?"
+#   "is everything healthy?" · "which workloads have problems?" · "what went wrong
+#   recently?" · "how much memory is being used?" · "what is using the most memory?"
+#   "where is my storage going?"
+# It also ACCEPTED "how do I create a deployment in kubernetes?" — a how-to for the KB.
+#
+# Three signals instead of one, because people rarely name the object they mean:
+_INFRA_NOUN = re.compile(
+    r"\b(kubeconfig|kubectl|kubernetes|k8s|clusters?|namespaces?|pods?|nodes?|"
+    r"deployments?|statefulsets?|daemonsets?|replicasets?|ingress(es)?|helm|rancher|"
+    r"workloads?|pvc|pvs?|volumes?|services?|secrets?|configmaps?|cronjobs?|jobs?|"
+    r"events?|containers?|images?)\b",
     re.IGNORECASE,
 )
-# Phrases that mean "tell me about the concept", not "look at my cluster".
+# "how much memory", "what is using the most cpu" — no object named, still live.
+_MEASURABLE = re.compile(
+    r"\b(cpu|memory|ram|disk|storage|capacity|usage|utilisation|utilization|"
+    r"requests?|limits?|restarts?|uptime|versions?|ip addresses?|ips?)\b",
+    re.IGNORECASE,
+)
+# "is everything healthy", "what went wrong" — state of the system as a whole.
+_STATE = re.compile(
+    r"\b(status|state|health|healthy|unhealthy|ready|failing|down|problems?|issues?|"
+    r"errors?|warnings?|wrong|broken|crash\w*|oom\w*|pending|evicted|taints?|"
+    r"inventory|running|count|how many|list|show)\b",
+    re.IGNORECASE,
+)
+# "is this about OUR estate, or about the concept?" Measured: the first version listed
+# only possessives, so "how much memory is being used?" (no "my/our/the") and "show me
+# cpu usage" (imperative) were both declined and answered from the knowledge base.
+_SCOPE = re.compile(
+    r"\b(my|our|the|everything|anything|something|this|recently|now|show|list|check|"
+    r"any|current|much|many|me|we|have|is there|are there|do we)\b",
+    re.IGNORECASE,
+)
+# Concept/how-to questions belong to the knowledge base, not the cluster. This check
+# runs FIRST so a how-to that mentions "kubernetes" cannot reach the tools.
 _CONCEPT = re.compile(
-    r"\b(what is|what are|explain|define|difference between|how does|tutorial|"
-    r"concept|architecture of)\b",
+    r"\b(what is an?|what are|explain|define|difference between|how does|"
+    r"how do i (create|deploy|install|configure|set ?up|write|build|add|enable|use|"
+    r"reset|change|update)|how to |tutorial|step by step|concept|architecture of|"
+    r"best practice|why should|advantages? of|benefits? of|"
+    r"does an? |should i |do i need|are there any benefits)\b",
     re.IGNORECASE,
 )
 _LIVE_HINT = re.compile(
@@ -157,12 +193,70 @@ _LIVE_HINT = re.compile(
 def detect_infra_intent(question: str) -> bool:
     """True when the question is about THIS infrastructure's live state."""
     q = (question or "").strip()
-    if len(q) < 4 or not _INFRA_STRONG.search(q):
+    if len(q) < 4:
         return False
-    # "What is a pod?" is a KB question. "Why is my pod pending?" is not.
-    if _CONCEPT.search(q) and not _LIVE_HINT.search(q):
+    # A conceptual or procedural question is never a cluster lookup, even when it names
+    # kubernetes — that is what the knowledge base is for.
+    if _CONCEPT.search(q):
         return False
-    return True
+    # Named Kubernetes object -> live.
+    if _INFRA_NOUN.search(q):
+        return True
+    # A measurable quantity asked about *our* estate ("how much memory is being used?").
+    if _MEASURABLE.search(q) and _SCOPE.search(q):
+        return True
+    # State of the system as a whole ("is everything healthy?", "what went wrong?").
+    if _STATE.search(q) and _SCOPE.search(q):
+        return True
+    return False
+
+
+# "what can you check / what can you do / what tools do you have" — a capability
+# question, which legitimately matches no lookup tool and used to answer EMPTY.
+_CAPABILITY = re.compile(
+    r"(what can you (check|do|see|tell|query|access)|what (do|can) you (check|do|see)|"
+    r"what (tools|checks|queries) (do you have|are available)|"
+    r"what kubernetes (things|questions)|what can i ask|your capabilities|"
+    r"how can you help with (kube|k8s|kube?rnetes|the cluster))",
+    re.IGNORECASE,
+)
+
+
+def capabilities_text() -> str:
+    """The live-lookup capability list, grouped by what it answers.
+
+    Built from CURATED_TOOLS rather than prose so it cannot drift from what is actually
+    reachable, and so it is honest when a server is down (it lists only what is loaded).
+    """
+    groups = [
+        ("Cluster & nodes", ["cluster_list", "kubernetes_capacity", "kubernetes_list"]),
+        ("Workload health", ["kubernetes_workload_health", "kubernetes_top"]),
+        ("Diagnostics", ["kubernetes_events", "kubernetes_logs", "kubernetes_describe"]),
+    ]
+    loaded = set()
+    try:
+        loaded = {t.name for t in build_tools()}
+    except Exception:  # noqa: BLE001
+        pass
+    lines = ["**I can read your live Kubernetes / Rancher estate (read-only).**", ""]
+    for title, names in groups:
+        present = [n for n in names if not loaded or n in loaded]
+        if not present:
+            continue
+        lines.append(f"**{title}**")
+        for n in present:
+            lines.append(f"- `{n}`")
+        lines.append("")
+    lines += [
+        "Ask either way — a command or plain language, both work:",
+        "- `kubectl get nodes` · `kubectl get pods -n <namespace>` · `kubectl get svc`",
+        "- \"are the nodes healthy?\" · \"which pods are restarting?\" · \"what is using the "
+        "most memory?\" · \"what went wrong recently?\"",
+        "",
+        "Every tool is read-only: the service account has get/list/watch only, so nothing "
+        "can be changed from here.",
+    ]
+    return "\n".join(lines)
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -597,71 +691,76 @@ def _deterministic_lookup(question: str, tools):
             ns = mm.group(1)
             break
 
-    # Prefer the workload-health summary: it returns a READABLE, pre-formatted table
-    # (NAME / NAMESPACE / KIND / READY …) in one call, where kubernetes_list returns a
-    # large JSON array that renders as an unreadable wall of text in the answer.
-    # Measured: the list output was 6,031 chars of JSON and the UI showed a code block
-    # of "[…]" — technically correct, useless to a human.
-    # Node questions: the capacity table is already human-formatted, so take it before
-    # falling through to a Node list that would need summarising.
-    if re.search(r"\bnode", q) and re.search(r"status|health|ready|capacity|how many|count|list|show", q):
-        tool = _first_tool(tools, ("kubernetes_capacity",))
-        if tool:
-            try:
-                out = str(tool.invoke({"cluster": "kubeconfig:local"}))
-                if out.strip() and out.strip() not in ("[]", "{}"):
-                    return out
-            except Exception as exc:  # noqa: BLE001
-                logger.info("deterministic capacity failed: %s", exc)
+    # ---- ordered routing rules ------------------------------------------------
+    # Order matters: the specific shapes come before the broad health catch-all, and
+    # every rule was added only after it appeared in the question audit.
+    def _call(tool_name: str, args: dict):
+        t = _first_tool(tools, (tool_name,))
+        if not t:
+            return None
+        try:
+            out = str(t.invoke(args))
+        except Exception as exc:  # noqa: BLE001
+            logger.info("deterministic %s failed: %s", tool_name, exc)
+            return None
+        return out if out.strip() and out.strip() not in ("[]", "{}") else None
 
-    if re.search(r"unhealthy|not ready|failing|broken|crash|health|status|how many|count|which|list|pod|deployment|workload", q):
-        tool = _first_tool(tools, ("kubernetes_workload_health",))
-        if tool:
-            try:
-                wargs = {"cluster": "kubeconfig:local"}
-                if ns:
-                    wargs["namespace"] = ns
-                out = str(tool.invoke(wargs))
-                if out.strip() and out.strip() not in ("[]", "{}"):
-                    return out
-            except Exception as exc:  # noqa: BLE001
-                logger.info("deterministic workload_health failed: %s", exc)
+    # 1) Which estates exist / their status -> cluster_list.
+    if re.search(r"\bclusters?\b", q) and re.search(
+            r"list|which|what|how many|status|manage|available|all|connected", q):
+        out = _call("cluster_list", {})
+        if out:
+            return out
 
-    # Specific resource kind -> kubernetes_list, for questions the summary cannot
-    # answer (e.g. a Service or Ingress inventory).
-    kind = None
-    for needle, proper in (("deployment", "Deployment"), ("statefulset", "StatefulSet"),
-                           ("daemonset", "DaemonSet"), ("pod", "Pod"),
-                           ("service", "Service"), ("ingress", "Ingress"),
-                           ("node", "Node"), ("namespace", "Namespace")):
-        if re.search(r"\b" + needle + r"s?\b", q):
-            kind = proper
-            break
-    if kind:
-        tool = _first_tool(tools, ("kubernetes_list",))
-        if tool:
-            try:
-                largs = {"cluster": "kubeconfig:local", "kind": kind}
-                if ns:
-                    largs["namespace"] = ns
-                out = str(tool.invoke(largs))
-                if out.strip() and out.strip() not in ("[]", "{}"):
-                    # Never hand back a wall of JSON: summarise to a table when the
-                    # payload is a raw object list.
-                    return summarise_json(out) or out
-            except Exception as exc:  # noqa: BLE001
-                logger.info("deterministic kubernetes_list failed: %s", exc)
+    # 2) Storage inventory -> PVC list (summarised).
+    if re.search(r"\b(storage|pvc|persistent ?volumes?|volumes?|disk)\b", q):
+        largs = {"cluster": "kubeconfig:local", "kind": "PersistentVolumeClaim"}
+        if ns:
+            largs["namespace"] = ns
+        out = _call("kubernetes_list", largs)
+        if out:
+            return summarise_json(out) or out
 
-    if re.search(r"event|warning", q):
-        tool = _first_tool(tools, ("kubernetes_events",))
-        if tool:
-            try:
-                eargs = {"cluster": "kubeconfig:local"}
-                if ns:
-                    eargs["namespace"] = ns
-                return str(tool.invoke(eargs))
-            except Exception as exc:  # noqa: BLE001
-                logger.info("deterministic kubernetes_events failed: %s", exc)
+    # 3) Consumption -> top. "how much memory is being used", "what is using the most
+    #    memory", "show me cpu usage" name no object at all.
+    if re.search(r"\b(cpu|memory|ram)\b", q) and re.search(
+            r"usage|using|most|top|utilis|utiliz|consume|pressure", q):
+        out = _call("kubernetes_top", {"cluster": "kubeconfig:local"})
+        if out:
+            return summarise_json(out) or out
+
+    # 4) Nodes. Capacity questions get the pre-formatted capacity table; status,
+    #    version, roles, taints and IP questions need the node objects, which are
+    #    summarised into Name/Status/Roles/Internal IP/Version/Age.
+    if re.search(r"\bnodes?\b|\bno\b", q):
+        if re.search(r"capacity|request|limit|allocat", q):
+            out = _call("kubernetes_capacity", {"cluster": "kubeconfig:local"})
+            if out:
+                return out
+        out = _call("kubernetes_list", {"cluster": "kubeconfig:local", "kind": "Node"})
+        if out:
+            return summarise_json(out) or out
+
+    # 5) Events / warnings / anything wrong -> events. Before the generic health rule:
+    #    "are there any warnings" should list events, not a workload summary.
+    if re.search(r"events?|warnings?|wrong|errors?|problems?|issues?|alert", q):
+        eargs = {"cluster": "kubeconfig:local"}
+        if ns:
+            eargs["namespace"] = ns
+        out = _call("kubernetes_events", eargs)
+        if out:
+            return out
+
+    # 6) Everything else about live state -> the workload-health summary.
+    if re.search(r"unhealthy|not ready|failing|broken|crash|health|healthy|status|state|"
+                 r"ready|how many|count|which|list|running|inventory|pod|deployment|"
+                 r"workload|namespace|resource|everything|anything", q):
+        wargs = {"cluster": "kubeconfig:local"}
+        if ns:
+            wargs["namespace"] = ns
+        out = _call("kubernetes_workload_health", wargs)
+        if out:
+            return out
     return ""
 
 
@@ -705,6 +804,11 @@ def answer_infra(question: str) -> tuple[str, str, list, str]:
                     "cluster (not from documents).\n\n```\n" + excerpt + "\n"
                     + note_line + "\n```")
             return text, "deterministic", (_TOOL_CALLS.get() or []), raw.strip()
+
+    # A "what can you do" question names the domain but wants the capability list, not a
+    # lookup — and it legitimately matches no tool, so it used to come back EMPTY.
+    if _CAPABILITY.search(question or ""):
+        return capabilities_text(), "capabilities", (_TOOL_CALLS.get() or []), ""
 
     # Fall back to the model choosing tools, for questions the deterministic shapes
     # above do not cover.
