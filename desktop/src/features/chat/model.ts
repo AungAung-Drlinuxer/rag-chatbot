@@ -48,6 +48,8 @@ export type Message = {
     kind?: string; servers?: string[]; read_only?: boolean; at?: string | null;
     calls?: number; total_ms?: number; total_bytes?: number;
   } | null;
+  /** v1.6.68 — verbatim tool output; shown only in the evidence card's viewer. */
+  rawOutput?: string;
   latencyMs?: number;
   serverId?: string;  // v0.21.90 — DB row id from the done event (feedback target)
   feedback?: 1 | -1;  // v0.21.90 — recorded rating (button state)

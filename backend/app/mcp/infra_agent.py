@@ -445,8 +445,16 @@ def _deterministic_lookup(question: str, tools):
     return ""
 
 
-def answer_infra(question: str) -> tuple[str, str, list]:
-    """(text, note, calls). note is "deterministic" | "ok" | "failed".
+def answer_infra(question: str) -> tuple[str, str, list, str]:
+    """(text, note, calls, raw). note is "deterministic" | "ok" | "failed".
+
+    `text` is what gets shown as the answer; `raw` is the verbatim tool output.
+
+    WHY THEY ARE SEPARATE: the first version put the entire tool output in the answer
+    body AND offered it again under the evidence card's "Show full output" — the same
+    6 KB of table twice, which is exactly the messiness this work is meant to remove.
+    The body now carries a readable excerpt with a count of what is held back, and the
+    full payload travels only to the collapsible viewer.
 
     `calls` is the per-turn record of what was queried (name, duration, size, server,
     time). It is the evidence a live-infrastructure answer must show — the KB path has
@@ -466,19 +474,24 @@ def answer_infra(question: str) -> tuple[str, str, list]:
         # A tool can succeed and still return nothing; an empty array is not an answer.
         if raw and raw.strip() not in ("[]", "{}", "null") and len(raw.strip()) > 20:
             logger.info("deterministic infra lookup produced %d chars", len(raw))
-            head = raw.strip()
-            if len(head) > 3500:
-                head = head[:3500] + "\n…[truncated]"
-            return (("**Live infrastructure** — read-only, queried directly from the "
-                     "cluster (not from documents).\n\n```\n" + head + "\n```"),
-                    "deterministic", _TOOL_CALLS.get() or [])
+            body_lines = raw.strip().split("\n")
+            # Excerpt for the answer; the remainder is one click away.
+            head_n = 14
+            excerpt = "\n".join(body_lines[:head_n])
+            held = max(0, len(body_lines) - head_n)
+            note_line = (f"\n… {held} more line(s) — see the full output below"
+                         if held else "")
+            text = ("**Live infrastructure** — read-only, queried directly from the "
+                    "cluster (not from documents).\n\n```\n" + excerpt + "\n"
+                    + note_line + "\n```")
+            return text, "deterministic", (_TOOL_CALLS.get() or []), raw.strip()
 
     # Fall back to the model choosing tools, for questions the deterministic shapes
     # above do not cover.
     text = run_infra_agent(question)
     if text:
-        return text, "ok", _TOOL_CALLS.get() or []
-    return "", "failed", _TOOL_CALLS.get() or []
+        return text, "ok", (_TOOL_CALLS.get() or []), ""
+    return "", "failed", (_TOOL_CALLS.get() or []), ""
 
 
 def agent_status() -> dict:

@@ -164,6 +164,10 @@ export type RagPipelineStatusProps = {
   simulate?: boolean;
   /** Fires when the simulation finishes (so parents can reset state). */
   onSimulateDone?: () => void;
+  /** v1.6.68 — the answer came from the live estate. Needed because the stage
+   *  telemetry that would otherwise reveal this is cleared once streaming ends, so a
+   *  completed live answer was still titled "RAG Pipeline". */
+  live?: boolean;
   /** v1.6.18 — render the full card with hide/show toggle (chat reply area). */
   variant?: "panel" | "card" | "inline";
   /** Initial open state */
@@ -183,6 +187,7 @@ export default function RagPipelineStatus({
   simulate = false,
   onSimulateDone,
   defaultOpen = false,
+  live = false,
 }: RagPipelineStatusProps) {
   const [demoStage, setDemoStage] = useState<StageKey | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -194,10 +199,11 @@ export default function RagPipelineStatus({
   // string like "Querying <tool>").
   const isLive = useMemo(
     () =>
+      live === true ||
       Boolean(telemetry && "tools" in telemetry) ||
       matchStageKey(stage) === "tools" ||
       /quer|cluster query/i.test(stage || ""),
-    [telemetry, stage],
+    [live, telemetry, stage],
   );
   const steps = isLive ? STEPS_LIVE : STEPS;
   const [tableOpen, setTableOpen] = useState(false);
@@ -305,7 +311,10 @@ export default function RagPipelineStatus({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                RAG Pipeline
+                {/* v1.6.68 — name the pipeline that is actually running. Calling a
+                    cluster lookup "RAG Pipeline" described retrieval that never
+                    happened. */}
+                {isLive ? "Infrastructure query" : "RAG Pipeline"}
               </span>
               <span
                 className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${

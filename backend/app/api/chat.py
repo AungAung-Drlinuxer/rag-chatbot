@@ -34,6 +34,28 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _stage_emitter():
+    """Yield stage SSE frames, dropping CONSECUTIVE duplicates.
+
+    WHY: two graph nodes map to the same UI stage (context and tools both render as
+    "generate"), and chat.py announces "understanding" before the graph's classify node
+    also reports it. The tracker therefore showed
+    ['understanding','understanding',...,'generate','generate','tools','generate'] —
+    the same step twice, which reads as the pipeline running twice. Only consecutive
+    repeats are collapsed, so a genuine non-adjacent re-run (the retrieval retry loop)
+    still shows.
+    """
+    last = {"key": None}
+
+    def emit(stage_key: str, detail: str) -> str | None:
+        if stage_key == last["key"]:
+            return None
+        last["key"] = stage_key
+        return _sse("stage", {"stage": stage_key, "detail": detail})
+
+    return emit
+
+
 def _chunk_text(text: str, size: int = 40):
     """Yield answer text in small chunks (SSE token streaming feel)."""
     for i in range(0, len(text), size):
@@ -47,6 +69,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
     Events: meta (domain/confidence/decision/hits) → token* → done.
     """
+    _emit_stage = _stage_emitter()
     raw_sid = req.session_id or str(uuid.uuid4())
     try:
         session_id = str(uuid.UUID(raw_sid))
@@ -125,7 +148,9 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
 
         # Stage feedback (v0.16.4): tell the client what the pipeline is doing so the
         # user sees progress instead of silence during retrieval + rerank.
-        yield _sse("stage", {"stage": "understanding", "detail": "Analyzing your question"})
+        _f = _emit_stage("understanding", "Analyzing your question")
+        if _f:
+            yield _f
 
         # v1.1.9 — MONITORING NL QUERY TOOL: Zabbix devices/servers + K8s/LGTM app status.
         # Deterministic intent match; answers real-time data without touching the KB/LLM path
@@ -171,10 +196,14 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     if isinstance(ev, tuple) and ev[0] == "__FINAL__":
                         g = ev[1]
                     elif isinstance(ev, tuple) and len(ev) == 2:
-                        yield _sse("stage", {"stage": _NODE_STAGE.get(ev[0], "graph"),
-                                             "detail": ev[1]})
+                        _f = _emit_stage(_NODE_STAGE.get(ev[0], "graph"), ev[1])
+                        if _f:
+                            yield _f
                     else:
-                        yield _sse("stage", {"stage": "graph", "detail": str(ev)})
+                        # Unknown event shape: previously streamed the raw repr of the
+                        # event to the user, which leaked internal tuple text into the
+                        # progress detail. Keep it on the server log instead.
+                        logger.debug("graph event: %r", ev)
                 graph_pending = bool(g.get("pending_approval"))
                 graph_thread = req.session_id
                 result = RAGOrchestrationResult(
@@ -191,6 +220,7 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                     # failed infrastructure lookup was reported to the UI as success.
                     tool_note=g.get("tool_note"),
                     tool_calls=g.get("tool_calls") or [],
+                    raw_output=(g.get("raw_output") or "")[:20000],
                     top_k=g["top_k"] or 5,
                     context_chars=len(g["context"]),
                     context_tokens_estimate=len(g["context"]) // 4,
@@ -227,9 +257,11 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 # emitting this unconditionally would make a documents answer render the
                 # live step set — measured: a mode=kb question produced
                 # ['...', 'generate', 'tools', 'retrieve', 'generate'].
-                yield _sse("stage", {"stage": _canon_stage("tools") if (
-                    result.tool_used == "mcp_infra") else _canon_stage("retrieval"),
-                    "detail": _detail})
+                _f = _emit_stage(
+                    _canon_stage("tools") if result.tool_used == "mcp_infra"
+                    else _canon_stage("retrieval"), _detail)
+                if _f:
+                    yield _f
             except Exception as graph_err:
                 logger.warning("langgraph path failed (%s) — falling back to linear pipeline", graph_err)
                 result = None
@@ -269,7 +301,9 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 yield _sse("done", {"message_id": str(_uuid.uuid4()),
                                     "latency_ms": int((time.time() - t0) * 1000)})
                 return
-        yield _sse("stage", {"stage": _canon_stage("generating"), "detail": "Generating answer"})
+        _f = _emit_stage(_canon_stage("generating"), "Generating answer")
+        if _f:
+            yield _f
 
         # Domain-scoped access (Phase 9): non-admin users only see their allowed domains.
         role = get_role(user)
@@ -337,6 +371,10 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         # Presenting "90% confidence" about live state is a category error, and the UI
         # now renders scope + time + read-only instead.
         meta["tool_calls"] = getattr(result, "tool_calls", None) or []
+        # v1.6.68 — the verbatim output goes to the collapsible viewer only. The answer
+        # body carries an excerpt, so the same payload is never printed twice.
+        if getattr(result, "raw_output", ""):
+            meta["raw_output"] = result.raw_output
         if result.tool_used == "mcp_infra":
             servers = sorted({c.get("server") for c in meta["tool_calls"] if c.get("server")})
             meta["evidence"] = {

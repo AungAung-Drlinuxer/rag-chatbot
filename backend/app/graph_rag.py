@@ -60,6 +60,9 @@ class RAGState(TypedDict):
     # v1.6.65 — what was actually queried this turn: [{name, ms, bytes, server, at}].
     # The evidence panel renders this for a live answer (documents have sources).
     tool_calls: list | None
+    # v1.6.68 — the verbatim tool output, shown only in the evidence card's
+    # "Show full output" so the answer body does not repeat it.
+    raw_output: str | None
     question: str
     history: list[dict] | None
     user: str | None
@@ -180,7 +183,7 @@ def _node_tools(state: RAGState) -> dict:
                                             "knowledge base.\n\n"
                                             + (state.get("context") or ""))}
                 elif mode == "infra" or detect_infra_intent(q):
-                    findings, note, tool_calls = answer_infra(q)
+                    findings, note, tool_calls, raw_output = answer_infra(q)
                     if findings:
                         logger.info("infra agent answered %r (%d chars, %s)",
                                     q[:40], len(findings), note)
@@ -200,6 +203,7 @@ def _node_tools(state: RAGState) -> dict:
                             "tool_used": "mcp_infra",
                             "tool_note": note,
                             "tool_calls": tool_calls,
+                            "raw_output": raw_output,
                             "context": ctx,
                             "confidence": 0.9,
                             "decision": "answer",

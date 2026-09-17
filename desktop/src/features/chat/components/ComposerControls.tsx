@@ -30,10 +30,12 @@ type Props<T extends string> = {
   accent?: "blue" | "emerald";
   /** Rendered after the button, e.g. a compact "live" marker. */
   trailing?: React.ReactNode;
+  /** Extra classes on the wrapper (used to place/hide by breakpoint). */
+  className?: string;
 };
 
 function Select<T extends string>({
-  label, value, options, onChange, accent = "blue", trailing,
+  label, value, options, onChange, accent = "blue", trailing, className = "",
 }: Props<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ function Select<T extends string>({
   const dot = accent === "emerald" ? "bg-emerald-500" : "bg-blue-500";
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={`relative ${className}`} ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -127,6 +129,34 @@ function Select<T extends string>({
   );
 }
 
+/**
+ * v1.6.68 — the answer-source control on its own, so the header can host it on small
+ * screens. On a phone the composer keeps only attach / mic / send, and the mode (a
+ * session-level setting) lives in the header where it stays visible.
+ */
+export function ModeControl({
+  mode, onModeChange, className = "",
+}: {
+  mode: "auto" | "kb" | "infra";
+  onModeChange: (v: "auto" | "kb" | "infra") => void;
+  className?: string;
+}) {
+  return (
+    <Select
+      label="Answer from"
+      value={mode}
+      onChange={onModeChange}
+      accent={mode === "infra" ? "emerald" : "blue"}
+      className={className}
+      options={[
+        { value: "auto", label: "Auto", hint: "Documents, or the live estate when the question is about it" },
+        { value: "kb", label: "Knowledge base", hint: "Documents only — infrastructure tools are never used" },
+        { value: "infra", label: "Infrastructure", hint: "Live Kubernetes / Rancher, read-only. Admin or agent role" },
+      ] as const}
+    />
+  );
+}
+
 export default function ComposerControls({
   mode, onModeChange, engine, onEngineChange,
 }: {
@@ -142,6 +172,8 @@ export default function ComposerControls({
         value={mode}
         onChange={onModeChange}
         accent={mode === "infra" ? "emerald" : "blue"}
+        // Hidden on phones: the header hosts it there so the composer stays minimal.
+        className="hidden sm:block"
         options={[
           { value: "auto", label: "Auto", hint: "Documents, or the live estate when the question is about it" },
           { value: "kb", label: "Knowledge base", hint: "Documents only — infrastructure tools are never used" },
