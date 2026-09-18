@@ -699,9 +699,20 @@ def summarise_json(raw: str) -> str | None:
         body = [f"| {r[0]} | {r[1]} | {r[2]} | {r[6]} | {r[7]} |" for r in rows]
 
     total = len(data)
+    # Name what was counted. "**6 object(s)**" made the reader work out what the six things
+    # were from the table below it; "**6 Nodes**" says it up front. A mixed list keeps the
+    # generic wording and names the kinds it contains.
+    kinds = sorted({r[1] for r in rows if r[1] and r[1] != "?"})
+    if len(kinds) == 1:
+        label = kinds[0] if kinds[0].endswith("s") else kinds[0] + "s"
+        heading = f"**{total} {label}**"
+    elif kinds:
+        heading = f"**{total} objects** — {', '.join(kinds)}"
+    else:
+        heading = f"**{total} objects**"
     cut = " (list was truncated at the tool-output cap)" if len(rows) >= 80 else ""
     note = (f"\n\n_Showing {len(rows)} of {total}{cut}._" if total > len(rows) or cut else "")
-    return (f"**{total} object(s)**\n\n{head}\n{sep}\n" + "\n".join(body) + note)
+    return (f"{heading}\n\n{head}\n{sep}\n" + "\n".join(body) + note)
 
 
 def _first_tool(tools, names: tuple[str, ...]):
@@ -870,6 +881,49 @@ def summarise_proxmox(raw: str) -> str | None:
         return f"**{d.get('count', len(rows))} recent task(s)**\n\n{body}"
 
     return None
+
+
+def _as_answer_body(raw: str, max_rows: int = 10) -> str:
+    """Turn a tool payload into the answer body.
+
+    MARKDOWN TABLES ARE PASSED THROUGH AS MARKDOWN. They used to be wrapped in a ``` fence
+    along with everything else, which is why a correct table arrived on screen as a dark
+    monospace block showing the raw pipes — `| Node | Status | …` with `|---|` visible — and
+    why any `**bold**` in it printed its asterisks. react-markdown only builds a real table
+    (and MarkdownMessage already styles one) when the text is NOT a code block, so the fence
+    was defeating the renderer for exactly the payloads that most needed it.
+
+    Everything that is not a table — raw JSON, kubectl output — still gets fenced, because a
+    wall of JSON reflowed as prose is worse than a scrollable block.
+
+    Tables are cut on ROW boundaries, not line boundaries. A fixed 14-LINE cut splits a
+    table mid-row and the renderer drops the orphan, so the visible row count would silently
+    differ from the one stated.
+    """
+    lines = raw.strip().split("\n")
+    tbl_at = None
+    for i in range(len(lines) - 1):
+        if lines[i].lstrip().startswith("|") and re.match(r"^\s*\|[\s:|\-]+\|\s*$", lines[i + 1]):
+            tbl_at = i
+            break
+
+    if tbl_at is None:
+        shown = lines[:14]
+        hidden = max(0, len(lines) - len(shown))
+        out = "```\n" + "\n".join(shown) + "\n```"
+        if hidden:
+            out += f"\n\n_{hidden} more line(s) — open \"Show full output\" below_"
+        return out
+
+    pre = lines[:tbl_at]
+    header = lines[tbl_at:tbl_at + 2]
+    rows = [ln for ln in lines[tbl_at + 2:] if ln.strip()]
+    shown = rows[:max_rows]
+    hidden = max(0, len(rows) - len(shown))
+    md = "\n".join(pre + header + shown).strip()
+    if hidden:
+        md += f"\n\n_{hidden} more row(s) — open \"Show full output\" below_"
+    return md
 
 
 def _deterministic_lookup(question: str, tools):
@@ -1080,16 +1134,15 @@ def answer_infra(question: str) -> tuple[str, str, list, str]:
         # A tool can succeed and still return nothing; an empty array is not an answer.
         if raw and raw.strip() not in ("[]", "{}", "null") and len(raw.strip()) > 20:
             logger.info("deterministic infra lookup produced %d chars", len(raw))
-            body_lines = raw.strip().split("\n")
-            # Excerpt for the answer; the remainder is one click away.
-            head_n = 14
-            excerpt = "\n".join(body_lines[:head_n])
-            held = max(0, len(body_lines) - head_n)
-            note_line = (f"\n… {held} more line(s) — see the full output below"
-                         if held else "")
-            text = ("**Live infrastructure** — read-only, queried directly from the "
-                    "cluster (not from documents).\n\n```\n" + excerpt + "\n"
-                    + note_line + "\n```")
+            # NO leading "Live infrastructure — read-only, queried directly from the
+            # cluster (not from documents)." sentence. The chat UI already renders a green
+            # "live infrastructure · read-only MCP" badge directly above the bubble (see
+            # EvidenceCard), so saying it again in the body was pure duplication — and it
+            # pushed the actual data down. The badge is the claim; the table is the evidence.
+            #
+            # NO code fence around the body either: it must reach the renderer as markdown.
+            # See _as_answer_body.
+            text = _as_answer_body(raw)
             return text, "deterministic", (_TOOL_CALLS.get() or []), raw.strip()
 
     # A "what can you do" question names the domain but wants the capability list, not a
