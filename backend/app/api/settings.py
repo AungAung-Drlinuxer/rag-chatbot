@@ -6,6 +6,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+import threading
+import time
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi import status as http_status
 from pydantic import BaseModel
@@ -638,3 +641,370 @@ def delete_branding_logo(user: str = Depends(get_current_user)) -> dict:
     audit("branding.logo.reset", user)
     return {"ok": True}
 
+
+# ---------------------------------------------------------------------------
+# Connectors gallery (v1.6.74)
+# ---------------------------------------------------------------------------
+# A Perplexity-style connector screen needs three things this app did not have: a
+# catalogue of what CAN be connected, the live state of each, and a way to connect one
+# without editing a manifest. The catalogue lives in app/mcp/catalog.py; this module
+# joins it to real state so the UI never has to guess.
+#
+# `status` is measured, never assumed: a connector is only "ready" when its MCP server
+# actually answered a tool listing. That distinction matters — a card that says
+# "Connected" while the server is down is the same class of lie as reporting a failed
+# lookup as a success.
+
+
+# Connector probe cache. A settings page must not block on network probes: measured
+# 20.1s when every enabled server was probed inline, so the result is cached for 5
+# minutes. Explicit "Test" bypasses the cache (the user is waiting for the truth there).
+_STATE_CACHE: tuple = ()
+_STATE_LOCK = threading.Lock()
+_STATE_TTL = 300.0
+_REFRESHING = False
+
+
+def _invalidate_connector_cache() -> None:
+    global _STATE_CACHE
+    with _STATE_LOCK:
+        _STATE_CACHE = ()
+
+
+def _probe(spec: dict, timeout: float = 6.0) -> dict:
+    """Ask one MCP server what it offers. Bounded, never raises."""
+    from app.mcp.client import get_client
+    from app.mcp.infra_agent import curated_for
+
+    if not spec or not spec.get("enabled") or not spec.get("url"):
+        return {"reachable": False, "tools": 0, "exposed": 0}
+    out = {"reachable": False, "tools": 0, "exposed": 0}
+    res: dict = {}
+
+    def run():
+        try:
+            cli = get_client(spec["name"])
+            cat = {t.get("name"): t for t in cli.list_tools()}
+            res["tools"] = len(cat)
+            res["exposed"] = len(curated_for(spec["name"], cat))
+            res["reachable"] = True
+        except Exception:  # noqa: BLE001
+            res["reachable"] = False
+
+    th = threading.Thread(target=run, daemon=True)
+    th.start()
+    th.join(timeout)
+    if th.is_alive():
+        # The connector is configured but slow to answer. Report it as not answering
+        # rather than making the settings page wait on it.
+        return out
+    return {
+        "reachable": bool(res.get("reachable")),
+        "tools": int(res.get("tools") or 0),
+        "exposed": int(res.get("exposed") or 0),
+    }
+
+
+def _unknown_state() -> dict:
+    """Configured/enabled from settings, with reachability explicitly UNKNOWN.
+
+    Tri-state on purpose: `null` means "not probed yet", `false` means "probed and it did
+    not answer". Collapsing those two would make a working connector look broken on the
+    first page load.
+    """
+    from app.mcp.catalog import CATALOG
+    from app.mcp.client import get_mcp_cfg, get_mcp_servers
+
+    cfg = get_mcp_cfg()
+    servers = {x["name"]: x for x in get_mcp_servers()}
+    out = {}
+    for entry in CATALOG:
+        cid = entry["id"]
+        spec = servers.get(cid)
+        out[cid] = {
+            "configured": bool(spec) and (cid in ("rancher", "proxmox") or bool(cfg.get("servers"))),
+            "enabled": bool(spec.get("enabled")) if spec else False,
+            "reachable": None,
+            "tools_available": 0,
+            "tools_exposed": 0,
+        }
+    return out
+
+
+def _connector_state(block: bool = False) -> dict:
+    """Live state for every connector: configured, enabled, reachable, tool counts.
+
+    MEASURED, never assumed — and CACHED. The first version probed every server inline
+    and the settings page took 20.1s to load, which is not a settings page. Probes are
+    now bounded to 6s each, run in parallel, and cached for 5 minutes; "Test" always
+    probes fresh because that is the one place a user is waiting for the truth.
+    """
+    from app.mcp.catalog import CATALOG
+    from app.mcp.client import get_mcp_cfg, get_mcp_servers
+
+    global _STATE_CACHE, _REFRESHING  # declared once: Python requires it
+    # before ANY use of the name in the function
+    now = time.time()
+    with _STATE_LOCK:
+        cached = _STATE_CACHE[1] if _STATE_CACHE else None
+        fresh = bool(_STATE_CACHE) and now - _STATE_CACHE[0] < _STATE_TTL
+    if fresh:
+        return cached
+
+    # NOT fresh. Two replicas mean an in-process cache is never reliably warm, and the
+    # probe takes ~6s, so blocking here made the settings page wait. Instead: return what
+    # we have (or an honest "unknown") immediately and refresh in the background; the next
+    # load has the answer. Explicit Test still probes synchronously — that is the one
+    # place the user is waiting for the truth.
+    if not block:
+        with _STATE_LOCK:
+            if not _REFRESHING:
+                _REFRESHING = True
+                threading.Thread(target=_connector_state, kwargs={"block": True},
+                                 daemon=True).start()
+        return cached if cached is not None else _unknown_state()
+
+    cfg = get_mcp_cfg()
+    servers = {s["name"]: s for s in get_mcp_servers()}
+
+    ids = []
+    for entry in CATALOG:
+        cid = entry["id"]
+        spec = servers.get(cid)
+        configured = bool(spec) and (
+            cid in ("rancher", "proxmox") or bool(cfg.get("servers"))
+        )
+        if spec and configured and spec.get("enabled") and spec.get("url"):
+            ids.append(cid)
+
+    probes: dict = {}
+    threads = []
+    for cid in ids:
+        def mk(c=cid):
+            probes[c] = _probe(servers.get(c) or {})
+        t = threading.Thread(target=mk, daemon=True)
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join(7)
+
+    state: dict = {}
+    for entry in CATALOG:
+        cid = entry["id"]
+        spec = servers.get(cid)
+        configured = bool(spec) and (
+            cid in ("rancher", "proxmox") or bool(cfg.get("servers"))
+        )
+        pr = probes.get(cid) or {"reachable": False, "tools": 0, "exposed": 0}
+        state[cid] = {
+            "configured": configured,
+            "enabled": bool(spec.get("enabled")) if spec else False,
+            "reachable": pr["reachable"],
+            "tools_available": pr["tools"],
+            "tools_exposed": pr["exposed"],
+        }
+    with _STATE_LOCK:
+        _STATE_CACHE = (now, state)
+        _REFRESHING = False
+    return state
+
+
+@router.get("/connectors")
+def list_connectors(user: str = Depends(get_current_user)) -> dict:
+    """The gallery: catalogue grouped by category, each entry with its real state."""
+    _require_admin(user)
+    from app.mcp.catalog import CATALOG, catalog_by_category
+    from app.mcp.client import get_mcp_cfg, get_mcp_servers
+
+    state = _connector_state()
+    cfg = get_mcp_cfg()
+    specs = {s["name"]: s for s in get_mcp_servers()}
+
+    def public(entry: dict) -> dict:
+        cid = entry["id"]
+        st = state.get(cid, {})
+        return {
+            "id": cid,
+            "name": entry["name"],
+            "description": entry["description"],
+            "category": entry["category"],
+            "badge": entry.get("badge") or "",
+            "source": entry["source"],
+            "transport": entry.get("transport") or "streamable_http",
+            "url_default": entry.get("url_default") or "",
+            "fields": entry.get("fields") or [],
+            "note": entry.get("note") or "",
+            # Configured values, except secrets — same write-only contract as every
+            # other integration. A secret is reported only as set/unset.
+            "url": (specs.get(cid) or {}).get("url") or "",
+            "rancher_url": str(cfg.get("rancher_url") or ""),
+            "has_token": bool(
+                (specs.get(cid) or {}).get("token")
+                or cfg.get("rancher_token")
+            ),
+            "connected": bool(st.get("enabled") and st.get("configured")),
+            "enabled": bool(st.get("enabled")),
+            # None stays None: the UI distinguishes "not probed yet" from "not answering".
+            "reachable": st.get("reachable"),
+            "tools_available": st.get("tools_available", 0),
+            "tools_exposed": st.get("tools_exposed", 0),
+        }
+
+    # Connectors the administrator added that are NOT in the catalogue still belong on
+    # the screen — otherwise a working custom connector would be invisible.
+    known = {e["id"] for e in CATALOG}
+    extras = []
+    for s in (cfg.get("servers") or []):
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("id") or "").strip()
+        if not sid or sid in known:
+            continue
+        # Same bounded probe as the catalogue entries — never an inline list_tools call,
+        # which is what made this endpoint take 20s.
+        st = ({"reachable": None, "tools": 0, "exposed": 0} if not block
+              else _probe({"name": sid, "url": s.get("url"), "enabled": s.get("enabled")}))
+        extras.append({
+            "id": sid,
+            "name": str(s.get("name") or sid),
+            "description": "Custom MCP connector added by an administrator.",
+            "category": "Custom",
+            "badge": "",
+            "source": "custom",
+            "transport": str(s.get("transport") or "streamable_http"),
+            "url_default": "",
+            "fields": [],
+            "note": "",
+            "url": str(s.get("url") or ""),
+            "has_token": bool(s.get("token")),
+            "connected": bool(s.get("enabled")),
+            "enabled": bool(s.get("enabled")),
+            "reachable": st.get("reachable"),
+            "tools_available": st.get("tools", 0),
+            "tools_exposed": st.get("exposed", 0),
+        })
+
+    groups = catalog_by_category()
+    if extras:
+        groups.append({"category": "Custom", "connectors": []})
+    return {
+        "groups": [
+            {"category": g["category"], "connectors": [public(e) for e in g["connectors"]]}
+            for g in groups
+        ],
+        "extras": extras,
+        "counts": {
+            "total": len(CATALOG) + len(extras),
+            "connected": sum(1 for e in CATALOG if state.get(e["id"], {}).get("enabled")
+                             and state.get(e["id"], {}).get("configured"))
+                         + sum(1 for e in extras if e["connected"]),
+            "reachable": sum(1 for e in CATALOG if state.get(e["id"], {}).get("reachable"))
+                         + sum(1 for e in extras if e["reachable"]),
+        },
+    }
+
+
+@router.post("/connectors/{connector_id}/test")
+def test_connector(connector_id: str, payload: dict | None = None,
+                   user: str = Depends(get_current_user)) -> dict:
+    """Probe a connector (saving the posted values first so Test tests what you typed)."""
+    _require_admin(user)
+    if payload:
+        connect_connector(connector_id, payload, user)
+    from app.mcp.client import get_client
+    from app.mcp.infra_agent import curated_for
+    try:
+        catalogue = {t.get("name"): t for t in get_client(connector_id).list_tools()}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "detail": f"{type(exc).__name__}: {str(exc)[:200]}"}
+    exposed = curated_for(connector_id, catalogue)
+    return {
+        "ok": True,
+        "tools_available": len(catalogue),
+        "tools_exposed": len(exposed),
+        "exposed": list(exposed)[:20],
+        "detail": f"connected — {len(catalogue)} tool(s) available, {len(exposed)} "
+                  f"read-only tool(s) exposed to the assistant",
+    }
+
+
+@router.post("/connectors/{connector_id}")
+def connect_connector(connector_id: str, payload: dict,
+                      user: str = Depends(get_current_user)) -> dict:
+    """Connect or update a connector.
+
+    The two shipped connectors keep their existing settings keys (they are special-cased
+    in client.get_mcp_servers: Rancher has two auth modes, Proxmox reads its credential
+    from a Kubernetes Secret). Everything else lands in `mcp.servers`.
+    """
+    _require_admin(user)
+    p = payload or {}
+    if connector_id == "rancher":
+        update = {
+            "enabled": p.get("enabled"),
+            "url": p.get("url") or None,
+            "rancher_url": p.get("rancher_url") or None,
+            "rancher_token": p.get("rancher_token") or None,
+        }
+        r = put_integration_settings(
+            "mcp", {"settings": {k: v for k, v in update.items() if v is not None}}, user)
+        _invalidate_connector_cache()
+        return r
+
+    if connector_id == "proxmox":
+        # Proxmox has no token field on purpose: its credential is a K8s Secret, not an
+        # app setting. See get_mcp_servers().
+        from app.mcp.client import save_mcp_server  # noqa: F401  (kept for symmetry)
+        update = {k: v for k, v in {
+            "proxmox_enabled": p.get("enabled"),
+            "proxmox_url": p.get("url") or None,
+        }.items() if v is not None}
+        if not update:
+            return {"ok": True, "status": 200, "detail": "nothing to update"}
+        r = put_integration_settings("mcp", {"settings": update}, user)
+        _invalidate_connector_cache()
+        return r
+
+    from app.mcp.catalog import catalog_entry
+    from app.mcp.client import save_mcp_server
+
+    entry = catalog_entry(connector_id) or {}
+    display = p.get("name") or entry.get("name") or connector_id
+    record = {
+        "id": connector_id,
+        "name": display,
+        "url": p.get("url") or entry.get("url_default") or "",
+        "transport": p.get("transport") or entry.get("transport") or "streamable_http",
+        "enabled": str(p.get("enabled", "true")).strip().lower()
+                   not in ("0", "false", "no", "off"),
+    }
+    if str(p.get("token") or "").strip():
+        record["token"] = p["token"]
+    if not record["url"]:
+        raise HTTPException(status_code=400, detail="a connector URL is required")
+    save_mcp_server(record)
+    from app.mcp.client import reset_clients
+    reset_clients()
+    _invalidate_connector_cache()
+    return {"ok": True, "status": 200,
+            "detail": f"{display} connected — {record['url']} ({record['transport']})"}
+
+
+@router.delete("/connectors/{connector_id}")
+def disconnect_connector(connector_id: str, confirm: str = "",
+                         user: str = Depends(get_current_user)) -> dict:
+    """Disconnect. Destructive, so it needs ?confirm=<connector_id> (same guard style as
+    the credential endpoints — the earlier production-config deletion proved that a bare
+    DELETE is too easy to fire by accident)."""
+    _require_admin(user)
+    if confirm != connector_id:
+        raise HTTPException(status_code=400,
+                            detail=f"confirm={connector_id} required to disconnect")
+    if connector_id in ("rancher", "proxmox"):
+        key = "enabled" if connector_id == "rancher" else "proxmox_enabled"
+        return put_integration_settings("mcp", {"settings": {key: "false"}}, user)
+    from app.mcp.client import remove_mcp_server, reset_clients
+    remove_mcp_server(connector_id)
+    reset_clients()
+    _invalidate_connector_cache()
+    return {"ok": True, "status": 200, "detail": f"{connector_id} disconnected"}

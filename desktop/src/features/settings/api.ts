@@ -306,3 +306,63 @@ export async function deleteClassifierDomain(id: number): Promise<{ status: stri
   }
   return r.json();
 }
+
+// --- MCP connectors gallery (v1.6.74) -------------------------------------
+export type ConnectorField = {
+  key: string; label: string; kind: "text" | "password" | "bool";
+  required?: boolean; placeholder?: string;
+};
+export type Connector = {
+  id: string; name: string; description: string; category: string;
+  badge?: string; source: "builtin" | "upstream" | "custom";
+  transport?: string; url_default?: string; fields?: ConnectorField[]; note?: string;
+  url?: string; rancher_url?: string; has_token?: boolean;
+  connected: boolean; enabled: boolean;
+  /** true = probed and answering, false = probed and silent, null = not probed yet */
+  reachable: boolean | null;
+  tools_available: number; tools_exposed: number;
+};
+export type ConnectorGroup = { category: string; connectors: Connector[] };
+
+export async function listConnectors(): Promise<{
+  groups: ConnectorGroup[]; extras: Connector[];
+  counts: { total: number; connected: number; reachable: number };
+}> {
+  const r = await apiFetch(`/api/connectors`, { headers: authHeaders() });
+  if (!r.ok) throw new Error(`connectors ${r.status}`);
+  return r.json();
+}
+
+export async function connectConnector(
+  id: string, payload: Record<string, unknown>,
+): Promise<{ ok: boolean; detail?: string }> {
+  const r = await apiFetch(`/api/connectors/${encodeURIComponent(id)}`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body?.detail || `connect ${r.status}`);
+  return body;
+}
+
+export async function disconnectConnector(id: string): Promise<{ ok: boolean }> {
+  const r = await apiFetch(
+    `/api/connectors/${encodeURIComponent(id)}?confirm=${encodeURIComponent(id)}`,
+    { method: "DELETE", headers: authHeaders() },
+  );
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body?.detail || `disconnect ${r.status}`);
+  return body;
+}
+
+export async function testConnector(
+  id: string, payload?: Record<string, unknown>,
+): Promise<{ ok: boolean; detail?: string; tools_available?: number; tools_exposed?: number }> {
+  const r = await apiFetch(`/api/connectors/${encodeURIComponent(id)}/test`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
+  });
+  return r.json().catch(() => ({ ok: false, detail: `test ${r.status}` }));
+}

@@ -13,12 +13,17 @@ import {
   Sparkles,
   Lock,
   Pencil,
+  ServerCog,
+  Plug,
+  BookOpen,
+  LayoutGrid,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
 
 import { dashHealth } from "@/features/dashboard/api";
 import { IntegrationsConfig } from "../components/IntegrationsConfig";
+import ConnectorsGallery from "../components/ConnectorsGallery";
 import { BrandingSettings } from "../components/BrandingSettings";
 import { Image as ImageIcon } from "lucide-react";
 import {
@@ -73,6 +78,31 @@ function SelectRow({ label, description, value, onChange, options, width = "w-52
   );
 }
 
+
+/* Grouped settings navigation (v1.6.75). Modelled on the Claude Desktop settings
+ * sidebar: labelled groups, icon + label rows, one panel visible at a time.
+ *
+ * Only panels that HAVE content are listed. That screen also shows Extensions,
+ * Developer and Plugins; this app has no settings behind those yet, and an empty page
+ * is worse than an absent one. The service-status block lives inside Integrations. */
+const SETTINGS_NAV: { group: string; items: { id: string; label: string; icon: React.ReactNode }[] }[] = [
+  {
+    group: "Application",
+    items: [
+      { id: "general", label: "General", icon: <Globe className="size-4" /> },
+      { id: "integrations", label: "Integrations", icon: <Plug className="size-4" /> },
+    ],
+  },
+  {
+    group: "Customize",
+    items: [
+      { id: "skills", label: "Skills", icon: <BookOpen className="size-4" /> },
+      { id: "connectors", label: "Connectors", icon: <LayoutGrid className="size-4" /> },
+      { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> },
+    ],
+  },
+];
+
 function SectionCard({ icon, iconTone, title, description, children }: {
   icon: React.ReactNode; iconTone: string; title: string; description: string; children: React.ReactNode;
 }) {
@@ -97,6 +127,8 @@ function SectionCard({ icon, iconTone, title, description, children }: {
 ============================================================ */
 
 export default function Settings({ role }: { role?: string }) {
+  // v1.6.75 — which settings panel is open (grouped sidebar nav).
+  const [active, setActive] = useState("general");
   // v0.21.90 — role gating: user/IT Support/Knowledge Manager only see General,
   // Appearance, AI Assistant, Notifications. Integrations + Mail are admin-only.
   const isAdmin = role === "admin";
@@ -293,11 +325,60 @@ export default function Settings({ role }: { role?: string }) {
           }
         />
 
-        {/* Main content */}
-        <main className="mx-auto max-w-[1400px] pb-8">
+        {/* Main content — grouped nav on the left, one panel at a time (v1.6.75) */}
+        <main className="mx-auto flex max-w-[1400px] gap-6 pb-8">
+          <nav aria-label="Settings sections" className="hidden w-52 shrink-0 lg:block">
+            {SETTINGS_NAV.map((g) => (
+              <div key={g.group} className="mb-5">
+                <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  {g.group}
+                </p>
+                <div className="space-y-0.5">
+                  {g.items.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => setActive(it.id)}
+                      aria-current={active === it.id ? "page" : undefined}
+                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[12.5px] font-medium transition ${
+                        active === it.id
+                          ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60"
+                      }`}
+                    >
+                      <span className={active === it.id ? "text-slate-700 dark:text-slate-200" : "text-slate-400"}>
+                        {it.icon}
+                      </span>
+                      {it.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          {/* On small screens the nav is a horizontal strip so nothing is unreachable. */}
+          <div className="min-w-0 flex-1">
+            <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 lg:hidden">
+              {SETTINGS_NAV.flatMap((g) => g.items).map((it) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => setActive(it.id)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
+                    active === it.id
+                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  }`}
+                >
+                  {it.label}
+                </button>
+              ))}
+            </div>
           <div className="space-y-5">
 
             {/* ==================== GENERAL ==================== */}
+            {active === "general" && (
             <SectionCard icon={<Globe className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
               iconTone="bg-sky-50 dark:bg-sky-950/40"
               title="General" description="Basic application settings and preferences.">
@@ -323,8 +404,10 @@ export default function Settings({ role }: { role?: string }) {
                 value={String(itemsPerPage)} onChange={(v) => setItemsPerPage(Number(v) || 20)}
                 options={["10", "20", "25", "50", "100"]} />
             </SectionCard>
+            )}
 
             {/* ==================== APPEARANCE ==================== */}
+            {active === "general" && (
             <SectionCard icon={<Monitor className="h-5 w-5 text-violet-600 dark:text-violet-400" />}
               iconTone="bg-violet-50 dark:bg-violet-950/40"
               title="Appearance" description="Customize how the application looks.">
@@ -358,8 +441,20 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
             </SectionCard>
+            )}
 
             {/* ==================== INTEGRATIONS ==================== */}
+            {active === "connectors" && (
+            <SectionCard
+              icon={<ServerCog className="size-4" />}
+              iconTone="bg-sky-50 dark:bg-sky-950/40"
+              title="Connectors"
+              description="Connect services so the assistant can read and act on your data.">
+              <ConnectorsGallery />
+            </SectionCard>
+            )}
+
+            {active === "integrations" && (
             <SectionCard icon={<Link2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />}
               iconTone="bg-teal-50 dark:bg-teal-950/40"
               title="Integrations" description="Connect external tools and services.">
@@ -381,9 +476,10 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
             </SectionCard>
+            )}
 
             {/* Branding — admin only (logo on login + sidebar) */}
-            {isAdmin && (
+            {isAdmin && active === "general" && (
             <SectionCard
               icon={<ImageIcon className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-400" />}
               iconTone="bg-fuchsia-50 dark:bg-fuchsia-950/40"
@@ -396,11 +492,12 @@ export default function Settings({ role }: { role?: string }) {
             </SectionCard>
             )}
 
-            {/* Mail (SMTP) — admin only */}
-            {isAdmin && <MailSettings />}
+            {/* Mail (SMTP) — admin only; part of the Notifications panel */}
+            {isAdmin && active === "notifications" && <MailSettings />}
 
 
             {/* ==================== AI ASSISTANT ==================== */}
+            {active === "skills" && (
             <SectionCard icon={<Bot className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
               iconTone="bg-indigo-50 dark:bg-indigo-950/40"
               title="AI Assistant" description="Configure AI provider and response behavior.">
@@ -474,10 +571,12 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
             </SectionCard>
+            )}
 
             
 
             {/* ==================== NOTIFICATIONS ==================== */}
+            {active === "notifications" && (
             <SectionCard icon={<Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
               iconTone="bg-amber-50 dark:bg-amber-950/40"
               title="Notifications" description="Control how you receive updates and alerts.">
@@ -496,6 +595,7 @@ export default function Settings({ role }: { role?: string }) {
                   description="Daily summary of usage and system activity." />
               </div>
             </SectionCard>
+            )}
 
             {/* ==================== SECURITY INFO ==================== */}
             <section className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
@@ -510,6 +610,7 @@ export default function Settings({ role }: { role?: string }) {
                 </div>
               </div>
             </section>
+          </div>
           </div>
         </main>
 

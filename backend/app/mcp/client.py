@@ -355,11 +355,103 @@ def get_mcp_servers() -> list[dict]:
         # it is spoken to over SSE (see McpClient.transport).
         "transport": "sse",
     })
+    # --- connectors added from the gallery ------------------------------------
+    # `mcp.servers` holds whatever the administrator connected on the Connectors
+    # screen: [{id, name, url, token, enabled, transport}]. The two entries above stay
+    # hardcoded because this deployment ships those images and their behaviour is
+    # special-cased (Rancher's two auth modes, Proxmox's SSE transport); anything an
+    # administrator adds is data.
+    for entry in (cfg.get("servers") or []):
+        if not isinstance(entry, dict):
+            continue
+        url = str(entry.get("url") or "").strip().rstrip("/")
+        sid = str(entry.get("id") or "").strip()
+        if not sid or not url:
+            continue
+        en = str(entry.get("enabled")).strip().lower() in ("1", "true", "yes", "on")
+        servers.append({
+            "name": sid,
+            "url": url,
+            "enabled": en,
+            # A bearer token is forwarded per request; servers that read credentials
+            # from their own environment simply ignore it.
+            "token": str(entry.get("token") or ""),
+            "mode": "custom",
+            "transport": str(entry.get("transport") or "http").strip() or "http",
+        })
     return servers
 
 
-# Per-URL client registry: each server keeps its own MCP session, tool cache and
-# credential, so a failure or a repoint on one cannot affect the other.
+
+def save_mcp_server(entry: dict) -> list[dict]:
+        """Add or replace one connector in `mcp.servers`. Returns the new list.
+
+        Stored server-side with the rest of the integration settings. A blank token on an
+        update means "keep the stored one", matching the write-only credential contract used
+        by every other integration — the UI never receives a secret back, so it cannot send
+        one either.
+        """
+        from sqlalchemy import text as _sql
+
+        from app.persistence.database import SessionLocal
+
+        sid = str(entry.get("id") or "").strip()
+        if not sid:
+            raise ValueError("connector id required")
+        with SessionLocal() as session:
+            raw = session.execute(_sql(
+                "SELECT value FROM system_settings WHERE key = 'mcp'")).scalar()
+            cfg = {}
+            if raw:
+                try:
+                    cfg = json.loads(raw) if isinstance(raw, str) else dict(raw)
+                except Exception:  # noqa: BLE001
+                    cfg = {}
+            servers = [s for s in (cfg.get("servers") or []) if isinstance(s, dict)]
+            existing = next((s for s in servers if s.get("id") == sid), {})
+            merged = dict(existing)
+            merged.update({k: v for k, v in entry.items() if v is not None})
+            if not str(merged.get("token") or "").strip():
+                merged["token"] = existing.get("token") or ""
+            servers = [s for s in servers if s.get("id") != sid] + [merged]
+            cfg["servers"] = servers
+            session.execute(_sql(
+                "INSERT INTO system_settings (key, value) VALUES ('mcp', :v) "
+                "ON CONFLICT (key) DO UPDATE SET value = :v"),
+                {"v": json.dumps(cfg)})
+            session.commit()
+            return servers
+
+
+
+def remove_mcp_server(connector_id: str) -> list[dict]:
+        """Disconnect a connector: drop it from `mcp.servers` and forget its client."""
+        from sqlalchemy import text as _sql
+
+        from app.persistence.database import SessionLocal
+
+        with SessionLocal() as session:
+            raw = session.execute(_sql(
+                "SELECT value FROM system_settings WHERE key = 'mcp'")).scalar()
+            cfg = {}
+            if raw:
+                try:
+                    cfg = json.loads(raw) if isinstance(raw, str) else dict(raw)
+                except Exception:  # noqa: BLE001
+                    cfg = {}
+            servers = [s for s in (cfg.get("servers") or [])
+                       if isinstance(s, dict) and s.get("id") != connector_id]
+            cfg["servers"] = servers
+            session.execute(_sql(
+                "INSERT INTO system_settings (key, value) VALUES ('mcp', :v) "
+                "ON CONFLICT (key) DO UPDATE SET value = :v"),
+                {"v": json.dumps(cfg)})
+            session.commit()
+        # Drop the cached session so a reconnect starts clean.
+        with _clients_lock:
+            for url in [u for u, c in _clients.items() if getattr(c, "owner", "") == connector_id]:
+                _clients.pop(url, None)
+        return servers
 _clients: dict[str, McpClient] = {}
 _clients_lock = threading.Lock()
 

@@ -131,6 +131,34 @@ CURATED_BY_SERVER: dict[str, tuple[str, ...]] = {
     "proxmox": PROXMOX_CURATED_TOOLS,
 }
 
+# For a connector an administrator added, there is no hand-written allowlist — so the
+# exposure rule is inverted: only names that READ are considered, and anything matching a
+# write verb is refused. Names are then capped, because tool-selection accuracy collapses
+# as the count grows and every schema costs tokens on every request.
+_READ_VERB_RE = re.compile(
+    r"^(?:[a-z0-9]+[_-])?(list|get|show|describe|status|read|search|find|query|fetch|"
+    r"inspect|view|recent|top|capacity|health|events|logs|info|summary|diff)",
+    re.IGNORECASE,
+)
+_CUSTOM_TOOL_CAP = 14
+
+
+def curated_for(server_name: str, catalogue: dict) -> tuple[str, ...]:
+    """Tool names to expose for a server. Explicit allowlist, else reads only."""
+    explicit = CURATED_BY_SERVER.get(server_name)
+    if explicit:
+        return explicit
+    picked = []
+    for name in sorted(catalogue):
+        if DENY_TOOLS_RE.search(name):
+            continue
+        if not _READ_VERB_RE.match(name):
+            continue
+        picked.append(name)
+        if len(picked) >= _CUSTOM_TOOL_CAP:
+            break
+    return tuple(picked)
+
 # Cheap intent gate — no LLM call, same discipline as app/tools/ticket_tool.py.
 #
 # v1.6.73 — rebuilt after auditing 51 question forms. The old gate required one of a
@@ -323,15 +351,18 @@ def build_tools():
     for spec in get_mcp_servers():
         if not spec.get("enabled") or not spec.get("url"):
             continue
-        curated = CURATED_BY_SERVER.get(spec["name"], ())
-        if not curated:
-            continue
         client = get_client(spec["name"])
         try:
             catalogue = {t.get("name"): t for t in client.list_tools()}
         except Exception as exc:  # noqa: BLE001
             logger.info("mcp[%s] catalogue unavailable: %s: %s",
                         spec["name"], type(exc).__name__, exc)
+            continue
+        # Explicit allowlist for the shipped servers; reads-only for a connector the
+        # administrator added from the gallery.
+        curated = curated_for(spec["name"], catalogue)
+        if not curated:
+            logger.info("mcp[%s] exposes no read tools; skipping", spec["name"])
             continue
 
         for name in curated:
