@@ -783,6 +783,54 @@ def _deterministic_lookup(question: str, tools):
             return None
         return out if out.strip() and out.strip() not in ("[]", "{}") else None
 
+    # 0) Proxmox / hypervisor. MUST come before every rule below, because Proxmox has
+    #    nodes, storage and guests of its own — so each generic rule was claiming
+    #    hypervisor questions and answering them with Kubernetes data. Measured before
+    #    this rule existed: "Proxmox node တွေ ဘယ်နှစ်ခု ရှိလဲ" ran kubernetes_list, and
+    #    "Proxmox VMs list ပြပါ" ran kubernetes_workload_health. The tools were connected
+    #    and reachable the whole time; nothing ever routed to them.
+    #    Bare "node"/"storage"/"vm" still routes to Kubernetes; the word Proxmox (or pve)
+    #    is required to enter here.
+    if re.search(r"\b(proxmox|pve|hypervisor)\b", q):
+        # -- storage / backup inventory ------------------------------------------
+        if re.search(r"\b(storage|datastore|disk|backup|vzdump)\b", q):
+            if re.search(r"\bbackup", q):
+                out = _call("proxmox_list_backups", {}) or _call("proxmox_list_storage", {})
+            else:
+                out = _call("proxmox_list_storage", {})
+            if out:
+                return summarise_json(out) or out
+        # -- guests: whole VMs vs LXC containers ---------------------------------
+        if re.search(r"\b(vms?|virtual machines?|qemu)\b", q):
+            out = _call("proxmox_list_vms", {})
+            if out:
+                return summarise_json(out) or out
+        if re.search(r"\b(lxc|containers?|cts?)\b", q) and not re.search(
+                r"\b(kubernetes|k8s|pods?|namespace|deploy)\b", q):
+            out = _call("proxmox_list_containers", {})
+            if out:
+                return summarise_json(out) or out
+        # -- consumption ---------------------------------------------------------
+        # NOT proxmox_resource_usage: its schema requires a vmid (it reports per-guest
+        # metrics, not per-node). Calling it without one returns TOOL_INPUT_INVALID, so the
+        # branch could never succeed. Node-level CPU/memory live in /nodes/<node>/rrddata,
+        # which the vendored tool set does not expose and which needs Sys.Audit on the node
+        # anyway — so a usage question lands on proxmox_status, and the answer says what the
+        # node reports rather than inventing a figure.
+        if re.search(r"\b(cpu|memory|ram|load|usage|utilis|utiliz)\b", q):
+            out = _call("proxmox_status", {})
+            if out:
+                return summarise_json(out) or out
+        # -- running/scheduled work ---------------------------------------------
+        if re.search(r"\b(task|job|recent|running)\b", q):
+            out = _call("proxmox_recent_tasks", {})
+            if out:
+                return summarise_json(out) or out
+        # -- default: version, node list and cluster health ----------------------
+        out = _call("proxmox_status", {})
+        if out:
+            return summarise_json(out) or out
+
     # 1) Which estates exist / their status -> cluster_list.
     if re.search(r"\bclusters?\b", q) and re.search(
             r"list|which|what|how many|status|manage|available|all|connected", q):

@@ -24,6 +24,18 @@
 # there is no per-request token passthrough like Rancher's). Keeping it in a Secret
 # means the platform team owns it — rotate with kubectl/SealedSecrets and the app
 # never holds it. The Settings card manages enable/disable, the URL and a live test.
+#
+# CONNECTION SHAPE
+#   URL       http://proxmox-mcp:8000       (bare host:port — the client appends /mcp)
+#   transport http
+# The image ships OUR bridge (bridge.js), which serves streamable HTTP at /mcp plus
+# /healthz, so this server has the same shape as rancher-mcp.
+#
+# THE PROXMOX-SIDE PREREQUISITE
+# The API token must hold PVEAuditor (or at least Sys.Audit) at path / with propagate.
+# A token granted only on one node authenticates fine but sees ONE node and zero guests,
+# and /cluster/status returns 403 "Permission check failed (/, Sys.Audit)" — which looks
+# like a broken connector rather than a missing privilege.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -81,10 +93,10 @@ spec:
             # Node + bridge: no model, no training runtime. Modest is honest.
             requests: { cpu: "50m", memory: "128Mi" }
             limits:   { cpu: "500m", memory: "512Mi" }
-          # The bridge is started with --healthEndpoint /healthz, so readiness is a
-          # real HTTP check of the whole chain (bridge -> MCP child), not just a
-          # socket that accepts. The container's startup banner claims
-          # "Health endpoints: (none)"; the flag exists and is the stronger signal.
+          # bridge.js serves /healthz itself, and the endpoint is a real check of the whole
+          # chain (bridge -> stdio child) because the bridge cannot answer it without a live
+          # child. This replaced supergateway, which is unusable with this child: its SSE mode
+          # serves one client only and its streamable-HTTP modes crash on the first request.
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 5

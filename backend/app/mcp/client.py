@@ -375,9 +375,11 @@ def get_mcp_servers() -> list[dict]:
         # team, rotatable with kubectl/SealedSecrets.
         "token": "",
         "mode": "proxmox",
-        # A bridged stdio server: its streamable-HTTP mode crashes on tools/list, so
-        # it is spoken to over SSE (see McpClient.transport).
-        "transport": "sse",
+        # A bridged stdio server. The image ships OUR bridge (bridge.js), which serves
+        # streamable HTTP at /mcp — supergateway was measured unusable with this child (its
+        # SSE mode serves one client only, and both streamable-HTTP variants die on the first
+        # request). So this is "http", the same shape as rancher-mcp.
+        "transport": "http",
     })
     # --- connectors added from the gallery ------------------------------------
     # `mcp.servers` holds whatever the administrator connected on the Connectors
@@ -393,7 +395,7 @@ def get_mcp_servers() -> list[dict]:
         if not sid or not url:
             continue
         en = str(entry.get("enabled")).strip().lower() in ("1", "true", "yes", "on")
-        servers.append({
+        row = {
             "name": sid,
             "url": url,
             "enabled": en,
@@ -402,7 +404,18 @@ def get_mcp_servers() -> list[dict]:
             "token": str(entry.get("token") or ""),
             "mode": "custom",
             "transport": str(entry.get("transport") or "http").strip() or "http",
-        })
+        }
+        # A signal the connector is ALREADY hardcoded above (proxmox is, and an
+        # administrator may well configure its URL on the Connectors screen). Without this
+        # check the same name appeared twice — once from the hardcoded default with its own
+        # enabled flag and transport, once from storage — so Settings listed one connector
+        # as both disabled and enabled. The stored entry wins: it carries what the
+        # administrator actually chose.
+        prior = next((i for i, s in enumerate(servers) if s.get("name") == sid), None)
+        if prior is None:
+            servers.append(row)
+        else:
+            servers[prior] = row
     return servers
 
 
