@@ -32,14 +32,18 @@ export default function ContextGraphPage() {
   const [prov, setProv] = useState<EntityRow[]>([]);
   const [rels, setRels] = useState<GraphEdge[]>([]);
   const [filter, setFilter] = useState("");
+  // Which extractor to view. Blank means "whatever the service defaults to" — which the page
+  // resolves from the first /stats reply, so the switch always shows the numbers on screen.
+  const [method, setMethod] = useState("");
 
   const load = useCallback(async () => {
     setBusy(true);
     setErr(null);
     try {
-      const [s, g] = await Promise.all([getStats(), getGraph(150)]);
+      const [s, g] = await Promise.all([getStats(method), getGraph(150, method)]);
       setStats(s);
       setGraph(g);
+      if (!method && s.method) setMethod(s.method);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setStats(null);
@@ -47,7 +51,7 @@ export default function ContextGraphPage() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [method]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -58,12 +62,12 @@ export default function ContextGraphPage() {
     let live = true;
     (async () => {
       try {
-        const [p, r] = await Promise.all([getProvenance(selected), getRelations(selected)]);
+        const [p, r] = await Promise.all([getProvenance(selected, method), getRelations(selected, method)]);
         if (live) { setProv(p); setRels(r); }
       } catch { if (live) { setProv([]); setRels([]); } }
     })();
     return () => { live = false; };
-  }, [selected]);
+  }, [selected, method]);
 
   const shownNodes = useMemo(() => {
     if (!graph) return [];
@@ -117,6 +121,35 @@ export default function ContextGraphPage() {
           </p>
         </div>
       </div>
+
+      {stats && (stats.methods?.length ?? 0) > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-card px-4 py-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Extractor</span>
+          {stats.methods!.map((m) => {
+            const on = (stats.method ?? "") === m.method;
+            return (
+              <button
+                key={m.method}
+                type="button"
+                onClick={() => { setMethod(m.method); setSelected(null); }}
+                className={[
+                  "flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
+                  on ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                     : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200",
+                ].join(" ")}
+              >
+                {m.method}
+                <span className={`tabular-nums ${on ? "opacity-70" : "opacity-50"}`}>
+                  {m.entities.toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
+          <span className="text-[10px] text-muted-foreground">
+            entity count per extractor — deterministic, no LLM
+          </span>
+        </div>
+      )}
 
       {err && (
         <div className="mb-5 rounded-xl border border-red-200 bg-red-50/70 px-4 py-3 text-[11px] text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">

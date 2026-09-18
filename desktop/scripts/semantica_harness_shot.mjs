@@ -5,6 +5,12 @@
 // payloads captured from the live semantica-spike service.
 import puppeteer from "puppeteer-core";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+// The fixture names the entity worth showing; the page selects it so the provenance panel in
+// the screenshot is real structure rather than whatever ranks first (markdown noise, here).
+const FIXTURE = JSON.parse(readFileSync("public/semantica_fixture.json", "utf8"));
+const SELECTED = FIXTURE.selected ?? "";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const OUT = "../docs/qa";
@@ -44,12 +50,14 @@ for (const [name, vp, shot] of [
   // Let the force simulation settle: nodes are placed over ticks, so an early shot is a blur.
   await sleep(3500);
 
-  // Select the top entity so the provenance/connections panel is populated in the shot — it is
-  // the part of this page actually worth evaluating.
-  await page.evaluate(() => {
-    const row = document.querySelector("table tbody tr");
-    if (row instanceof HTMLElement) row.click();
-  });
+  // Select the entity the fixture chose (a recognisable one) so the provenance/connections
+  // panel shows real structure. Clicking the first row instead selects whatever ranks highest,
+  // which on this corpus is markdown noise ("###") — honest data, but useless as evidence.
+  await page.evaluate((want) => {
+    const rows = [...document.querySelectorAll("table tbody tr")];
+    const hit = rows.find((r) => r.textContent?.trim().startsWith(want)) ?? rows[0];
+    if (hit instanceof HTMLElement) hit.click();
+  }, SELECTED);
   await sleep(1500);
 
   const facts = await page.evaluate(() => {

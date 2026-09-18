@@ -36,6 +36,9 @@ import psycopg2.extras
 RAW_DSN = os.environ.get("SEMANTICA_DSN") or os.environ.get("DATABASE_URL") or ""
 BATCH = int(os.environ.get("SEMANTICA_BATCH", "0"))          # 0 = every article
 METHOD = os.environ.get("SEMANTICA_METHOD", "pattern")        # pattern | ml | llm
+# Rebuild even when rows for this method already exist. Needed to compare extractors: the
+# pattern graph was already built, and evaluating `ml` must not mean deleting it.
+FORCE = os.environ.get("SEMANTICA_FORCE", "").lower() in ("1", "true", "yes")
 PORT = int(os.environ.get("SEMANTICA_PORT", "8000"))
 
 # Build progress, readable by /stats. The build is long (measured: ~25 min for 229 articles,
@@ -109,17 +112,24 @@ def build_extractors():
     from semantica.semantic_extract import NERExtractor, RelationExtractor
 
     if METHOD in ("ml", "auto"):
+        # Gate on spaCy ITSELF, not on a probe through the wrapper.
+        #
+        # The old probe was a false pass: with no model installed, NERExtractor(method="ml")
+        # still returns entities — because it silently falls back to pattern INSIDE — so the
+        # probe succeeded, the run reported "ml", and every article paid a failed model load.
+        # Loading the model directly is the only check that distinguishes the two.
         try:
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+            probe = nlp("Kubernetes runs on Ubuntu 24.04 at 10.10.10.115 for the Platform Team")
+            ents = [(e.text, e.label_) for e in probe.ents]
+            log(f"extractor: ml — spaCy {spacy.__version__} en_core_web_sm loaded; probe {ents}")
             ner = NERExtractor(method="ml")
             rel = RelationExtractor(method="ml")
-            # Prove it actually works before committing 229 articles to it.
-            probe = ner.extract("Kubernetes runs on Ubuntu 24.04 at 10.10.10.115")
-            if probe:
-                log(f"extractor: ml (spaCy) — probe found {len(probe)} entities")
-                return ner, rel, "ml"
-            log("extractor: ml returned nothing on the probe; falling back to pattern")
+            return ner, rel, "ml"
         except Exception as exc:  # noqa: BLE001
-            log(f"extractor: ml unavailable ({type(exc).__name__}: {str(exc)[:90]}); using pattern")
+            log(f"extractor: ml UNAVAILABLE ({type(exc).__name__}: {str(exc)[:120]}) — "
+                f"falling back to pattern; results will NOT be comparable to an ml run")
 
     return NERExtractor(method="pattern"), RelationExtractor(method="pattern"), "pattern"
 
@@ -151,7 +161,8 @@ CREATE TABLE IF NOT EXISTS semantica_entities (
     mentions     integer NOT NULL DEFAULT 0,
     page_ids     text[]  NOT NULL DEFAULT '{}',
     source_urls  text[]  NOT NULL DEFAULT '{}',
-    UNIQUE (name, label)
+    method       text    NOT NULL DEFAULT 'pattern',
+    UNIQUE (name, label, method)
 );
 CREATE TABLE IF NOT EXISTS semantica_relations (
     id           bigserial PRIMARY KEY,
@@ -160,11 +171,18 @@ CREATE TABLE IF NOT EXISTS semantica_relations (
     object       text NOT NULL,
     mentions     integer NOT NULL DEFAULT 0,
     page_ids     text[]  NOT NULL DEFAULT '{}',
-    source_urls  text[]  NOT NULL DEFAULT '{}'
+    source_urls  text[]  NOT NULL DEFAULT '{}',
+    method       text    NOT NULL DEFAULT 'pattern'
 );
 CREATE INDEX IF NOT EXISTS semantica_relations_subject_idx ON semantica_relations (subject);
 CREATE INDEX IF NOT EXISTS semantica_relations_object_idx  ON semantica_relations (object);
 """
+# NOT here: the `method` indexes. `CREATE TABLE IF NOT EXISTS` is a no-op on a pre-existing
+# table, so on this database the DDL runs against tables WITHOUT a `method` column -- and
+# `CREATE INDEX ... (method)` then fails with `column "method" does not exist`, aborting the
+# statement batch BEFORE the ALTER that would have added it. ensure_schema() creates those two
+# indexes immediately after the ALTER instead: a schema statement must never depend on a
+# migration that has not run yet.
 
 
 def ensure_schema() -> None:
@@ -180,36 +198,54 @@ def ensure_schema() -> None:
         conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute(DDL)
+            # The pattern graph was built before `method` existed. Add it rather than recreate
+            # the tables — the comparison needs both extractors side by side.
+            for tbl in ("semantica_entities", "semantica_relations"):
+                cur.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS method text NOT NULL DEFAULT 'pattern'")
+                cur.execute(f"CREATE INDEX IF NOT EXISTS {tbl}_method_idx ON {tbl} (method)")
+            cur.execute("ALTER TABLE semantica_entities DROP CONSTRAINT IF EXISTS semantica_entities_name_label_key")
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS semantica_entities_name_label_method_key "
+                        "ON semantica_entities (name, label, method)")
     finally:
         conn.close()
 
 
-def save(entities: dict, relations: dict) -> None:
+def save(entities: dict, relations: dict, method: str) -> None:
     """Write on a fresh connection, held only for the write itself."""
     conn = connect()
     try:
         with conn.cursor() as cur:
-            _save_rows(cur, entities, relations)
+            _save_rows(cur, entities, relations, method)
         conn.commit()
     finally:
         conn.close()
 
 
-def _save_rows(cur, entities: dict, relations: dict) -> None:
-        cur.execute(DDL)
-        cur.execute("TRUNCATE semantica_entities, semantica_relations")
-        psycopg2.extras.execute_values(
-            cur,
-            "INSERT INTO semantica_entities (name,label,mentions,page_ids,source_urls) VALUES %s "
-            "ON CONFLICT (name,label) DO UPDATE SET mentions = EXCLUDED.mentions, "
-            "page_ids = EXCLUDED.page_ids, source_urls = EXCLUDED.source_urls",
-            [(k[0], k[1], v["mentions"], sorted(v["pages"]), sorted(v["urls"])) for k, v in entities.items()],
-        )
-        psycopg2.extras.execute_values(
-            cur,
-            "INSERT INTO semantica_relations (subject,predicate,object,mentions,page_ids,source_urls) VALUES %s",
-            [(s, p, o, v["mentions"], sorted(v["pages"]), sorted(v["urls"])) for (s, p, o), v in relations.items()],
-        )
+def _save_rows(cur, entities: dict, relations: dict, method: str) -> None:
+    """Replace THIS METHOD's rows only.
+
+    The first version ran `TRUNCATE semantica_entities, semantica_relations`. That was fine
+    while one extractor existed and catastrophic the moment there were two: building `ml`
+    would silently delete the `pattern` graph the comparison depends on. Delete by method
+    instead, so each extractor owns its own slice of the tables.
+    """
+    cur.execute("DELETE FROM semantica_entities  WHERE method = %s", (method,))
+    cur.execute("DELETE FROM semantica_relations WHERE method = %s", (method,))
+    psycopg2.extras.execute_values(
+        cur,
+        "INSERT INTO semantica_entities (name,label,mentions,page_ids,source_urls,method) VALUES %s "
+        "ON CONFLICT (name,label,method) DO UPDATE SET mentions = EXCLUDED.mentions, "
+        "page_ids = EXCLUDED.page_ids, source_urls = EXCLUDED.source_urls",
+        [(k[0], k[1], v["mentions"], sorted(v["pages"]), sorted(v["urls"]), method)
+         for k, v in entities.items()],
+    )
+    psycopg2.extras.execute_values(
+        cur,
+        "INSERT INTO semantica_relations (subject,predicate,object,mentions,page_ids,source_urls,method) "
+        "VALUES %s",
+        [(sub, pre, obj, v["mentions"], sorted(v["pages"]), sorted(v["urls"]), method)
+         for (sub, pre, obj), v in relations.items()],
+    )
 
 
 # ---------------------------------------------------------------- the pipeline
@@ -267,7 +303,7 @@ def run_build() -> dict:
             PROGRESS.update(done=i, entities=len(entities), relations=len(relations))
             log(f"  {i}/{len(articles)} articles · {len(entities)} entities · {len(relations)} relations")
 
-    save(entities, relations)
+    save(entities, relations, method)
 
     by_label = Counter(k[1] for k in entities)
     stats = {
@@ -281,7 +317,7 @@ def run_build() -> dict:
         "with_provenance": sum(1 for v in entities.values() if v["urls"]),
     }
     log("build done: " + json.dumps(stats))
-    PROGRESS.update(state="ready", entities=stats["entities"], relations=stats["relations"])
+    PROGRESS.update(state="ready", method=method, entities=stats["entities"], relations=stats["relations"])
     return stats
 
 
@@ -319,55 +355,71 @@ def serve() -> None:
                     return self._send({"ok": True})
                 # A dependency-free health signal for the K8s probe that actually tests the DB.
                 if p == "/stats":
+                    m = (qs.get("method", [METHOD])[0] or METHOD)
+                    empty = {"entities": 0, "relations": 0, "by_label": [], "top_entities": [],
+                             "top_relations": [], "method": m, "methods": [], "progress": PROGRESS}
                     try:
-                        t = q("SELECT count(*) c FROM semantica_entities")[0]["c"]
+                        # Every extractor's totals, so the UI can offer a real comparison
+                        # rather than a single number with no baseline.
+                        methods = q(
+                            "SELECT e.method, e.c entities, coalesce(r.c,0) relations FROM "
+                            "(SELECT method, count(*) c FROM semantica_entities GROUP BY method) e "
+                            "LEFT JOIN (SELECT method, count(*) c FROM semantica_relations GROUP BY method) r "
+                            "ON r.method = e.method ORDER BY e.method")
+                        t = q("SELECT count(*) c FROM semantica_entities WHERE method=%s", (m,))[0]["c"]
                     except Exception:  # noqa: BLE001  — tables not created yet, i.e. building
-                        return self._send({"entities": 0, "relations": 0, "by_label": [],
-                                           "top_entities": [], "top_relations": [],
-                                           "progress": PROGRESS})
+                        return self._send(empty)
                     if not t and PROGRESS.get("state") != "ready":
-                        return self._send({"entities": 0, "relations": 0, "by_label": [],
-                                           "top_entities": [], "top_relations": [],
-                                           "progress": PROGRESS})
-                    _ = t
-                    r = q("SELECT count(*) c FROM semantica_relations")[0]["c"]
-                    lab = q("SELECT label, count(*) c FROM semantica_entities GROUP BY label ORDER BY c DESC LIMIT 12")
-                    top = q("SELECT name, label, mentions FROM semantica_entities ORDER BY mentions DESC LIMIT 15")
-                    five = q("SELECT subject, predicate, object, mentions FROM semantica_relations ORDER BY mentions DESC LIMIT 10")
+                        return self._send({**empty, "methods": methods})
+                    r = q("SELECT count(*) c FROM semantica_relations WHERE method=%s", (m,))[0]["c"]
+                    lab = q("SELECT label, count(*) c FROM semantica_entities WHERE method=%s "
+                            "GROUP BY label ORDER BY c DESC LIMIT 12", (m,))
+                    top = q("SELECT name, label, mentions FROM semantica_entities WHERE method=%s "
+                            "ORDER BY mentions DESC LIMIT 15", (m,))
+                    five = q("SELECT subject, predicate, object, mentions FROM semantica_relations "
+                             "WHERE method=%s ORDER BY mentions DESC LIMIT 10", (m,))
                     return self._send({"entities": t, "relations": r, "by_label": lab,
                                        "top_entities": top, "top_relations": five,
-                                       "progress": PROGRESS})
+                                       "method": m, "methods": methods, "progress": PROGRESS})
                 if p == "/entities":
                     lim = int(qs.get("limit", ["200"])[0])
+                    m = (qs.get("method", [METHOD])[0] or METHOD)
                     like = (qs.get("q", [""])[0] or "").strip()
                     if like:
                         return self._send(q(
                             "SELECT name,label,mentions,page_ids,source_urls FROM semantica_entities "
-                            "WHERE name ILIKE %s ORDER BY mentions DESC LIMIT %s", (f"%{like}%", lim)))
+                            "WHERE method=%s AND name ILIKE %s ORDER BY mentions DESC LIMIT %s",
+                            (m, f"%{like}%", lim)))
                     return self._send(q(
                         "SELECT name,label,mentions,page_ids,source_urls FROM semantica_entities "
-                        "ORDER BY mentions DESC LIMIT %s", (lim,)))
+                        "WHERE method=%s ORDER BY mentions DESC LIMIT %s", (m, lim)))
                 if p == "/graph":
                     # Bounded neighbourhood for the viewer: top entities plus the edges between them.
                     lim = int(qs.get("limit", ["120"])[0])
-                    nodes = q("SELECT name,label,mentions FROM semantica_entities ORDER BY mentions DESC LIMIT %s", (lim,))
+                    m = (qs.get("method", [METHOD])[0] or METHOD)
+                    nodes = q("SELECT name,label,mentions FROM semantica_entities WHERE method=%s "
+                              "ORDER BY mentions DESC LIMIT %s", (m, lim))
                     names = [n["name"] for n in nodes]
                     edges = q(
                         "SELECT subject,predicate,object,mentions FROM semantica_relations "
-                        "WHERE subject = ANY(%s) AND object = ANY(%s) ORDER BY mentions DESC LIMIT 400",
-                        (names, names))
+                        "WHERE method=%s AND subject = ANY(%s) AND object = ANY(%s) "
+                        "ORDER BY mentions DESC LIMIT 400",
+                        (m, names, names))
                     return self._send({"nodes": nodes, "edges": edges, "truncated": len(nodes) >= lim})
                 if p == "/relation":
-                    s = qs.get("subject", [""])[0]
+                    sub = qs.get("subject", [""])[0]
+                    m = (qs.get("method", [METHOD])[0] or METHOD)
                     return self._send(q(
                         "SELECT subject,predicate,object,mentions,page_ids,source_urls "
-                        "FROM semantica_relations WHERE subject=%s OR object=%s ORDER BY mentions DESC LIMIT 100",
-                        (s, s)))
+                        "FROM semantica_relations WHERE method=%s AND (subject=%s OR object=%s) "
+                        "ORDER BY mentions DESC LIMIT 100",
+                        (m, sub, sub)))
                 if p == "/provenance":
                     name = qs.get("name", [""])[0]
+                    m = (qs.get("method", [METHOD])[0] or METHOD)
                     return self._send(q(
-                        "SELECT name,label,mentions,page_ids,source_urls FROM semantica_entities WHERE name=%s",
-                        (name,)))
+                        "SELECT name,label,mentions,page_ids,source_urls FROM semantica_entities "
+                        "WHERE method=%s AND name=%s", (m, name)))
                 return self._send({"error": "not found", "path": p}, 404)
             except Exception as exc:  # noqa: BLE001
                 return self._send({"error": f"{type(exc).__name__}: {str(exc)[:200]}"}, 500)
@@ -375,7 +427,12 @@ def serve() -> None:
     import threading
 
     def background_build() -> None:
-        """Build only if the graph is absent, and never rebuild over an existing one."""
+        """Build this METHOD's slice if it is absent; never rebuild over what is already there.
+
+        Scoped to the method, not the table: `pattern` and `ml` coexist in the same two tables
+        so they can be compared, so "the table has rows" is no longer a reason to skip.
+        SEMANTICA_FORCE=1 overrides the skip.
+        """
         try:
             ensure_schema()
             conn = connect()
@@ -386,15 +443,17 @@ def serve() -> None:
                     exists = cur.fetchone()[0]
                     n = 0
                     if exists:
-                        cur.execute("SELECT count(*) FROM semantica_entities")
+                        cur.execute("SELECT count(*) FROM semantica_entities WHERE method=%s", (METHOD,))
                         n = cur.fetchone()[0]
             finally:
                 conn.close()
-            if n:
-                log(f"graph already built: {n} entities")
-                PROGRESS.update(state="ready", entities=n)
+            if n and not FORCE:
+                log(f"graph for method '{METHOD}' already built: {n} entities")
+                PROGRESS.update(state="ready", method=METHOD, entities=n)
                 return
-            log("graph table is empty — building once, in the background")
+            if FORCE and n:
+                log(f"SEMANTICA_FORCE set — rebuilding method '{METHOD}' over {n} existing row(s)")
+            log(f"no rows for method '{METHOD}' — building in the background")
             run_build()
         except Exception as exc:  # noqa: BLE001
             PROGRESS.update(state=f"failed: {type(exc).__name__}: {str(exc)[:120]}")

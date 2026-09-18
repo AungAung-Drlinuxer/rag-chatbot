@@ -30,6 +30,11 @@ router = APIRouter()
 BASE = "http://semantica-spike:8000"
 TIMEOUT = 12.0
 
+# The extractors coexist in the service so they can be compared; the UI picks one.
+METHOD = Query("", description="pattern | ml — blank uses the service default")
+# The graph is bounded at 400 edges upstream, and ml on a real KB can be slower to answer.
+TIMEOUT_METHOD = 20.0
+
 
 def _get(path: str, **params) -> dict:
     """Fetch one endpoint from the spike service, with an honest failure message.
@@ -56,14 +61,23 @@ def _get(path: str, **params) -> dict:
 
 
 @router.get("/api/semantica/stats")
-def stats(user: str = Depends(get_current_user), role: str = Depends(require_role("admin"))) -> dict:
-    """Counts, label breakdown, and the most-mentioned entities and relations."""
-    return _get("/stats")
+def stats(
+    method: str = METHOD,
+    user: str = Depends(get_current_user),
+    role: str = Depends(require_role("admin")),
+) -> dict:
+    """Counts, label breakdown, and the most-mentioned entities and relations.
+
+    `methods` in the reply carries every extractor's totals, so the page can show a comparison
+    instead of one number with no baseline.
+    """
+    return _get("/stats", method=method)
 
 
 @router.get("/api/semantica/graph")
 def graph(
     limit: int = Query(120, ge=5, le=400),
+    method: str = METHOD,
     user: str = Depends(get_current_user),
     role: str = Depends(require_role("admin")),
 ) -> dict:
@@ -72,23 +86,25 @@ def graph(
     Bounded on purpose — the full graph would be thousands of nodes, and a viewer that tries
     to draw all of them shows a hairball rather than a structure.
     """
-    return _get("/graph", limit=limit)
+    return _get("/graph", limit=limit, method=method)
 
 
 @router.get("/api/semantica/entities")
 def entities(
     limit: int = Query(200, ge=1, le=1000),
     q: str = Query(""),
+    method: str = METHOD,
     user: str = Depends(get_current_user),
     role: str = Depends(require_role("admin")),
 ) -> list:
     """Entity list, optionally filtered by name. Includes mention counts."""
-    return _get("/entities", limit=limit, q=q)
+    return _get("/entities", limit=limit, q=q, method=method)
 
 
 @router.get("/api/semantica/provenance")
 def provenance(
     name: str = Query(..., min_length=1),
+    method: str = METHOD,
     user: str = Depends(get_current_user),
     role: str = Depends(require_role("admin")),
 ) -> list:
@@ -97,12 +113,13 @@ def provenance(
     This is the claim worth testing: `audit_log` already records what the system decided, but
     nothing today can say which documents produced a given fact.
     """
-    return _get("/provenance", name=name)
+    return _get("/provenance", name=name, method=method)
 
 
 @router.get("/api/semantica/relation")
 def relation(
     subject: str = Query(..., min_length=1),
+    method: str = METHOD,
     user: str = Depends(get_current_user),
     role: str = Depends(require_role("admin")),
 ) -> list:
@@ -111,4 +128,4 @@ def relation(
     `-> list`, not `-> dict`: the service returns an array, and a `-> dict` annotation makes
     FastAPI fail response validation and answer 500 for a request that had already succeeded.
     """
-    return _get("/relation", subject=subject)
+    return _get("/relation", subject=subject, method=method)

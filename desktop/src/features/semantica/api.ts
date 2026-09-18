@@ -11,9 +11,16 @@ export type GraphNode = { name: string; label: string | null; mentions: number }
 export type GraphEdge = { subject: string; predicate: string; object: string; mentions: number };
 export type EntityRow = { name: string; label: string | null; mentions: number; page_ids: string[]; source_urls: string[] };
 
+/** One extractor's totals — the comparison the page exists to show. */
+export type MethodTotal = { method: string; entities: number; relations: number };
+
 export type Stats = {
   entities: number;
   relations: number;
+  /** The extractor these numbers came from. */
+  method?: string;
+  /** Every extractor present in the tables, for the method switch. */
+  methods?: MethodTotal[];
   by_label: { label: string | null; c: number }[];
   top_entities: { name: string; label: string | null; mentions: number }[];
   top_relations: { subject: string; predicate: string; object: string; mentions: number }[];
@@ -39,22 +46,22 @@ async function get<T>(path: string, params: Record<string, string | number> = {}
   return r.json() as Promise<T>;
 }
 
-export function getStats() {
-  return get<Stats>("/api/semantica/stats");
+export function getStats(method = "") {
+  return get<Stats>("/api/semantica/stats", { method });
 }
 
-export function getGraph(limit = 120) {
-  return get<{ nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean }>("/api/semantica/graph", { limit });
+export function getGraph(limit = 120, method = "") {
+  return get<{ nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean }>("/api/semantica/graph", { limit, method });
 }
 
-export function listEntities(limit = 200, q = "") {
-  return get<EntityRow[]>("/api/semantica/entities", { limit, q });
+export function listEntities(limit = 200, q = "", method = "") {
+  return get<EntityRow[]>("/api/semantica/entities", { limit, q, method });
 }
 
-export function getProvenance(name: string) {
-  return get<EntityRow[]>("/api/semantica/provenance", { name });
+export function getProvenance(name: string, method = "") {
+  return get<EntityRow[]>("/api/semantica/provenance", { name, method });
 }
 
-export function getRelations(subject: string) {
-  return get<GraphEdge[]>("/api/semantica/relation", { subject });
+export function getRelations(subject: string, method = "") {
+  return get<GraphEdge[]>("/api/semantica/relation", { subject, method });
 }

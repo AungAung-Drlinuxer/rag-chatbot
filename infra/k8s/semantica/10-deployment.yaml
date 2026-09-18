@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: semantica-spike
-          image: harbor.drlinuxer.com/rag-chatbot/semantica-spike:0.1.2@sha256:dc04007ea3adb860cd1bb6f11e7ac52e9be6e86720c32a905f250837530d0bc9
+          image: harbor.drlinuxer.com/rag-chatbot/semantica-spike:0.1.4@sha256:79f812d209cca57b9fdcc8408d9e14182727d33ead757151e72c1951c14e0fb7
           ports:
             - name: http
               containerPort: 8000
@@ -55,7 +55,11 @@ spec:
             # the honest choice for an evaluation: deterministic, no model, no download.
             # Install en_core_web_sm in the image first if you want to try ml.
             - name: SEMANTICA_METHOD
-              value: "pattern"
+              value: "ml"
+            # OFF. While this is "1", EVERY pod restart re-runs the extraction (52 minutes for
+            # ml). It was on for the one-off comparison build; leave it off.
+            - name: SEMANTICA_FORCE
+              value: "0"
             - name: SEMANTICA_BATCH
               value: "0"           # 0 = every kb_meta article
           resources:

@@ -15,7 +15,7 @@ import { createRoot } from "react-dom/client";
 import ContextGraphPage from "./features/semantica/pages/ContextGraphPage";
 
 declare global {
-  interface Window { __SEM_HARNESS__?: { ready: boolean; nodes: number } }
+  interface Window { __SEM_HARNESS__?: { ready: boolean; nodes: number; selected: string } }
 }
 
 type Fixture = { stats: unknown; graph: unknown; provenance: unknown; relations: unknown; selected: string };
@@ -43,5 +43,5 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 createRoot(document.getElementById("root")!).render(<ContextGraphPage />);
 
 const nodes = (fx.graph as { nodes?: unknown[] })?.nodes?.length ?? 0;
-window.__SEM_HARNESS__ = { ready: false, nodes };
+window.__SEM_HARNESS__ = { ready: false, nodes, selected: fx.selected };
 setTimeout(() => { if (window.__SEM_HARNESS__) window.__SEM_HARNESS__.ready = true; }, 2500);
