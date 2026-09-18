@@ -135,28 +135,75 @@ CURATED_BY_SERVER: dict[str, tuple[str, ...]] = {
 # exposure rule is inverted: only names that READ are considered, and anything matching a
 # write verb is refused. Names are then capped, because tool-selection accuracy collapses
 # as the count grows and every schema costs tokens on every request.
-_READ_VERB_RE = re.compile(
-    r"^(?:[a-z0-9]+[_-])?(list|get|show|describe|status|read|search|find|query|fetch|"
-    r"inspect|view|recent|top|capacity|health|events|logs|info|summary|diff)",
-    re.IGNORECASE,
-)
-_CUSTOM_TOOL_CAP = 14
+#
+# v1.6.79 — matched on WORDS, not a single anchored regex. The first version was
+# `^(?:[a-z0-9]+[_-])?(list|get|…)`, and the optional prefix greedily ate the verb:
+# "list_alert_groups" parsed as prefix "list_" + "alert" and was DROPPED as a non-read.
+# Measured effect: 51 of Grafana's 65 tools were refused, including list_datasources,
+# list_incidents, list_prometheus_label_names and analyze_db_health — reads an operator
+# actually wants. Both real servers name tools as <namespace>_<verb>_<object>, so the rule
+# is now "the verb appears in the first two words", which keeps the prefix form working
+# without swallowing the verb.
+_READ_VERBS = frozenset({
+    "list", "get", "show", "describe", "status", "read", "search", "find", "query",
+    "fetch", "inspect", "view", "recent", "top", "capacity", "health", "events", "logs",
+    "info", "summary", "diff", "check", "analyze", "analyse", "explain", "test",
+    "validate", "whoami", "version", "ping", "resolve", "preview", "history",
+})
+_CUSTOM_TOOL_CAP = 18
+
+# Order matters when trimming to the cap. Sorting alphabetically is arbitrary and, with
+# Grafana's 65 tools, it cut every `list_*` tool — the enumerable inventories an operator
+# asks for first ("what datasources / alerts / incidents are there"). Ranking by verb
+# first, then by name length (shorter = more general), keeps the broadly useful reads and
+# drops the niche ones instead.
+_VERB_RANK = {
+    "list": 0, "check": 1, "analyze": 2, "analyse": 2, "explain": 2,
+    "get": 3, "show": 3, "describe": 3, "status": 3, "info": 3, "summary": 3,
+    "query": 4, "search": 4, "find": 4, "fetch": 4, "read": 4, "view": 4,
+    "diff": 5, "logs": 5, "events": 5, "health": 5, "top": 5, "capacity": 5,
+}
+
+
+def _looks_like_read(name: str) -> bool:
+    words = [w for w in re.split(r"[_\-.]", (name or "").lower()) if w]
+    return any(w in _READ_VERBS for w in words[:2])
+
+
+def _read_rank(name: str) -> tuple:
+    words = [w for w in re.split(r"[_\-.]", (name or "").lower()) if w]
+    best = min((_VERB_RANK.get(w, 6) for w in words[:2]), default=6)
+    return (best, len(name), name)
 
 
 def curated_for(server_name: str, catalogue: dict) -> tuple[str, ...]:
-    """Tool names to expose for a server. Explicit allowlist, else reads only."""
+    """Tool names to expose for a server. Explicit allowlist, else reads only.
+
+    Selection is ROUND-ROBIN across verb rank, not "best rank first". Filling the cap
+    from the top rank alone gave Grafana 18 `list_*` tools and nothing else — inventory
+    only, with no health or detail reads. Taking one per rank in turn yields a balanced
+    set: several inventories, a health check, and the detail getters.
+    """
     explicit = CURATED_BY_SERVER.get(server_name)
     if explicit:
         return explicit
-    picked = []
-    for name in sorted(catalogue):
-        if DENY_TOOLS_RE.search(name):
+
+    buckets: dict[int, list[str]] = {}
+    for name in catalogue:
+        if DENY_TOOLS_RE.search(name) or not _looks_like_read(name):
             continue
-        if not _READ_VERB_RE.match(name):
-            continue
-        picked.append(name)
-        if len(picked) >= _CUSTOM_TOOL_CAP:
-            break
+        buckets.setdefault(_read_rank(name)[0], []).append(name)
+    for b in buckets.values():
+        b.sort(key=len)  # shorter name = the more general tool
+
+    picked: list[str] = []
+    while len(picked) < _CUSTOM_TOOL_CAP and any(buckets.values()):
+        for rank in sorted(buckets):
+            if not buckets[rank]:
+                continue
+            picked.append(buckets[rank].pop(0))
+            if len(picked) >= _CUSTOM_TOOL_CAP:
+                break
     return tuple(picked)
 
 # Cheap intent gate — no LLM call, same discipline as app/tools/ticket_tool.py.

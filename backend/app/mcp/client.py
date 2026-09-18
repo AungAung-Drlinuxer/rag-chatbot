@@ -92,6 +92,11 @@ def get_mcp_cfg() -> dict:
         # Proxmox VE (opt-in; see get_mcp_servers for why it defaults off).
         "proxmox_enabled": cfg.get("proxmox_enabled"),
         "proxmox_url": str(cfg.get("proxmox_url") or SETTINGS.mcp_proxmox_url).strip(),
+        # Connectors added from the gallery. Without this passthrough the key never
+        # reached get_mcp_servers(), so a connected connector was absent from the server
+        # list and get_client() fell back to the FIRST server — the settings page reported
+        # Rancher's tool counts for Postgres and Grafana.
+        "servers": cfg.get("servers") or [],
         # No proxmox_token here on purpose — see get_mcp_servers().
     }
 
@@ -145,6 +150,14 @@ class McpClient:
         self._tools_cache: tuple[float, list[dict]] | None = None
 
     # -- SSE transport (legacy MCP SSE: GET /sse -> POST /message) ----------
+    def _sse_base(self) -> str:
+        """The server root for SSE, whatever form the configured URL takes."""
+        u = (self.url or "").rstrip("/")
+        for suffix in ("/sse", "/messages/", "/message"):
+            if u.endswith(suffix):
+                u = u[: -len(suffix)]
+        return u
+
     def _sse_open(self) -> None:
         """Open the event stream and learn the message endpoint."""
         if self._sse_started:
@@ -155,7 +168,12 @@ class McpClient:
         def _read():
             try:
                 with httpx.Client(timeout=httpx.Timeout(30.0, read=None)) as client:
-                    with client.stream("GET", self.url + "/sse",
+                    # Accept either convention: a base URL (…:8000) or one that already
+                    # names the SSE path (…:8000/sse). The catalogue advertises the full
+                    # path for clarity, and appending "/sse" to that produced
+                    # "…/sse/sse" -> 404 -> "endpoint not advertised", which is how both
+                    # new connectors failed on first contact.
+                    with client.stream("GET", self._sse_base() + "/sse",
                                        headers={"Accept": "text/event-stream"}) as r:
                         r.raise_for_status()
                         event = None

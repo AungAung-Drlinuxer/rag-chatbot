@@ -77,16 +77,18 @@ CATALOG: list[dict] = [
         "category": "Observability",
         "badge": "Popular",
         "source": "upstream",
-        "transport": "streamable_http",
-        "url_default": "",
+        "transport": "sse",
+        "url_default": "http://grafana-mcp:8000",
         "fields": [
-            {"key": "url", "label": "MCP server URL", "kind": "text", "required": True,
-             "placeholder": "http://grafana-mcp:8000/mcp"},
-            {"key": "token", "label": "Service account token", "kind": "password",
+            {"key": "url", "label": "MCP server URL", "kind": "text", "required": False,
+             "placeholder": "http://grafana-mcp:8000"},
+            {"key": "token", "label": "Grafana service account token", "kind": "password",
              "required": True, "placeholder": "glsa_xxxxxxxx"},
         ],
-        "note": "Run the MCP server with a Viewer-role service account. Metrics reads are "
-                "safe; alert-rule writes are not, so keep the role read-only.",
+        "note": "Deployed in this cluster as grafana-mcp, pinned read-only "
+                "(--disable-write), serving http://10.10.10.18:3000. Create a service "
+                "account in Grafana with the VIEWER role and paste its token here — the "
+                "token is sent per request and never stored in the cluster manifest.",
     },
     {
         "id": "postgres",
@@ -96,16 +98,17 @@ CATALOG: list[dict] = [
         "category": "Data",
         "badge": "Popular",
         "source": "upstream",
-        "transport": "streamable_http",
-        "url_default": "",
+        "transport": "sse",
+        "url_default": "http://postgres-mcp:8000",
         "fields": [
-            {"key": "url", "label": "MCP server URL", "kind": "text", "required": True,
-             "placeholder": "http://postgres-mcp:8000/mcp"},
-            {"key": "dsn", "label": "Connection string", "kind": "password",
-             "required": True, "placeholder": "postgresql://reader:***@host:5432/db"},
+            {"key": "url", "label": "MCP server URL", "kind": "text", "required": False,
+             "placeholder": "http://postgres-mcp:8000"},
         ],
-        "note": "Use a dedicated read-only role. Never point this at the application "
-                "database with its own credentials.",
+        "note": "Deployed in this cluster as postgres-mcp, restricted mode. It connects "
+                "with the mcp_reader role, which can SELECT an explicit allowlist of 11 "
+                "structural tables and nothing else — no users, credentials, API keys, "
+                "system settings, chat history or audit log. The DSN lives in the "
+                "postgres-mcp-credentials Secret, never here.",
     },
     {
         "id": "gitea",

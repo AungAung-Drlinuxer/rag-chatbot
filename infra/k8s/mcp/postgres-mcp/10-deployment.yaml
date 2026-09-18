@@ -1,0 +1,98 @@
+---
+# PostgreSQL MCP — read-only, SSE transport, in-cluster.
+#
+# WHY THE ACCESS MODE MATTERS TWICE
+#   --access-mode restricted   upstream's "read-only with protections": the server
+#                              refuses write SQL itself, not just by convention.
+#   the mcp_reader role        the database ALSO refuses: SELECT is granted on an explicit
+#                              allowlist of 11 structural tables and revoked everywhere
+#                              else, with default_transaction_read_only=on. See
+#                              10-create-readonly-role.sh.
+# Two independent layers, because either one alone is a single point of trust. The role
+# is the wall that matters: it cannot see local_user_credentials, api_keys,
+# system_settings, users, chat_messages or audit_log even if the server is misconfigured.
+#
+# The DSN lives in the Secret `postgres-mcp-credentials`, created in-cluster by
+# 10-create-readonly-role.sh. It is never in this file and never printed.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-mcp
+  namespace: rag-chatbot
+  labels:
+    app.kubernetes.io/name: postgres-mcp
+    app.kubernetes.io/component: mcp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres-mcp
+  ports:
+    - name: sse
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-mcp
+  namespace: rag-chatbot
+  labels:
+    app.kubernetes.io/name: postgres-mcp
+    app.kubernetes.io/component: mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp
+          image: harbor.drlinuxer.com/rag-chatbot/postgres-mcp:latest
+          args:
+            - --access-mode
+            - restricted
+            - --transport
+            - sse
+            - --sse-host
+            - 0.0.0.0
+            - --sse-port
+            - "8000"
+          env:
+            - name: DATABASE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-mcp-credentials
+                  key: DATABASE_URI
+          ports:
+            - name: sse
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 8
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
