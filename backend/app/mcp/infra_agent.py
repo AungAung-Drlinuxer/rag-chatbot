@@ -712,6 +712,166 @@ def _first_tool(tools, names: tuple[str, ...]):
     return None
 
 
+def _fmt_bytes(n) -> str:
+    """Bytes -> the largest unit that keeps the number readable."""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return "?"
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(n) < 1024:
+            return f"{int(n)} B" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def _fmt_uptime(sec) -> str:
+    try:
+        sec = int(sec)
+    except (TypeError, ValueError):
+        return "?"
+    d, rem = divmod(sec, 86400)
+    h, rem = divmod(rem, 3600)
+    m = rem // 60
+    if d:
+        return f"{d}d {h}h"
+    return f"{h}h {m}m" if h else f"{m}m"
+
+
+def _fmt_ts(ts) -> str:
+    try:
+        import datetime as _dt
+        return _dt.datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError, OSError, OverflowError):
+        return "?"
+
+
+def _md_table(headers: list[str], rows: list[list[str]]) -> str:
+    out = ["| " + " | ".join(headers) + " |",
+           "|" + "|".join("---" for _ in headers) + "|"]
+    out += ["| " + " | ".join(r) + " |" for r in rows]
+    return "\n".join(out)
+
+
+def summarise_proxmox(raw: str) -> str | None:
+    """Render a Proxmox tool payload as a readable table, or None if it is not one.
+
+    A SEPARATE FUNCTION FROM summarise_json, and the reason is measurable: that one is
+    Kubernetes-shaped — it reads `metadata.name` and the workload status fields — so against
+    Proxmox objects (`vmid`, `cpu`, `mem`, `maxmem`) every cell rendered as "?" and the
+    answer was a table of question marks reading `| ? | ? | - | - | - |`, over 29 real VMs
+    that had returned correctly. A K8s-shaped table over correct data is worse than no
+    table, because it looks like the tool failed.
+
+    It mutates nothing and returns None for anything unrecognised, so the caller can fall
+    back to the raw payload.
+    """
+    try:
+        d = json.loads(raw)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(d, dict):
+        return None
+
+    # --- nodes: proxmox_status -------------------------------------------------
+    if "nodes" in d and isinstance(d.get("nodes"), list) and "version" in d:
+        rows = []
+        for n in d["nodes"]:
+            if not isinstance(n, dict):
+                continue
+            cpu = n.get("cpu")
+            cpu_s = f"{float(cpu) * 100:.1f}%" if isinstance(cpu, (int, float)) else "?"
+            rows.append([
+                str(n.get("node") or "?"),
+                str(n.get("status") or "?"),
+                cpu_s,
+                str(n.get("maxcpu") or "?"),
+                f"{_fmt_bytes(n.get('mem'))} / {_fmt_bytes(n.get('maxmem'))}",
+                _fmt_uptime(n.get("uptime")),
+            ])
+        if rows:
+            body = _md_table(["Node", "Status", "CPU", "Cores", "Memory (used / max)", "Uptime"], rows)
+            return f"PVE {d.get('version')} (release {d.get('release')})\n\n{body}"
+
+    # --- guests: proxmox_list_vms / proxmox_list_containers ---------------------
+    for key in ("vms", "containers"):
+        items = d.get(key)
+        if isinstance(items, list):
+            kind = "VM" if key == "vms" else "CT"
+            rows = []
+            for g in items:
+                if not isinstance(g, dict):
+                    continue
+                cpu = g.get("cpu")
+                cpu_s = f"{float(cpu) * 100:.1f}%" if isinstance(cpu, (int, float)) else "?"
+                name = str(g.get("name") or "?")
+                if str(g.get("template")) == "1":
+                    name += " (template)"
+                rows.append([
+                    str(g.get("vmid") or "?"),
+                    kind,
+                    name[:38],
+                    str(g.get("node") or "?"),
+                    str(g.get("status") or "?"),
+                    cpu_s,
+                    f"{_fmt_bytes(g.get('mem'))} / {_fmt_bytes(g.get('maxmem'))}",
+                    _fmt_uptime(g.get("uptime")),
+                ])
+            if rows:
+                body = _md_table(["VMID", "Kind", "Name", "Node", "Status", "CPU",
+                                  "Memory (used / max)", "Uptime"], rows)
+                return f"**{d.get('count', len(rows))} guest(s)**\n\n{body}"
+
+    # --- storage: proxmox_list_storage -----------------------------------------
+    # The payload is NESTED — {count, nodes: [{node, storage: [...]}]} — not the flat
+    # {storage: [...]} the name suggests. Checking only the flat shape let this fall
+    # through to summarise_json, which rendered the "?" table again. Flatten both.
+    stor = d.get("storage")
+    node_label = d.get("node") or "?"
+    if not (isinstance(stor, list) and stor and isinstance(stor[0], dict)):
+        stor = []
+        for n in (d.get("nodes") or []):
+            if isinstance(n, dict) and isinstance(n.get("storage"), list):
+                stor.extend(s for s in n["storage"] if isinstance(s, dict))
+        if stor:
+            node_label = ", ".join(
+                str(n.get("node")) for n in (d.get("nodes") or []) if isinstance(n, dict)
+            ) or node_label
+    if isinstance(stor, list) and stor and isinstance(stor[0], dict):
+        rows = []
+        for s in stor:
+            frac = s.get("used_fraction")
+            pct = f"{float(frac) * 100:.1f}%" if isinstance(frac, (int, float)) else "?"
+            rows.append([
+                str(s.get("storage") or "?"),
+                str(s.get("type") or "?"),
+                str(s.get("content") or "-"),
+                _fmt_bytes(s.get("used")),
+                _fmt_bytes(s.get("avail")),
+                _fmt_bytes(s.get("total")),
+                pct,
+            ])
+        body = _md_table(["Storage", "Type", "Content", "Used", "Available", "Total", "Use%"], rows)
+        return f"**{len(rows)} datastore(s)** on {node_label}\n\n{body}"
+
+    # --- tasks: proxmox_recent_tasks -------------------------------------------
+    tasks = d.get("tasks")
+    if isinstance(tasks, list) and tasks and isinstance(tasks[0], dict):
+        rows = []
+        for t in tasks:
+            rows.append([
+                _fmt_ts(t.get("starttime")),
+                str(t.get("type") or "?"),
+                str(t.get("id") or "-"),
+                str(t.get("user") or "?"),
+                str(t.get("status") or "?"),
+            ])
+        body = _md_table(["Started", "Type", "Target", "User", "Status"], rows)
+        return f"**{d.get('count', len(rows))} recent task(s)**\n\n{body}"
+
+    return None
+
+
 def _deterministic_lookup(question: str, tools):
     """Answer a common infrastructure question WITHOUT the model choosing a tool.
 
@@ -792,6 +952,8 @@ def _deterministic_lookup(question: str, tools):
     #    Bare "node"/"storage"/"vm" still routes to Kubernetes; the word Proxmox (or pve)
     #    is required to enter here.
     if re.search(r"\b(proxmox|pve|hypervisor)\b", q):
+        # summarise_proxmox FIRST, summarise_json second: the latter is Kubernetes-shaped
+        # and renders Proxmox objects as a table of "?" over correct data.
         # -- storage / backup inventory ------------------------------------------
         if re.search(r"\b(storage|datastore|disk|backup|vzdump)\b", q):
             if re.search(r"\bbackup", q):
@@ -799,37 +961,36 @@ def _deterministic_lookup(question: str, tools):
             else:
                 out = _call("proxmox_list_storage", {})
             if out:
-                return summarise_json(out) or out
+                return summarise_proxmox(out) or summarise_json(out) or out
         # -- guests: whole VMs vs LXC containers ---------------------------------
         if re.search(r"\b(vms?|virtual machines?|qemu)\b", q):
             out = _call("proxmox_list_vms", {})
             if out:
-                return summarise_json(out) or out
+                return summarise_proxmox(out) or summarise_json(out) or out
         if re.search(r"\b(lxc|containers?|cts?)\b", q) and not re.search(
                 r"\b(kubernetes|k8s|pods?|namespace|deploy)\b", q):
             out = _call("proxmox_list_containers", {})
             if out:
-                return summarise_json(out) or out
+                return summarise_proxmox(out) or summarise_json(out) or out
         # -- consumption ---------------------------------------------------------
         # NOT proxmox_resource_usage: its schema requires a vmid (it reports per-guest
         # metrics, not per-node). Calling it without one returns TOOL_INPUT_INVALID, so the
         # branch could never succeed. Node-level CPU/memory live in /nodes/<node>/rrddata,
-        # which the vendored tool set does not expose and which needs Sys.Audit on the node
-        # anyway — so a usage question lands on proxmox_status, and the answer says what the
-        # node reports rather than inventing a figure.
+        # which the vendored tool set does not expose — so a usage question lands on
+        # proxmox_status, whose table now carries the node's CPU and memory columns.
         if re.search(r"\b(cpu|memory|ram|load|usage|utilis|utiliz)\b", q):
             out = _call("proxmox_status", {})
             if out:
-                return summarise_json(out) or out
+                return summarise_proxmox(out) or summarise_json(out) or out
         # -- running/scheduled work ---------------------------------------------
         if re.search(r"\b(task|job|recent|running)\b", q):
             out = _call("proxmox_recent_tasks", {})
             if out:
-                return summarise_json(out) or out
+                return summarise_proxmox(out) or summarise_json(out) or out
         # -- default: version, node list and cluster health ----------------------
         out = _call("proxmox_status", {})
         if out:
-            return summarise_json(out) or out
+            return summarise_proxmox(out) or summarise_json(out) or out
 
     # 1) Which estates exist / their status -> cluster_list.
     if re.search(r"\bclusters?\b", q) and re.search(
