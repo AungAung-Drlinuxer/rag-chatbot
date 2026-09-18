@@ -764,6 +764,36 @@ def _md_table(headers: list[str], rows: list[list[str]]) -> str:
     return "\n".join(out)
 
 
+def _fmt_pair(used, total) -> str:
+    """`15.3 / 16.0 GB` — one unit for both numbers.
+
+    Not `15.3 GB / 16.0 GB`: repeating the unit in every cell of every row spent width the
+    widest column needed, and the header already says what the pair means. It matters
+    because the guest table carries eight columns and the widest one sets its total width.
+
+    The loop walks the ORIGINAL total and only computes an exponent; it must not scale the
+    values as it goes. An earlier version divided both inside the loop and then divided
+    again by the unit exponent, so every figure came out as `0.0 / 0.0 GB` — a correct-looking
+    column of zeroes that no exception would ever flag.
+    """
+    try:
+        u = float(used)
+        t = float(total)
+    except (TypeError, ValueError):
+        return _fmt_bytes(used) + " / " + _fmt_bytes(total)
+    exps = {"B": 0, "KB": 1, "MB": 2, "GB": 3, "TB": 4}
+    probe = abs(t)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if probe < 1024:
+            if unit == "B":
+                return str(int(u)) + " / " + str(int(t)) + " B"
+            d = 1024 ** exps[unit]
+            return f"{u / d:.1f} / {t / d:.1f} {unit}"
+        probe /= 1024
+    d = 1024 ** 5
+    return f"{u / d:.1f} / {t / d:.1f} PB"
+
+
 def summarise_proxmox(raw: str) -> str | None:
     """Render a Proxmox tool payload as a readable table, or None if it is not one.
 
@@ -797,18 +827,26 @@ def summarise_proxmox(raw: str) -> str | None:
                 str(n.get("status") or "?"),
                 cpu_s,
                 str(n.get("maxcpu") or "?"),
-                f"{_fmt_bytes(n.get('mem'))} / {_fmt_bytes(n.get('maxmem'))}",
+                _fmt_pair(n.get('mem'), n.get('maxmem')),
                 _fmt_uptime(n.get("uptime")),
             ])
         if rows:
-            body = _md_table(["Node", "Status", "CPU", "Cores", "Memory (used / max)", "Uptime"], rows)
+            body = _md_table(["Node", "Status", "CPU", "Cores", "Memory", "Uptime"], rows)
             return f"PVE {d.get('version')} (release {d.get('release')})\n\n{body}"
 
     # --- guests: proxmox_list_vms / proxmox_list_containers ---------------------
+    # Only columns that CARRY INFORMATION. On a single-node PVE every row says "pve01",
+    # and this branch summarises one key at a time so a "Kind" column would be a column of
+    # identical values. Eight columns is what pushed "Uptime" off the right edge of a 735px
+    # bubble; six fit. A mixed payload or a multi-node cluster keeps the column, because
+    # then it distinguishes rows.
     for key in ("vms", "containers"):
         items = d.get(key)
-        if isinstance(items, list):
-            kind = "VM" if key == "vms" else "CT"
+        if isinstance(items, list) and items and isinstance(items[0], dict):
+            label = "VM" if key == "vms" else "container"
+            multi_node = len({str(g.get("node")) for g in items if isinstance(g, dict)}) > 1
+            headers = (["VMID", "Name"] + (["Node"] if multi_node else [])
+                       + ["Status", "CPU", "Memory", "Uptime"])
             rows = []
             for g in items:
                 if not isinstance(g, dict):
@@ -818,20 +856,20 @@ def summarise_proxmox(raw: str) -> str | None:
                 name = str(g.get("name") or "?")
                 if str(g.get("template")) == "1":
                     name += " (template)"
-                rows.append([
-                    str(g.get("vmid") or "?"),
-                    kind,
-                    name[:38],
-                    str(g.get("node") or "?"),
+                row = [str(g.get("vmid") or "?"), name[:38]]
+                if multi_node:
+                    row.append(str(g.get("node") or "?"))
+                row += [
                     str(g.get("status") or "?"),
                     cpu_s,
-                    f"{_fmt_bytes(g.get('mem'))} / {_fmt_bytes(g.get('maxmem'))}",
+                    _fmt_pair(g.get("mem"), g.get("maxmem")),
                     _fmt_uptime(g.get("uptime")),
-                ])
+                ]
+                rows.append(row)
             if rows:
-                body = _md_table(["VMID", "Kind", "Name", "Node", "Status", "CPU",
-                                  "Memory (used / max)", "Uptime"], rows)
-                return f"**{d.get('count', len(rows))} guest(s)**\n\n{body}"
+                n = d.get("count", len(rows))
+                body = _md_table(headers, rows)
+                return f"**{n} {label}{'' if str(n) == '1' else 's'}**\n\n{body}"
 
     # --- storage: proxmox_list_storage -----------------------------------------
     # The payload is NESTED — {count, nodes: [{node, storage: [...]}]} — not the flat
@@ -883,7 +921,7 @@ def summarise_proxmox(raw: str) -> str | None:
     return None
 
 
-def _as_answer_body(raw: str, max_rows: int = 10) -> str:
+def _as_answer_body(raw: str, max_rows: int = 200) -> str:
     """Turn a tool payload into the answer body.
 
     MARKDOWN TABLES ARE PASSED THROUGH AS MARKDOWN. They used to be wrapped in a ``` fence

@@ -783,66 +783,19 @@ code, pre, .mono { font-family: var(--mono); }
 }
 
 /* ---------------------------------------------------------------------------
-   Responsive answer tables (v1.6.45).
+   Answer tables (v1.6.45).
 
-   An infrastructure answer is a wide table — the Proxmox guest list is 8 columns, the
-   Kubernetes node list 6 — and no single breakpoint fits them all: a 768px chat bubble on a
-   1440px monitor is as cramped as a phone. So this is decided by MEASUREMENT, not by a
-   media query. `Table` measures its own natural width against the space available and puts
-   `md-stack-active` on the wrapper only when the table genuinely does not fit.
+   A wide infrastructure table (the Proxmox guest list is 8 columns) must scroll sideways
+   inside its own card rather than be clipped — clipping silently removed the rightmost
+   columns, and the answer looked complete while "Internal IP", "Version" and "Uptime"
+   were simply not on screen.
 
-   Both measured failures it fixes:
-     phone (390px)  only VMID / Kind / Name were visible; Status, CPU, Memory and Uptime sat
-                    off-screen behind a scroll with no affordance, and the block looked
-                    complete.
-     desktop        the 8-column guest table overflowed the bubble and dropped its last
-                    column (Uptime) at the clipped edge, again with no hint.
+   A per-row "stacked card" layout for narrow screens was built here and REMOVED at the
+   user's request: eight labelled lines per VM turns a scannable inventory into several
+   screens of cards. The table scrolls instead; keep it that way.
 
-   When stacked, each ROW becomes a labelled block so every field is readable without
-   sideways scrolling. The labels come from `data-label` on each cell, filled in from the
-   table's own header row — so this works for any table the backend emits, not just the
-   shapes that exist today.
+   `overscroll-x-contain` matters — without it a sideways swipe inside the table also
+   drags the chat pane behind it.
    --------------------------------------------------------------------------- */
-.md-stack-active { overflow-x: visible !important; border: 0; }
-.md-stack-active table { display: block; }
-.md-stack-active thead { display: none; }
-.md-stack-active tbody { display: block; }
-
-.md-stack-active tr {
-  display: block;
-  margin-bottom: 0.5rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--border, rgb(226 232 240));
-  border-radius: 0.75rem;
-  background: rgb(248 250 252);
-  white-space: normal;
-}
-[data-theme="dark"] .md-stack-active tr { background: rgb(15 23 42 / 0.5); }
-.md-stack-active tr:last-child { margin-bottom: 0; }
-
-.md-stack-active td {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.1rem 0;
-  border: 0;
-  white-space: normal;
-  word-break: break-word;
-  text-align: right;
-}
-.md-stack-active td::before {
-  content: attr(data-label);
-  flex: 0 0 auto;
-  font-weight: 500;
-  color: rgb(100 116 139);
-  text-align: left;
-}
-.md-stack-active td:first-child {
-  font-weight: 600;
-  color: inherit;
-  padding-bottom: 0.25rem;
-  margin-bottom: 0.15rem;
-  border-bottom: 1px solid rgb(226 232 240 / 0.8);
-}
-[data-theme="dark"] .md-stack-active td:first-child { border-bottom-color: rgb(51 65 85 / 0.8); }
+.md-table-wrap { -webkit-overflow-scrolling: touch; }
+.md-table-wrap table { min-width: 100%; }

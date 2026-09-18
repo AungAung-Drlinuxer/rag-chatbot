@@ -18,18 +18,19 @@ declare global {
   interface Window { __HARNESS__?: { ready: boolean; tables: number } }
 }
 
-const PROXMOX_VMS = `**29 guest(s)**
+const PROXMOX_VMS = `**29 VMs**
 
-| VMID | Kind | Name | Node | Status | CPU | Memory (used / max) | Uptime |
-|---|---|---|---|---|---|---|---|
-| 100 | VM | drlinuxer-prod-worker-7nc7k-kpd7b | pve01 | running | 8.2% | 15.4 GB / 16.0 GB | 5d 8h |
-| 100010 | VM | nsvr1 | pve01 | running | 5.2% | 2.1 GB / 4.0 GB | 6d 9h |
-| 100011 | VM | nsvr2 | pve01 | running | 14.1% | 1.8 GB / 4.0 GB | 6d 9h |
-| 100012 | VM | truenas | pve01 | running | 1.4% | 7.6 GB / 8.0 GB | 31d 9h |
-| 100014 | VM | harbor | pve01 | running | 1.6% | 7.5 GB / 8.0 GB | 31d 9h |
-| 100015 | VM | ROOTCA01 | pve01 | stopped | 0.0% | 0 B / 4.0 GB | 0m |
-
-_19 more row(s) — open "Show full output" below_`;
+| VMID | Name | Status | CPU | Memory | Uptime |
+|---|---|---|---|---|---|
+| 100 | drlinuxer-prod-worker-7nc7k-kpd7b | running | 10.0% | 15.3 / 16.0 GB | 5d 9h |
+| 100010 | nsvr1 | running | 8.3% | 2.2 / 4.0 GB | 6d 9h |
+| 100011 | nsvr2 | running | 5.2% | 1.7 / 4.0 GB | 6d 9h |
+| 100012 | truenas | running | 1.5% | 7.7 / 8.0 GB | 31d 9h |
+| 100014 | harbor | running | 1.6% | 7.5 / 8.0 GB | 31d 9h |
+| 100017 | xwiki | running | 15.2% | 9.3 / 16.0 GB | 28d 13h |
+| 100018 | lgmt-stack | running | 6.1% | 13.8 / 16.0 GB | 12d 4h |
+| 100019 | zabbix | stopped | 0.0% | 0.0 / 4.0 GB | 0m |
+| 9301 | k8s-worker (template) | stopped | 0.0% | 0.0 / 4.0 GB | 0m |`;
 
 const K8S_NODES = `**6 Nodes**
 
