@@ -44,21 +44,25 @@ and apply upstream's Certificate objects instead.
 
 Nothing else. Everything after this is mechanical.
 
+**Target: Garage, self-hosted at `https://s3.drlinuxer.com`, bucket `production-backups`.**
+Verified from a pod: reachable (10.10.10.16), TLS valid, region reported as `garage`.
+
 ### 1. Create the bucket
 
-Any S3-compatible store. `s3.amazonaws.com` is already reachable from a pod in this
-cluster (verified: HTTP 307), so a cloud bucket needs no network change.
+Garage UI (or `garage bucket create production-backups`), then grant your key read/write
+on it (`garage bucket allow --read --write production-backups --key <key>`).
 
 ```
-bucket:     <your bucket>
+endpoint:   https://s3.drlinuxer.com
+bucket:     production-backups
 prefix:     rag-chatbot-postgres
-endpoint:   <provider endpoint>          # omit for AWS in its default region
-region:     <region>
+region:     garage          <- not us-east-1; Garage signs with this exact string
 ```
 
 ### 2. Create the credentials secret
 
 Run this yourself — the values do not belong in a chat transcript or in git:
+
 
 ```bash
 kubectl -n rag-chatbot create secret generic cnpg-backup-s3 \

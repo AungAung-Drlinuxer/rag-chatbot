@@ -1,29 +1,52 @@
 ---
-# ObjectStore — points the Barman Cloud plugin at the S3 bucket.
+# ObjectStore — Garage (self-hosted S3) at https://s3.drlinuxer.com
 #
-# CNPG 1.30 does backups through the plugin, not through spec.backup.barmanObjectStore
-# (deprecated in 1.25). This CR is the target; the Cluster references it by name from
-# spec.plugins, which 40-scheduledbackup.yaml's README step applies.
+# VERIFIED AGAINST THE LIVE ENDPOINT BEFORE WRITING THIS
+#   dns              s3.drlinuxer.com -> 10.10.10.16, reachable from a pod
+#   TLS              ssl_verify_result=0 (valid public chain — no endpointCA needed)
+#   GET /            403 with body:
+#                    <Error><Code>AccessDenied</Code><Message>Forbidden: Garage does not
+#                    support anonymous access yet</Message><Region>garage</Region></Error>
+#   GET /production-backups  403 (path-style reached the bucket namespace, not a 404)
 #
-# FILL THESE THREE VALUES, then apply. Everything else is already correct for this estate:
-#   metadata.name        -> referenced by the Cluster's plugin parameters
-#   spec.configuration.destinationPath -> s3://<bucket>/<prefix>
-#   spec.configuration.endpointURL     -> your provider's endpoint (omit for AWS us-east-1)
+# Three things come straight out of that response and each one alone breaks the backup:
+#
+#  1. REGION IS `garage`, not us-east-1. Garage reports its region in the error XML, boto3
+#     signs every request with it, and a mismatch gives SignatureDoesNotMatch.
+#
+#  2. CHECKSUM HEADERS. Recent boto3 enables AWS S3 data-integrity protections that Garage
+#     does not implement, producing an x-amz-content-sha256 error on upload — a known
+#     incompatibility with S3-compatible stores (plugin-barman-cloud issue #393, in the
+#     plugin's own object-store docs). The two env vars below restore the old behaviour.
+#     Without them the first backup fails in a way that looks like bad credentials.
+#
+#  3. PATH-STYLE. Garage serves buckets at /<bucket>, not <bucket>.host. barman-cloud uses
+#     path-style automatically whenever endpointURL is set — which is why upstream labels
+#     their DigitalOcean Spaces example "(SFO3, path-style)" with no extra flag to set.
+#     The 403 above rather than a 404 confirms the request reached the bucket namespace.
+#
+# endpointURL must NOT include the bucket: the bucket lives in destinationPath.
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
   name: cnpg-backup-store
   namespace: rag-chatbot
 spec:
-  # Keep 14 days. This is the window a point-in-time restore can reach back to — it is
-  # the number that decides whether "someone deleted a setting last week" is recoverable.
+  # How far back a point-in-time restore can reach.
   retentionPolicy: "14d"
+
+  instanceSidecarConfiguration:
+    env:
+      # See note 2. This is the difference between a working backup and a cryptic checksum
+      # error on an S3-compatible store.
+      - name: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required
+      - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+        value: when_required
+
   configuration:
-    destinationPath: "s3://REPLACE_BUCKET/rag-chatbot-postgres"
-    # Leave empty for AWS S3 in the default region; set for Wasabi/R2/Backblaze/MinIO.
-    endpointURL: "REPLACE_ENDPOINT"
-    # Path-style is required by most non-AWS providers (MinIO, TrueNAS, Ceph).
-    # Set false only if the provider requires virtual-hosted-style addressing.
+    destinationPath: "s3://production-backups/rag-chatbot-postgres"
+    endpointURL: "https://s3.drlinuxer.com"
     wal:
       compression: gzip
     data:
@@ -37,5 +60,4 @@ spec:
         key: SECRET_ACCESS_KEY
       region:
         name: cnpg-backup-s3
-        key: REGION
-    # Reuse the cluster's own instance role/TLS where possible; nothing else needed for S3.
+        key: REGION          # the Secret's REGION value must be exactly: garage
