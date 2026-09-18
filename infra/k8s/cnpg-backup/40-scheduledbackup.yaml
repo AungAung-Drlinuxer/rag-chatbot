@@ -1,0 +1,28 @@
+---
+# ScheduledBackup — the actual schedule.
+#
+# Applied LAST, after the ObjectStore exists and the Cluster references the plugin, so the
+# first run has somewhere to write. Order matters: applying this first would leave a
+# failing job producing error events every night with no bucket behind it.
+#
+# Schedule: 02:00 Asia/Yangon (18:30 UTC the previous day). CNPG takes a full base backup
+# and then keeps streaming WAL continuously, so the RPO is seconds-to-minutes, not a day —
+# the schedule controls how far back a restore can START, not how recent it can be.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-ha-nightly
+  namespace: rag-chatbot
+spec:
+  # 6-field cron: seconds minutes hours day-of-month month day-of-week
+  schedule: "0 30 18 * * *"
+  # false = apply to whichever instance is the current primary. (Older CNPG used
+  # backupOwnerReference to pick it automatically; 1.30 defaults correctly.)
+  immediate: false
+  suspend: false
+  backupOwnerReference: self
+  cluster:
+    name: postgres-ha
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

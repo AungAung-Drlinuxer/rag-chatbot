@@ -1,0 +1,41 @@
+---
+# ObjectStore — points the Barman Cloud plugin at the S3 bucket.
+#
+# CNPG 1.30 does backups through the plugin, not through spec.backup.barmanObjectStore
+# (deprecated in 1.25). This CR is the target; the Cluster references it by name from
+# spec.plugins, which 40-scheduledbackup.yaml's README step applies.
+#
+# FILL THESE THREE VALUES, then apply. Everything else is already correct for this estate:
+#   metadata.name        -> referenced by the Cluster's plugin parameters
+#   spec.configuration.destinationPath -> s3://<bucket>/<prefix>
+#   spec.configuration.endpointURL     -> your provider's endpoint (omit for AWS us-east-1)
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-backup-store
+  namespace: rag-chatbot
+spec:
+  # Keep 14 days. This is the window a point-in-time restore can reach back to — it is
+  # the number that decides whether "someone deleted a setting last week" is recoverable.
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: "s3://REPLACE_BUCKET/rag-chatbot-postgres"
+    # Leave empty for AWS S3 in the default region; set for Wasabi/R2/Backblaze/MinIO.
+    endpointURL: "REPLACE_ENDPOINT"
+    # Path-style is required by most non-AWS providers (MinIO, TrueNAS, Ceph).
+    # Set false only if the provider requires virtual-hosted-style addressing.
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-backup-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-backup-s3
+        key: SECRET_ACCESS_KEY
+      region:
+        name: cnpg-backup-s3
+        key: REGION
+    # Reuse the cluster's own instance role/TLS where possible; nothing else needed for S3.
