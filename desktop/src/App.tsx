@@ -31,6 +31,8 @@ import TicketsPage from "@/features/tickets/pages/TicketsPage";
 import UsersPage from "@/features/users/pages/UsersPage";
 import ConversationHistoryPage from "@/features/conversations/pages/ConversationHistoryPage";
 import AuditsPage from "@/features/audits/pages/AuditsPage";
+// Semantica spike — remove this import and the "graph" case to take the page out.
+import ContextGraphPage from "@/features/semantica/pages/ContextGraphPage";
 import SettingsPage from "@/features/settings/pages/SettingsPage";
 
 export default function App() {
@@ -176,6 +178,8 @@ export default function App() {
       return shell("history", <ConversationHistoryPage />);
     case "audits":
       return shell("audits", <AuditsPage />);
+    case "graph":
+      return shell("graph", <ContextGraphPage />);
     case "settings":
       return shell("settings", <SettingsPage role={role} />);
     default:

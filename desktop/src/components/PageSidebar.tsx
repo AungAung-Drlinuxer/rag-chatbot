@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import { dateBucket } from "@/features/chat/model";
 import { useBranding } from "@/app/useBranding";
-import {
-  BookOpen, Bot, ChevronDown, ChevronRight, Home, KeyRound as KeyIcon, MessageSquare, MessagesSquare, PanelLeftClose, PanelLeftOpen,
-  Pin, Pencil, Trash2, MoreHorizontal, ScrollText, Settings as SettingsIcon, Ticket as TicketIcon, Users as UsersIcon,
-} from "lucide-react";
+import { BookOpen, Bot, ChevronDown, ChevronRight, Home, KeyRound as KeyIcon, MessageSquare, MessagesSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Pin, ScrollText, Settings as SettingsIcon, Share2, Ticket as TicketIcon, Trash2, Users as UsersIcon } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
 import {
   listConversations,
@@ -132,6 +129,7 @@ export default function PageSidebar({
     { id: "apikeys", label: "API Keys", icon: <KeyIcon className="size-4" /> },
     { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review organization conversation history" },
     { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
+    { id: "graph", label: "Context Graph", icon: <Share2 className="size-4" />, cap: "manage_users", capLabel: "Evaluate the Semantica context graph (spike)" },
     { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
   ];
   const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Knowledge Manager" } as Record<string, string>)[role || "user"] || "User";

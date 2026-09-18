@@ -14,6 +14,7 @@ from app.api.conversations import router as conversations_router
 from app.api.dashboard import router as dashboard_router
 from app.api.health import router as health_router
 from app.api.knowledge import router as knowledge_router
+from app.api.semantica_spike import router as semantica_spike_router
 from app.api.settings import router as settings_router
 from app.api.tickets import router as tickets_router
 from app.api.users import router as users_router
@@ -68,6 +69,9 @@ app.include_router(users_router)
 app.include_router(settings_router)
 from app.api.domain_rename import router as domain_rename_router
 app.include_router(domain_rename_router)
+# Semantica spike (admin-only, read-only proxy). Remove this line and app/api/semantica_spike.py
+# to take the spike out of the app — nothing else depends on it.
+app.include_router(semantica_spike_router)
 
 from app.observability.metrics import metrics_endpoint
 @app.get("/metrics")

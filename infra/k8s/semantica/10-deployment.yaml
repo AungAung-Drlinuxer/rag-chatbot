@@ -1,0 +1,97 @@
+---
+# Semantica spike — a SEPARATE Deployment + Service, never a backend dependency.
+#
+# WHY SEPARATE (measured against the real dependency tree)
+# `pip install semantica` resolves to ~155 packages including torch, transformers,
+# sentence-transformers, spacy, opencv-python, librosa, gensim, faiss-cpu, umap-learn,
+# matplotlib, seaborn, plotly and ipywidgets — and it caps `httpx<0.29.0`, a dependency the
+# backend's MCP client shares. Installed into backend/ that cap would freeze httpx for the
+# whole app. So this follows the estate's own pattern: one Deployment + Service, like
+# rancher-mcp / proxmox-mcp / grafana-mcp / rerank-svc.
+#
+# WHAT IT TOUCHES IN THE DATABASE
+# Two NEW tables only — semantica_entities and semantica_relations. Nothing existing is read
+# except kb_meta (the same table the app itself reads). `python spike_pipeline.py reset`
+# drops both tables; that is the whole undo.
+#
+# CPU-ONLY. There are no GPUs in this cluster, and the container installs the CPU torch wheel
+# so the image does not carry 2-3 GB of CUDA it can never use.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantica-spike
+  namespace: rag-chatbot
+  labels:
+    app.kubernetes.io/name: semantica-spike
+spec:
+  replicas: 1
+  strategy:
+    # The build writes to the DB, so two pods starting at once would both try to build.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: semantica-spike
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: semantica-spike
+    spec:
+      containers:
+        - name: semantica-spike
+          image: harbor.drlinuxer.com/rag-chatbot/semantica-spike:0.1.2@sha256:dc04007ea3adb860cd1bb6f11e7ac52e9be6e86720c32a905f250837530d0bc9
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            # Reuse the app's own DSN from its Secret — one credential, one place to rotate.
+            - name: SEMANTICA_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: DATABASE_URL
+            # Measured: "ml" without the spaCy model installed is NOT faster or better — it
+            # fails to load per article, falls back to pattern each time, and turned a
+            # seconds-long extraction into ~25 minutes with 2 cores pegged. pattern is also
+            # the honest choice for an evaluation: deterministic, no model, no download.
+            # Install en_core_web_sm in the image first if you want to try ml.
+            - name: SEMANTICA_METHOD
+              value: "pattern"
+            - name: SEMANTICA_BATCH
+              value: "0"           # 0 = every kb_meta article
+          resources:
+            # The pod imports semantica (torch/transformers come along), so the floor is
+            # higher than a plain HTTP service. Still modest for this cluster.
+            requests: { cpu: "200m", memory: "768Mi" }
+            limits:   { cpu: "2",    memory: "3Gi" }
+          # readiness is a real DB-backed check: /stats touches Postgres, so a pod that
+          # cannot reach the database is never sent traffic. While the graph is still being
+          # built /stats answers 200 with a progress object, so readiness does not have to
+          # wait for the build either.
+          readinessProbe:
+            httpGet: { path: /stats, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 6
+          # /healthz is served as soon as the process is up, because the build runs in a
+          # BACKGROUND THREAD. There is deliberately no long startupProbe: a probe window
+          # that has to outlast a 25-minute build is a trap — the pod gets killed mid-build
+          # and restarts into the same build forever. HTTP first, build second.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantica-spike
+  namespace: rag-chatbot
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: semantica-spike
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
