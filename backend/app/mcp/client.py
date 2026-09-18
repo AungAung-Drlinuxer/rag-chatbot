@@ -221,16 +221,22 @@ class McpClient:
         if params is not None:
             body["params"] = params
 
+        # _sse_base(), NOT self.url: the advertised endpoint is an absolute path
+        # ("/message?sessionId=..."), so appending it to a URL that already ends in "/sse"
+        # produced "/sse/message" -> 404. The stream GET already used _sse_base(), which is
+        # why a connector configured with the full SSE path failed only on the WRITE half:
+        # initialize never returned, and it surfaced as "endpoint not advertised". Using the
+        # same base for both halves makes either URL form work.
         if notify:
             with httpx.Client(timeout=self.timeout) as client:
-                client.post(self.url + self._sse_endpoint, json=body).raise_for_status()
+                client.post(self._sse_base() + self._sse_endpoint, json=body).raise_for_status()
             return {}
 
         q: queue.Queue = queue.Queue()
         self._sse_q[rid] = q
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                client.post(self.url + self._sse_endpoint, json=body).raise_for_status()
+                client.post(self._sse_base() + self._sse_endpoint, json=body).raise_for_status()
             msg = q.get(timeout=timeout or self.timeout)
         except queue.Empty:
             raise RuntimeError(f"MCP SSE timeout waiting for {method}")
