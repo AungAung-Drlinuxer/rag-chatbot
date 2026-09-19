@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Architecture — rag-chatbot</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #020617;
+      min-height: 100vh;
+      padding: 2rem;
+      color: white;
+    }
+
+    .container { max-width: 1240px; margin: 0 auto; }
+
+    .header { margin-bottom: 1.75rem; }
+
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+
+    .pulse-dot {
+      width: 12px; height: 12px; background: #22d3ee; border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+
+    .subtitle { color: #94a3b8; font-size: 0.8125rem; margin-left: 1.75rem; line-height: 1.6; }
+
+    .diagram-container {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 1rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+      overflow-x: auto;
+    }
+
+    svg { width: 100%; min-width: 1100px; display: block; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 1.75rem;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+      padding: 1.25rem;
+    }
+
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+    .card-dot.orange { background: #fb923c; }
+
+    .card h3 { font-size: 0.8125rem; font-weight: 600; }
+
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; line-height: 1.55; }
+    .card li { margin-bottom: 0.4rem; }
+
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.6875rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>MCP Live-Infrastructure Architecture</h1>
+      </div>
+      <p class="subtitle">
+        Read-only access to the live estate from the assistant &middot; RKE2 cluster <code>drlinuxer-prod</code>,
+        namespace <code>rag-chatbot</code>
+      </p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1180 810">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+          </marker>
+          <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+          </marker>
+          <marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fb923c" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- ============================ ARROWS (drawn first, behind boxes) ============ -->
+        <!-- user -> frontend -->
+        <line x1="125" y1="90" x2="125" y2="166" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+        <text x="132" y="104" fill="#94a3b8" font-size="9">HTTPS &middot; JWT</text>
+
+        <!-- frontend -> backend -->
+        <line x1="210" y1="215" x2="236" y2="215" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="223" y="207" fill="#94a3b8" font-size="8" text-anchor="middle">/api</text>
+
+        <!-- backend -> mcp client -->
+        <line x1="530" y1="215" x2="556" y2="215" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="545" y="206" fill="#94a3b8" font-size="8" text-anchor="middle">MCP</text>
+
+        <!-- mcp client -> exposure policy -->
+        <line x1="800" y1="215" x2="826" y2="215" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowhead)"/>
+        <text x="813" y="206" fill="#94a3b8" font-size="8" text-anchor="middle">gate</text>
+
+        <!-- mcp client -> each server (fan-out down) -->
+        <path d="M 680 262 L 680 300 Q 680 314 666 314 L 156 314 Q 142 314 142 328" fill="none" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+        <path d="M 680 262 L 680 300 Q 680 314 666 314 L 381 314 Q 367 314 367 328" fill="none" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+        <path d="M 680 262 L 680 328" fill="none" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+        <path d="M 680 262 L 680 300 Q 680 314 694 314 L 803 314 Q 817 314 817 328" fill="none" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+        <path d="M 680 262 L 680 300 Q 680 314 694 314 L 1026 314 Q 1040 314 1040 328" fill="none" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+        <text x="700" y="303" fill="#94a3b8" font-size="8">MCP &middot; http + sse</text>
+
+        <!-- server -> estate -->
+        <line x1="142" y1="464" x2="142" y2="556" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="367" y1="464" x2="367" y2="556" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="592" y1="464" x2="592" y2="556" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="817" y1="464" x2="817" y2="556" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="1040" y1="464" x2="1040" y2="556" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="150" y="512" fill="#94a3b8" font-size="8">read-only</text>
+
+        <!-- ============================ CLUSTER BOUNDARY ======================= -->
+        <rect x="20" y="126" width="1140" height="364" rx="12"
+              fill="rgba(251, 191, 36, 0.04)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="34" y="146" fill="#fbbf24" font-size="10" font-weight="600">
+          Kubernetes &middot; RKE2 drlinuxer-prod &middot; namespace rag-chatbot
+        </text>
+
+        <!-- ============================ USER ================================== -->
+        <rect x="40" y="34" width="170" height="56" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="125" y="56" fill="white" font-size="11" font-weight="600" text-anchor="middle">Operator / End User</text>
+        <text x="125" y="72" fill="#94a3b8" font-size="9" text-anchor="middle">desktop &amp; phone browser</text>
+
+        <!-- ============================ APP TIER ============================== -->
+        <!-- frontend -->
+        <rect x="40" y="168" width="170" height="94" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="125" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">frontend</text>
+        <text x="125" y="207" fill="#94a3b8" font-size="9" text-anchor="middle">React SPA &middot; nginx :80</text>
+        <text x="125" y="222" fill="#94a3b8" font-size="9" text-anchor="middle">Chat &middot; Settings</text>
+        <text x="125" y="237" fill="#94a3b8" font-size="9" text-anchor="middle">Connectors gallery</text>
+        <text x="125" y="254" fill="#22d3ee" font-size="8" text-anchor="middle">frontend 1.6.51</text>
+
+        <!-- backend -->
+        <rect x="240" y="168" width="290" height="94" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="385" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">backend &middot; FastAPI :8000</text>
+        <text x="385" y="207" fill="#94a3b8" font-size="9" text-anchor="middle">JWT + RBAC &middot; mode kb | infra | auto</text>
+        <text x="385" y="223" fill="#34d399" font-size="9" text-anchor="middle">1. deterministic lookup FIRST</text>
+        <text x="385" y="238" fill="#94a3b8" font-size="9" text-anchor="middle">2. LangGraph ReAct (model picks)</text>
+        <text x="385" y="254" fill="#94a3b8" font-size="8" text-anchor="middle">Kubernetes &middot; Proxmox &middot; Grafana &middot; Postgres branches</text>
+
+        <!-- mcp client -->
+        <rect x="560" y="168" width="240" height="94" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="680" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">MCP client</text>
+        <text x="680" y="207" fill="#94a3b8" font-size="9" text-anchor="middle">app/mcp/client.py</text>
+        <text x="680" y="223" fill="#34d399" font-size="9" text-anchor="middle">streamable-HTTP</text>
+        <text x="680" y="238" fill="#34d399" font-size="9" text-anchor="middle">legacy SSE</text>
+        <text x="680" y="254" fill="#94a3b8" font-size="8" text-anchor="middle">Bearer per connector &middot; 20 s timeout</text>
+
+        <!-- exposure policy -->
+        <rect x="830" y="168" width="300" height="94" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="980" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">Tool exposure policy</text>
+        <text x="980" y="207" fill="#94a3b8" font-size="9" text-anchor="middle">curated_for() &middot; DENY_TOOLS_RE</text>
+        <text x="980" y="223" fill="#fb7185" font-size="9" text-anchor="middle">135 tools upstream &rarr; 51 exposed</text>
+        <text x="980" y="238" fill="#94a3b8" font-size="9" text-anchor="middle">explicit allowlist per server</text>
+        <text x="980" y="254" fill="#94a3b8" font-size="8" text-anchor="middle">read-verb gate &middot; write verbs refused</text>
+
+        <!-- ============================ MCP SERVERS =========================== -->
+        <!-- rancher -->
+        <rect x="40" y="330" width="205" height="134" rx="6" fill="rgba(251, 146, 60, 0.28)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="142" y="352" fill="white" font-size="11" font-weight="600" text-anchor="middle">rancher-mcp</text>
+        <text x="142" y="369" fill="#94a3b8" font-size="9" text-anchor="middle">:8080 &middot; http</text>
+        <text x="142" y="386" fill="#94a3b8" font-size="8" text-anchor="middle">kubeconfig + read-only SA</text>
+        <text x="142" y="401" fill="#94a3b8" font-size="8" text-anchor="middle">this cluster</text>
+        <text x="142" y="424" fill="#fb923c" font-size="9" text-anchor="middle">19 tools</text>
+        <text x="142" y="440" fill="#94a3b8" font-size="8" text-anchor="middle">8 exposed</text>
+        <text x="142" y="456" fill="#94a3b8" font-size="7" text-anchor="middle">1 replica</text>
+
+        <!-- rancher mgmt -->
+        <rect x="265" y="330" width="205" height="134" rx="6" fill="rgba(251, 146, 60, 0.28)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="367" y="352" fill="white" font-size="11" font-weight="600" text-anchor="middle">rancher-mcp-mgmt</text>
+        <text x="367" y="369" fill="#94a3b8" font-size="9" text-anchor="middle">:8080 &middot; http</text>
+        <text x="367" y="386" fill="#94a3b8" font-size="8" text-anchor="middle">Rancher API</text>
+        <text x="367" y="401" fill="#94a3b8" font-size="8" text-anchor="middle">per-request token auth</text>
+        <text x="367" y="424" fill="#fb923c" font-size="9" text-anchor="middle">downstream clusters</text>
+        <text x="367" y="440" fill="#fb7185" font-size="8" text-anchor="middle">read_only=true</text>
+        <text x="367" y="456" fill="#fb7185" font-size="7" text-anchor="middle">destructive off &middot; secrets masked</text>
+
+        <!-- proxmox -->
+        <rect x="490" y="330" width="205" height="134" rx="6" fill="rgba(251, 146, 60, 0.28)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="592" y="352" fill="white" font-size="11" font-weight="600" text-anchor="middle">proxmox-mcp</text>
+        <text x="592" y="369" fill="#94a3b8" font-size="9" text-anchor="middle">:8000 &middot; http</text>
+        <text x="592" y="386" fill="#94a3b8" font-size="8" text-anchor="middle">own bridge.js</text>
+        <text x="592" y="401" fill="#94a3b8" font-size="8" text-anchor="middle">stdio &rarr; streamable HTTP</text>
+        <text x="592" y="424" fill="#fb923c" font-size="9" text-anchor="middle">42 tools</text>
+        <text x="592" y="440" fill="#94a3b8" font-size="8" text-anchor="middle">16 exposed</text>
+        <text x="592" y="456" fill="#fb7185" font-size="7" text-anchor="middle">destructive never enabled</text>
+
+        <!-- grafana -->
+        <rect x="715" y="330" width="205" height="134" rx="6" fill="rgba(251, 146, 60, 0.28)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="817" y="352" fill="white" font-size="11" font-weight="600" text-anchor="middle">grafana-mcp</text>
+        <text x="817" y="369" fill="#94a3b8" font-size="9" text-anchor="middle">:8000 &middot; sse</text>
+        <text x="817" y="386" fill="#94a3b8" font-size="8" text-anchor="middle">Grafana API</text>
+        <text x="817" y="401" fill="#94a3b8" font-size="8" text-anchor="middle">service-account token</text>
+        <text x="817" y="424" fill="#fb923c" font-size="9" text-anchor="middle">65 tools</text>
+        <text x="817" y="440" fill="#94a3b8" font-size="8" text-anchor="middle">19 exposed</text>
+        <text x="817" y="456" fill="#fb7185" font-size="7" text-anchor="middle">--disable-write</text>
+
+        <!-- postgres -->
+        <rect x="940" y="330" width="200" height="134" rx="6" fill="rgba(251, 146, 60, 0.28)" stroke="#fb923c" stroke-width="1.5"/>
+        <text x="1040" y="352" fill="white" font-size="11" font-weight="600" text-anchor="middle">postgres-mcp</text>
+        <text x="1040" y="369" fill="#94a3b8" font-size="9" text-anchor="middle">:8000 &middot; sse</text>
+        <text x="1040" y="386" fill="#94a3b8" font-size="8" text-anchor="middle">app database</text>
+        <text x="1040" y="401" fill="#94a3b8" font-size="8" text-anchor="middle">no execute_sql</text>
+        <text x="1040" y="424" fill="#fb923c" font-size="9" text-anchor="middle">9 tools</text>
+        <text x="1040" y="440" fill="#94a3b8" font-size="8" text-anchor="middle">8 exposed</text>
+        <text x="1040" y="456" fill="#fb7185" font-size="7" text-anchor="middle">access-mode restricted</text>
+
+        <!-- ============================ ESTATE ================================ -->
+        <rect x="40" y="560" width="205" height="86" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="142" y="584" fill="white" font-size="11" font-weight="600" text-anchor="middle">RKE2 API :6443</text>
+        <text x="142" y="602" fill="#94a3b8" font-size="8" text-anchor="middle">drlinuxer-prod</text>
+        <text x="142" y="618" fill="#94a3b8" font-size="8" text-anchor="middle">nodes &middot; workloads &middot; events</text>
+        <text x="142" y="636" fill="#fbbf24" font-size="7" text-anchor="middle">read-only ServiceAccount</text>
+
+        <rect x="265" y="560" width="205" height="86" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="367" y="584" fill="white" font-size="11" font-weight="600" text-anchor="middle">Rancher :443</text>
+        <text x="367" y="602" fill="#94a3b8" font-size="8" text-anchor="middle">rke2-cluster.drlinuxer.com</text>
+        <text x="367" y="618" fill="#94a3b8" font-size="8" text-anchor="middle">downstream clusters</text>
+        <text x="367" y="636" fill="#fbbf24" font-size="7" text-anchor="middle">token scopes what is visible</text>
+
+        <rect x="490" y="560" width="205" height="86" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="592" y="584" fill="white" font-size="11" font-weight="600" text-anchor="middle">Proxmox VE 9.2.10</text>
+        <text x="592" y="602" fill="#94a3b8" font-size="8" text-anchor="middle">pve01 :8006</text>
+        <text x="592" y="618" fill="#94a3b8" font-size="8" text-anchor="middle">29 VMs &middot; 3 LXC &middot; 2 stores</text>
+        <text x="592" y="636" fill="#fbbf24" font-size="7" text-anchor="middle">PVEAuditor, propagate</text>
+
+        <rect x="715" y="560" width="205" height="86" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="817" y="584" fill="white" font-size="11" font-weight="600" text-anchor="middle">Grafana 13.2.1</text>
+        <text x="817" y="602" fill="#94a3b8" font-size="8" text-anchor="middle">10.10.10.18 :3000</text>
+        <text x="817" y="618" fill="#94a3b8" font-size="8" text-anchor="middle">Prometheus &middot; Loki &middot; Tempo</text>
+        <text x="817" y="636" fill="#fbbf24" font-size="7" text-anchor="middle">Viewer service account</text>
+
+        <rect x="940" y="560" width="200" height="86" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="1040" y="584" fill="white" font-size="11" font-weight="600" text-anchor="middle">Postgres 16.4 HA</text>
+        <text x="1040" y="602" fill="#94a3b8" font-size="8" text-anchor="middle">CNPG &middot; 3 instances</text>
+        <text x="1040" y="618" fill="#94a3b8" font-size="8" text-anchor="middle">db &quot;assistant&quot;</text>
+        <text x="1040" y="636" fill="#a78bfa" font-size="7" text-anchor="middle">mcp_reader &middot; 11 tables only</text>
+
+        <!-- ============================ LEGEND ================================ -->
+        <text x="40" y="694" fill="white" font-size="10" font-weight="600">Legend</text>
+
+        <rect x="40" y="706" width="16" height="10" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="62" y="714" fill="#94a3b8" font-size="8">Client</text>
+
+        <rect x="130" y="706" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="152" y="714" fill="#94a3b8" font-size="8">Frontend</text>
+
+        <rect x="230" y="706" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="252" y="714" fill="#94a3b8" font-size="8">App tier</text>
+
+        <rect x="330" y="706" width="16" height="10" rx="2" fill="rgba(251, 146, 60, 0.28)" stroke="#fb923c" stroke-width="1"/>
+        <text x="352" y="714" fill="#94a3b8" font-size="8">MCP server (integration)</text>
+
+        <rect x="510" y="706" width="16" height="10" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
+        <text x="532" y="714" fill="#94a3b8" font-size="8">Policy / read-only gate</text>
+
+        <rect x="680" y="706" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="702" y="714" fill="#94a3b8" font-size="8">External estate</text>
+
+        <rect x="820" y="706" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="842" y="714" fill="#94a3b8" font-size="8">Database</text>
+
+        <line x1="920" y1="711" x2="936" y2="711" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="942" y="714" fill="#94a3b8" font-size="8">Exposure gate</text>
+
+        <rect x="1040" y="706" width="16" height="10" rx="2" fill="transparent" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3"/>
+        <text x="1062" y="714" fill="#94a3b8" font-size="8">Namespace boundary</text>
+
+        <text x="40" y="748" fill="#64748b" font-size="8">
+          Every arrow out of a server is a read. No MCP server here can mutate the estate it reads.
+        </text>
+        <text x="40" y="766" fill="#64748b" font-size="8">
+          135 tools exist upstream; 51 reach the model after curation, which is what makes tool selection reliable.
+        </text>
+        <text x="40" y="784" fill="#64748b" font-size="8">
+          The two transports are a compatibility measure, not a design: http for servers that speak it, sse for the rest.
+        </text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot emerald"></div><h3>Answer path (deterministic first)</h3></div>
+        <ul>
+          <li>&bull; Kubernetes / Proxmox / Grafana shapes are matched by code, no model in the loop &mdash; faster, cheaper, reproducible</li>
+          <li>&bull; Anything unmatched falls back to a LangGraph ReAct agent that chooses tools itself</li>
+          <li>&bull; The deterministic branch returns the cluster's own output as a markdown table, never re-worded by a model</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-dot rose"></div><h3>Read-only, proven not asserted</h3></div>
+        <ul>
+          <li>&bull; Rancher: <code>read_only=true</code>, <code>disable_destructive=true</code>, secrets masked</li>
+          <li>&bull; Proxmox: destructive flag deliberately absent</li>
+          <li>&bull; Grafana: <code>--disable-write</code></li>
+          <li>&bull; Postgres: <code>--access-mode restricted</code> + <code>mcp_reader</code>, <code>execute_sql</code> not exposed</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-dot amber"></div><h3>Why two transports</h3></div>
+        <ul>
+          <li>&bull; <code>rancher-mcp</code> and <code>grafana-mcp</code> are HTTP-native images</li>
+          <li>&bull; <code>proxmox-mcp</code> is stdio-only, served through our own <code>bridge.js</code></li>
+          <li>&bull; <code>postgres-mcp</code> and <code>grafana-mcp</code> answer on legacy SSE</li>
+          <li>&bull; Both paths must carry the connector token &mdash; the SSE one silently did not, and that single omission produced <code>401 with a valid token</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">
+      rag-chatbot &middot; MCP architecture &middot; measured on the live cluster, backend 1.6.98
+    </p>
+  </div>
+</body>
+</html>
