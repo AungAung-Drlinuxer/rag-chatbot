@@ -126,9 +126,48 @@ DENY_TOOLS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Grafana / LGTM: the questions an operator actually asks of an observability stack.
+#
+# WHY AN EXPLICIT LIST RATHER THAN THE ROUND-ROBIN FALLBACK
+# The dynamic rule (verb rank, then shortest name) produced a balanced-looking 18, but it
+# ranked `list_incidents` and `list_snapshots` above `list_loki_label_names` and never
+# selected `list_prometheus_metric_names` at all. Measured: "Loki က label ဘာတွေရှိလဲ"
+# therefore had NO path — the label tool was not exposed to the model, the deterministic
+# lookup declined the question, and the answer collapsed to "lookup failed — no live data"
+# while the evidence card showed a successful 290-byte call to list_datasources.
+#
+# Every entry here exists to answer a question family, not to fill a quota:
+#   datasource/health  -> what is configured, is it reachable
+#   loki labels/logs   -> what labels exist, what do the logs say
+#   prometheus         -> what labels/metrics exist, run an instant query
+#   alerting/incident  -> what is firing
+#   dashboard/search   -> where is the panel, where is the thing
+GRAFANA_CURATED_TOOLS: tuple[str, ...] = (
+    "list_datasources",
+    "check_datasources_health",
+    "get_datasource",
+    "list_loki_label_names",
+    "list_loki_label_values",
+    "query_loki_logs",
+    "query_loki_stats",
+    "analyze_loki_labels",
+    "list_prometheus_label_names",
+    "list_prometheus_label_values",
+    "list_prometheus_metric_names",
+    "list_prometheus_metric_metadata",
+    "query_prometheus",
+    "list_alert_groups",
+    "list_alert_rules",
+    "list_incidents",
+    "search_dashboards",
+    "get_dashboard_summary",
+    "search_folders",
+)
+
 CURATED_BY_SERVER: dict[str, tuple[str, ...]] = {
     "rancher": CURATED_TOOLS,
     "proxmox": PROXMOX_CURATED_TOOLS,
+    "grafana": GRAFANA_CURATED_TOOLS,
 }
 
 # For a connector an administrator added, there is no hand-written allowlist — so the
@@ -921,7 +960,105 @@ def summarise_proxmox(raw: str) -> str | None:
     return None
 
 
-def _as_answer_body(raw: str, max_rows: int = 200) -> str:
+def summarise_grafana(raw: str, kind: str = "") -> str | None:
+    """Render a Grafana/Loki/Prometheus tool payload as a readable answer body.
+
+    A SEPARATE FUNCTION FROM summarise_json, for the same measured reason summarise_proxmox
+    is: that one is Kubernetes-shaped. It looks for `metadata.name` / `status` and renders
+    anything else as a table whose every cell is "?" — over correct data. Grafana's payloads
+    are their own shapes, and they are mostly LISTS: label names, label values, metric names,
+    datasources. A list reflowed through the Kubernetes summariser is a wall of "?", so this
+    handles the shapes the connector actually returns:
+
+      {"datasources": [...], "total": n}     -> inventory table
+      {"results": [{...,status,message}]}    -> health table
+      ["container","pod",...]                -> the list, inline and readable
+      {"alertGroups": [...]}                 -> what is firing
+      {"data": [{"metric":{...},"value":[…]} -> instant-query series table
+
+    `kind` names what the list holds ("labels", "metrics", "series") because a bare array of
+    strings does not say. Unrecognised shapes return None so the caller can fall through to
+    the Kubernetes summariser, then to the raw payload.
+    """
+    try:
+        src = json.loads(raw)
+    except Exception:  # noqa: BLE001
+        return None
+
+    if isinstance(src, dict) and "datasources" in src:
+        ds = src.get("datasources") or []
+        if not ds:
+            return "**0 datasource(s)** configured in Grafana."
+        rows = [[
+            str(d.get("name") or "?"),
+            str(d.get("type") or "?"),
+            str(d.get("uid") or "-"),
+            "yes" if d.get("isDefault") else "",
+        ] for d in ds]
+        body = _md_table(["Name", "Type", "UID", "Default"], rows)
+        return f"**{len(rows)} datasource(s)** in Grafana\n\n{body}"
+
+    if isinstance(src, dict) and "results" in src:
+        rs = src.get("results") or []
+        if not rs:
+            return None
+        rows = [[
+            str(r.get("name") or "?"),
+            str(r.get("type") or "?"),
+            str(r.get("status") or "?"),
+            str(r.get("message") or "-")[:60],
+        ] for r in rs]
+        body = _md_table(["Name", "Type", "Status", "Detail"], rows)
+        return f"**{len(rows)} datasource(s) checked**\n\n{body}"
+
+    if isinstance(src, dict) and "alertGroups" in src:
+        gs = src.get("alertGroups") or []
+        if not gs:
+            return "**0 alert group(s)** — nothing is firing."
+        rows = [[
+            str(g.get("name") or "?"),
+            str(g.get("state") or "?"),
+            str(len(g.get("alerts") or [])),
+        ] for g in gs]
+        body = _md_table(["Alert group", "State", "Alerts"], rows)
+        return f"**{len(rows)} alert group(s)**\n\n{body}"
+
+    # Instant query: {"data":[{"metric":{...},"value":[ts,"v"]}]}
+    if isinstance(src, dict) and "data" in src:
+        data = src.get("data") or []
+        if not data or not isinstance(data[0], dict) or "metric" not in data[0]:
+            return None
+        rows = []
+        for s in data[:60]:
+            metric = s.get("metric") or {}
+            name = metric.get("__name__") or metric.get("name") or "?"
+            labels = ", ".join(f"{k}={v}" for k, v in sorted(metric.items())
+                               if k not in ("__name__", "name"))
+            val = s.get("value") or s.get("values") or []
+            if isinstance(val, list) and val and isinstance(val[-1], list):
+                val = val[-1]
+            shown = val[1] if isinstance(val, list) and len(val) > 1 else "-"
+            rows.append([str(name), labels[:70] or "-", str(shown)])
+        body = _md_table(["Metric", "Labels", "Value"], rows)
+        return (f"**{len(data)} series**{' (showing %d)' % len(rows) if len(data) > len(rows) else ''}"
+                f"\n\n{body}")
+
+    # A bare array of names — label names, label values, metric names, folder names.
+    if isinstance(src, list) and src and all(isinstance(x, str) for x in src):
+        label = {
+            "labels": "label(s)",
+            "values": "value(s)",
+            "metrics": "metric(s)",
+        }.get(kind, "item(s)")
+        shown = src[:60]
+        cells = " · ".join(f"`{s}`" for s in shown)
+        tail = f"\n\n_{len(src) - len(shown)} more not shown_" if len(src) > len(shown) else ""
+        return f"**{len(src)} {label}**\n\n{cells}{tail}"
+
+    return None
+
+
+def _as_answer_body(raw: str, max_rows: int = 200, markdown: bool = False) -> str:
     """Turn a tool payload into the answer body.
 
     MARKDOWN TABLES ARE PASSED THROUGH AS MARKDOWN. They used to be wrapped in a ``` fence
@@ -946,9 +1083,23 @@ def _as_answer_body(raw: str, max_rows: int = 200) -> str:
             break
 
     if tbl_at is None:
-        shown = lines[:14]
+        # MARKDOWN FROM A SUMMARISER IS PASSED THROUGH — never fenced.
+        #
+        # A fenced body is a `<pre>` to react-markdown, so `**bold**` prints its asterisks
+        # and `` `container` `` prints its backticks. That is exactly what happened to
+        # "Loki က label ဘာတွေရှိလဲ": the label list is markdown by construction but has no
+        # table, so it was fenced and arrived as literal `**6 label(s)** | \`container\` …`.
+        # The datasource answer was fine only because it happens to contain a table.
+        #
+        # The flag is explicit rather than sniffing for `**`, because the default caller
+        # feeds raw kubectl/JSON output where a backtick or asterisk inside a string must
+        # keep its literal meaning.
+        shown = lines[:40] if markdown else lines[:14]
         hidden = max(0, len(lines) - len(shown))
-        out = "```\n" + "\n".join(shown) + "\n```"
+        if markdown:
+            out = "\n".join(shown)
+        else:
+            out = "```\n" + "\n".join(shown) + "\n```"
         if hidden:
             out += f"\n\n_{hidden} more line(s) — open \"Show full output\" below_"
         return out
@@ -1034,6 +1185,103 @@ def _deterministic_lookup(question: str, tools):
             logger.info("deterministic %s failed: %s", tool_name, exc)
             return None
         return out if out.strip() and out.strip() not in ("[]", "{}") else None
+
+    # 0a) Grafana / LGTM observability. MUST come before the Kubernetes rules below, and it
+    #     is safe to put first because it only fires on observability vocabulary that no
+    #     other rule owns. Measured before this existed: "Loki က label ဘာတွေရှိလဲ"
+    #     had no working path anywhere — the deterministic lookup declined it (this function
+    #     is Kubernetes-only by design), `list_loki_label_names` was not in the model's
+    #     exposed tool set, the model called `list_datasources` instead, returned no final
+    #     message, and the answer collapsed to "lookup failed — no live data" while the
+    #     evidence card showed a successful 290-byte call. The connector was fine the whole
+    #     time; the routing was not.
+    #
+    #     The label and metric tools REQUIRE a datasourceUid, so the uid is resolved from
+    #     list_datasources by type first. A question phrased without the product name
+    #     ("label ဘာတွေရှိလဲ") cannot be resolved this way and is declined rather than
+    #     guessed, the same discipline the rest of this function follows.
+    if re.search(r"\b(grafana|loki|prometheus|tempo|mimir|pyroscope|datasources?)\b", q):
+
+        def _ds_uid(kind: str) -> str:
+            """Resolve a datasource uid by its type — list_datasources needs no arguments."""
+            out = _call("list_datasources", {})
+            if not out:
+                return ""
+            try:
+                for d in (json.loads(out).get("datasources") or []):
+                    if str(d.get("type") or "").lower() == kind:
+                        return str(d.get("uid") or "")
+            except Exception:  # noqa: BLE001
+                return ""
+            return ""
+
+        def _gf(title: str, tool: str, args: dict, kind: str = ""):
+            """Call a Grafana tool and render it; None keeps the caller searching."""
+            out = _call(tool, args)
+            if not out:
+                return None
+            body = summarise_grafana(out, kind) or summarise_json(out) or out
+            return f"**{title}**\n\n{body}"
+
+        wants_loki = bool(re.search(r"\bloki\b", q))
+        wants_prom = bool(re.search(r"\bprometheus\b", q))
+
+        # -- label inventories: the question class that had no path at all ---------
+        if re.search(r"\blabels?\b", q):
+            if wants_loki:
+                uid = _ds_uid("loki")
+                if uid:
+                    got = _gf("Loki — label names", "list_loki_label_names",
+                              {"datasourceUid": uid}, "labels")
+                    if got:
+                        return got
+            if wants_prom:
+                uid = _ds_uid("prometheus")
+                if uid:
+                    got = _gf("Prometheus — label names", "list_prometheus_label_names",
+                              {"datasourceUid": uid, "limit": 100}, "labels")
+                    if got:
+                        return got
+
+        # -- metric inventory ------------------------------------------------------
+        if wants_prom and re.search(r"\b(metrics?|series)\b", q):
+            uid = _ds_uid("prometheus")
+            if uid:
+                got = _gf("Prometheus — metric names", "list_prometheus_metric_names",
+                          {"datasourceUid": uid, "limit": 60}, "metrics")
+                if got:
+                    return got
+
+        # -- datasource inventory and reachability --------------------------------
+        if re.search(r"\b(datasources?|grafana)\b", q):
+            if re.search(r"\b(health|healthy|ok|reachable|working|connect|status)\b", q):
+                got = _gf("Grafana — datasource health", "check_datasources_health", {})
+                if got:
+                    return got
+            got = _gf("Grafana — datasources", "list_datasources", {})
+            if got:
+                return got
+
+        # -- what is firing --------------------------------------------------------
+        if re.search(r"\b(alerts?|alerting|firing|incidents?)\b", q):
+            got = (_gf("Grafana — alert groups", "list_alert_groups", {})
+                   or _gf("Grafana — incidents", "list_incidents", {}))
+            if got:
+                return got
+
+        # -- log lines -------------------------------------------------------------
+        if wants_loki and re.search(r"\blogs?\b", q):
+            uid = _ds_uid("loki")
+            if uid:
+                got = _gf("Loki — log volume", "query_loki_stats",
+                          {"datasourceUid": uid, "logql": '{container=~".+"}'})
+                if got:
+                    return got
+
+        # -- default: the inventory an operator means by "grafana" -----------------
+        got = _gf("Grafana — datasources", "list_datasources", {})
+        if got:
+            return got
 
     # 0) Proxmox / hypervisor. MUST come before every rule below, because Proxmox has
     #    nodes, storage and guests of its own — so each generic rule was claiming
@@ -1179,8 +1427,10 @@ def answer_infra(question: str) -> tuple[str, str, list, str]:
             # pushed the actual data down. The badge is the claim; the table is the evidence.
             #
             # NO code fence around the body either: it must reach the renderer as markdown.
-            # See _as_answer_body.
-            text = _as_answer_body(raw)
+            # See _as_answer_body — and note the flag: without `markdown=True` a body that
+            # has no table (the Loki label list) is still fenced, and `**6 label(s)**`
+            # arrives on screen wearing its asterisks.
+            text = _as_answer_body(raw, markdown=True)
             return text, "deterministic", (_TOOL_CALLS.get() or []), raw.strip()
 
     # A "what can you do" question names the domain but wants the capability list, not a
