@@ -38,6 +38,10 @@ export type Evidence = {
 const SERVER_LABEL: Record<string, string> = {
   rancher: "Rancher / Kubernetes",
   proxmox: "Proxmox VE",
+  // Added with the scope picker: it offers all four by name, so a card naming only two
+  // of them would show "grafana" in lowercase beside "Proxmox VE".
+  grafana: "Grafana",
+  postgres: "PostgreSQL",
 };
 
 function human(bytes?: number): string {
@@ -47,12 +51,19 @@ function human(bytes?: number): string {
 }
 
 export default function EvidenceCard({
-  evidence, calls, raw,
+  evidence, calls, raw, scope,
 }: {
   evidence?: Evidence | null;
   calls?: ToolCall[];
   /** The verbatim answer text, offered for copy/inspection. */
   raw?: string;
+  /**
+   * The connector scope the turn was ALLOWED to use (meta.servers_scope), which is a
+   * different claim from `evidence.servers` — what it actually used. Both are shown:
+   * "Grafana" alone would leave the reader unsure whether the restriction was applied
+   * or the other connectors simply had nothing to add.
+   */
+  scope?: string[] | null;
 }) {
   const [open, setOpen] = useState(false);
   const list = calls ?? [];
@@ -67,6 +78,14 @@ export default function EvidenceCard({
         <span className="text-emerald-700/80 dark:text-emerald-400/80">
           {servers.length ? servers.join(" · ") : "read-only MCP"}
         </span>
+        {scope?.length ? (
+          <span
+            className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-800 dark:bg-violet-900/50 dark:text-violet-300"
+            title="This conversation is limited to the connectors you selected"
+          >
+            scoped: {scope.map((s) => SERVER_LABEL[s] ?? s).join(" · ")}
+          </span>
+        ) : undefined}
         {evidence?.read_only && (
           <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
             read-only

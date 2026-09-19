@@ -9,6 +9,8 @@ export async function streamChat(
   llmProvider?: "auto" | "cloud" | "local",
   /** v1.6.55 — "auto" | "kb" | "infra": what the answer may draw on. */
   mode?: "auto" | "kb" | "infra",
+  /** Which connectors this turn may use. EMPTY/undefined = every enabled server. */
+  servers?: string[],
   signal?: AbortSignal
 ) {
   const res = await apiFetch(`${BASE}/api/chat/stream`, {
@@ -19,6 +21,10 @@ export async function streamChat(
       llm_provider: llmProvider ?? "auto",
       // v1.6.55 — omitted entirely when "auto" so the server default applies.
       mode: mode && mode !== "auto" ? mode : undefined,
+      // Omitted when empty: the server treats [] and undefined identically, and leaving
+      // the key out keeps an unscoped conversation byte-identical to what it was before
+      // scoping existed — which is what makes this change safe to ship with no flag.
+      servers: servers && servers.length ? servers : undefined,
     }),
     signal,
   });
@@ -104,4 +110,21 @@ export async function decideApproval(
     body: JSON.stringify({ decision }),
   });
   return r.json().catch(() => ({}));
+}
+
+/** The connectors a conversation can be scoped to (chat header picker).
+ *
+ * Returns an empty list for a role that cannot use infrastructure tools, and on any failure:
+ * the picker then hides itself and the chat behaves exactly as it did before scoping existed.
+ * An empty list is NEVER treated as "no servers" — see streamChat.
+ */
+export async function getMcpServers(): Promise<{ servers: { name: string; label: string; curated: boolean }[] }> {
+  try {
+    const r = await apiFetch(`${BASE}/api/mcp/servers`, { headers: authHeaders() });
+    if (!r.ok) return { servers: [] };
+    const j = await r.json();
+    return { servers: Array.isArray(j?.servers) ? j.servers : [] };
+  } catch {
+    return { servers: [] };
+  }
 }

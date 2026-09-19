@@ -225,6 +225,7 @@ function MessageBubble({
               evidence={message.evidence}
               calls={message.toolCalls}
               raw={message.rawOutput}
+              scope={message.serversScope}
             />
           )}
 

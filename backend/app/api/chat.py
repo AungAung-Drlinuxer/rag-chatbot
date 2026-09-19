@@ -192,7 +192,12 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 for ev in run_rag_graph_stream(req.message, history=req.context,
                                                top_k=req.top_k, user=user,
                                                thread_id=session_id,
-                                               mode=req.mode):
+                                               mode=req.mode,
+                                               # Per-conversation connector scope; None = all
+                                               # enabled servers. An empty list is normalised to None
+                                               # downstream, so an untouched picker widens rather
+                                               # than silently disabling infrastructure answers.
+                                               servers=req.servers):
                     if isinstance(ev, tuple) and ev[0] == "__FINAL__":
                         g = ev[1]
                     elif isinstance(ev, tuple) and len(ev) == 2:
@@ -360,6 +365,11 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
         # knowledge-base gap from a failed infrastructure lookup: both look like
         # "I couldn't find it", which is exactly the confusion the mode switch fixes.
         meta["mode"] = (req.mode or "auto").strip().lower()
+        # What the turn was ALLOWED to use, as opposed to `evidence.servers`, which is
+        # what it actually used. Both are needed: "scoped to grafana" and "used
+        # grafana" are different claims and the evidence card must not conflate them.
+        if req.servers:
+            meta["servers_scope"] = [str(x).strip().lower() for x in req.servers if str(x).strip()]
         meta["tool_note"] = getattr(result, "tool_note", None) or (
             "ok" if result.tool_used else None)
         # v1.6.65 — what was actually queried, and what that answer IS.

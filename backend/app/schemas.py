@@ -31,6 +31,19 @@ class ChatRequest(StrictModel):
     # the same explicit switch, otherwise a KB answer is indistinguishable from an
     # infrastructure answer and a silent tool failure looks like a KB miss.
     mode: str | None = None
+    # WHICH CONNECTORS THIS TURN MAY USE — a narrower question than `mode`.
+    #
+    # Measured reason it exists: a question names one system and the answer touches two.
+    # "Loki က label ဘာတွေရှိလဲ" ran on [grafana, rancher] and "Proxmox VMs list ပြပါ"
+    # on [proxmox, rancher], because the Kubernetes paths ask Rancher for a cluster id
+    # even when the question is not about Kubernetes. Scoping the conversation removes
+    # that second call from the answer AND from the evidence card.
+    #
+    # Names as the chat's scope picker shows them ("rancher", "proxmox", "grafana",
+    # "postgres"). None or [] means every enabled server — the pre-scope behaviour — so
+    # an untouched picker cannot silently disable infrastructure answers.
+    servers: list[str] | None = None
+
 
 
 class EscalateRequest(StrictModel):

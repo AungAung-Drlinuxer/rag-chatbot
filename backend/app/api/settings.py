@@ -809,6 +809,33 @@ def _connector_state(block: bool = False) -> dict:
     return state
 
 
+@router.get("/mcp/servers")
+def mcp_servers(user: str = Depends(get_current_user)) -> dict:
+    """The connectors a CONVERSATION can be scoped to — the chat's scope picker.
+
+    NOT `/connectors`: that one is the admin gallery, it lists connectors that are not
+    enabled, and it requires admin. This is read by the chat header for admins and agents —
+    the same two roles the infrastructure gate allows (see graph_rag._node_tools) — so it
+    deliberately exposes no URLs, tokens or settings, only the names a user may choose
+    between and whether each is actually usable right now.
+
+    An end user gets an empty list rather than a 403: their chat never shows the picker, and
+    a 403 would surface as an error banner in a UI that simply does not need the data.
+    """
+    from app.auth.rbac import get_role
+
+    if get_role(user) not in ("admin", "agent"):
+        return {"servers": [], "can_scope": False}
+    try:
+        from app.mcp.infra_agent import enabled_servers
+
+        return {"servers": enabled_servers(), "can_scope": True}
+    except Exception as exc:  # noqa: BLE001
+        # A broken MCP config must not break the chat page it is decorating.
+        logger.info("mcp/servers unavailable: %s: %s", type(exc).__name__, exc)
+        return {"servers": [], "can_scope": False}
+
+
 @router.get("/connectors")
 def list_connectors(user: str = Depends(get_current_user)) -> dict:
     """The gallery: catalogue grouped by category, each entry with its real state."""

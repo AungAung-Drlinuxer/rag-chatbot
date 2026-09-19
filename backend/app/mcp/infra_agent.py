@@ -42,6 +42,50 @@ logger = logging.getLogger("mcp.infra")
 _TOOL_CALLS: contextvars.ContextVar[list | None] = contextvars.ContextVar(
     "mcp_tool_calls", default=None)
 
+# Per-conversation connector scope: the subset of MCP servers THIS turn may use. None (the
+# default, and what every existing caller gets) means every enabled server.
+#
+# WHY IT EXISTS, measured: a question names one system and the answer still touched two.
+# "Loki က label ဘာတွေရှိလဲ" ran on [grafana, rancher] and "Proxmox VMs list ပြပါ" on
+# [proxmox, rancher] — the Grafana path resolves its datasource by calling grafana, but the
+# Kubernetes path had already asked rancher for a cluster id it was never going to use. On a
+# scoped conversation that second call is noise the operator did not ask for, and it is the
+# reason the evidence card shows a server the question had nothing to do with.
+_SERVER_SCOPE: contextvars.ContextVar[tuple[str, ...] | None] = contextvars.ContextVar(
+    "mcp_server_scope", default=None)
+
+
+def _in_scope(name: str) -> bool:
+    """Is this server allowed in the current turn? No scope set = everything allowed."""
+    scope = _SERVER_SCOPE.get()
+    return not scope or name in scope
+
+
+def server_scope() -> list[str] | None:
+    """The scope in force, as a list, or None for 'all enabled servers'."""
+    scope = _SERVER_SCOPE.get()
+    return list(scope) if scope else None
+
+
+def set_server_scope(names: list[str] | None) -> contextvars.Token:
+    """Apply a scope for the current context; pass the token to *reset_server_scope*.
+
+    Names are lower-cased and de-duplicated, and an EMPTY list is treated as "no scope"
+    rather than "no servers" — a request that sends `servers: []` (an untouched picker)
+    must not silently disable infrastructure answers.
+    """
+    clean = tuple(sorted({str(n).strip().lower() for n in (names or []) if str(n).strip()}))
+    return _SERVER_SCOPE.set(clean or None)
+
+
+def reset_server_scope(token: contextvars.Token) -> None:
+    try:
+        _SERVER_SCOPE.reset(token)
+    except ValueError:
+        # Token from a different context (a retry, or a thread hop). Falling back to "no
+        # scope" is always safe here: it widens rather than silently narrowing later turns.
+        _SERVER_SCOPE.set(None)
+
 
 def _begin_call_log() -> list:
     log: list = []
@@ -436,6 +480,11 @@ def build_tools():
     tools = []
     for spec in get_mcp_servers():
         if not spec.get("enabled") or not spec.get("url"):
+            continue
+        # Per-conversation scope. Skipped BEFORE the client is touched, so a scoped-out
+        # server costs nothing at all — no session, no catalogue fetch, no tools.
+        if not _in_scope(spec["name"]):
+            logger.info("mcp[%s] out of scope for this turn", spec["name"])
             continue
         client = get_client(spec["name"])
         try:
@@ -1155,12 +1204,20 @@ def _cluster_ref(call) -> str:
     if str(cfg.get("mode") or "") != "rancher":
         return "kubeconfig:local"
 
+    # A scoped-out rancher cannot be asked for its cluster inventory. Return what is known
+    # (or the safe default) WITHOUT a call — otherwise a Grafana-only conversation would
+    # still pay a rancher round trip, which is the exact noise the scope exists to remove.
+    if not _in_scope("rancher"):
+        return _CLUSTER_REF_CACHE.get("value") or "local"
+
     # Cached, because this runs on EVERY deterministic question — including Grafana and
     # Proxmox ones that have nothing to do with Kubernetes — and without the cache each of
     # them paid an extra cluster_list round trip (~300 ms measured) just to name a cluster
     # it was never going to use. A cluster inventory changes on the order of minutes, so a
     # five-minute TTL is generous; a failed resolve is not cached.
-    global _CLUSTER_REF_CACHE
+    # No `global` here: this only reads the dict and calls .update() on it, and
+    # declaring it after the read above made the module fail to import entirely.
+    # (Measured: `SyntaxError: name '_CLUSTER_REF_CACHE' is used prior to global`.)
     now = time.monotonic()
     hit = _CLUSTER_REF_CACHE.get("value")
     if hit and now - _CLUSTER_REF_CACHE.get("at", 0.0) < 300.0:
@@ -1469,8 +1526,25 @@ def _deterministic_lookup(question: str, tools):
     return ""
 
 
-def answer_infra(question: str) -> tuple[str, str, list, str]:
-    """(text, note, calls, raw). note is "deterministic" | "ok" | "failed".
+def answer_infra(question: str, servers: list[str] | None = None) -> tuple[str, str, list, str]:
+    """Answer from the live estate, optionally restricted to a subset of connectors.
+
+    `servers` is the per-conversation connector scope: names as the UI shows them
+    (`rancher`, `proxmox`, `grafana`, `postgres`). None or empty means every enabled
+    server, which is what every pre-scope caller sends and what keeps this change
+    backwards-compatible. An UNKNOWN name in the list is harmless — it simply matches
+    nothing — and the scope is reset afterwards even when the answer raises, so a scoped
+    turn can never leak its restriction into the next question on the same worker.
+    """
+    token = set_server_scope(servers)
+    try:
+        return _answer_infra_scoped(question)
+    finally:
+        reset_server_scope(token)
+
+
+def _answer_infra_scoped(question: str) -> tuple[str, str, list, str]:
+    """(text, note, calls, raw), with the connector scope already in force.
 
     `text` is what gets shown as the answer; `raw` is the verbatim tool output.
 
@@ -1522,6 +1596,37 @@ def answer_infra(question: str) -> tuple[str, str, list, str]:
     if text:
         return text, "ok", (_TOOL_CALLS.get() or []), ""
     return "", "failed", (_TOOL_CALLS.get() or []), ""
+
+
+def enabled_servers() -> list[dict]:
+    """The connectors a conversation can be scoped to, for the chat's scope picker.
+
+    Deliberately NOT `agent_status()`: that one opens a session and fetches every server's
+    catalogue to report tool counts, which is right for a diagnostics panel and wrong here —
+    this runs every time the chat page mounts. Only the settings row and reachability of the
+    *shared* session are needed, and a server with no curated tools is left out entirely
+    because scoping to it could only ever produce an empty answer.
+    """
+    from app.mcp.client import get_mcp_servers
+
+    out: list[dict] = []
+    for spec in get_mcp_servers():
+        if not spec.get("enabled") or not spec.get("url"):
+            continue
+        curated = CURATED_BY_SERVER.get(spec["name"], ())
+        out.append({
+            "name": spec["name"],
+            "label": spec["name"],          # the UI prettifies; keep the wire format plain
+            # NO url. An earlier revision returned spec["url"] while this docstring
+            # claimed otherwise — a real leak of internal service addresses
+            # (http://rancher-mcp-mgmt:8080 and friends) to any signed-in admin or
+            # agent, on a page whose only job is to render four names. The transport
+            # is the server's own business; the picker only needs to name it.
+            # A connector added from the gallery has no explicit allowlist — it is exposed
+            # by the read-verb rule, so "has a curated set" is not a reason to hide it.
+            "curated": bool(curated),
+        })
+    return out
 
 
 def agent_status() -> dict:

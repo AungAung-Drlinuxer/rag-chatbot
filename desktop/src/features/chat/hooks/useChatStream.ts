@@ -25,6 +25,8 @@ export async function runChatStream(
   llmProvider?: "auto" | "cloud" | "local",
   /** v1.6.55 — "auto" | "kb" | "infra": what the answer may draw on. */
   mode?: "auto" | "kb" | "infra",
+  /** Which connectors this turn may use. EMPTY = every enabled server. */
+  servers?: string[],
   signal?: AbortSignal
 ): Promise<string> {
   let streamed = "";
@@ -58,6 +60,6 @@ export async function runChatStream(
     } else if (e.event === "done") {
       h.onDone(e.data ?? {});
     }
-  }, llmProvider, mode, signal);
+  }, llmProvider, mode, servers, signal);
   return streamed;
 }

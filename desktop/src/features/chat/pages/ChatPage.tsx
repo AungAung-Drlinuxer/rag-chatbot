@@ -14,13 +14,10 @@ import {
   type FormEvent,
 } from "react";
 
-import {
-  decideApproval,
-  uploadAttachment,
-  submitFeedback as pushFeedback,
-} from "@/features/chat/api";
+import { decideApproval, getMcpServers, submitFeedback as pushFeedback, uploadAttachment } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import ComposerControls, { ModeControl } from "@/features/chat/components/ComposerControls";
+import ScopeControl from "@/features/chat/components/ScopeControl";
 import MessageBubble from "@/features/chat/components/MessageBubble";
 import SessionPanel from "@/features/chat/components/SessionPanel";
 import {
@@ -92,6 +89,12 @@ export default function Chat({
   // it a KB answer and an infrastructure answer look identical, and a failed tool
   // lookup reads as "no such information in the knowledge base".
   const [chatMode, setChatMode] = useState<"auto" | "kb" | "infra">("auto");
+
+  // Per-conversation connector scope. EMPTY = every enabled server, which is what the
+  // conversation used before scoping existed — so a failure to load this list degrades to
+  // today's behaviour rather than to a chat that cannot reach the infrastructure.
+  const [chatServers, setChatServers] = useState<string[]>([]);
+  const [mcpServers, setMcpServers] = useState<{ name: string; label: string; curated: boolean }[]>([]);
   // v1.6.65 — "Ask this in Infrastructure mode" re-sends a previous question without
   // making the user retype it. State updates are async, so the override travels in a
   // ref that sendMessage consumes once.
@@ -119,7 +122,20 @@ export default function Chat({
       .catch(() => setConversations([]));
   }
 
+    // The scope picker's options. Read once: the connector set changes in Settings, not
+  // mid-conversation, and a failed read leaves the list empty so the control hides itself.
   useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const j = await getMcpServers();
+        if (live && j.servers.length) setMcpServers(j.servers);
+      } catch { /* picker stays hidden; the chat is unaffected */ }
+    })();
+    return () => { live = false; };
+  }, []);
+
+useEffect(() => {
     refreshConversations();
     const handleOpen = (e: any) => {
       const id = e?.detail;
@@ -225,6 +241,7 @@ export default function Chat({
     // selection, which is what lets "Ask this in Infrastructure mode" work without
     // first mutating the control and waiting for a re-render.
     const sendMode = override?.mode ?? chatMode;
+    const sendServers = chatServers;
     if (!question || isTyping) return;
 
     // v0.21.36 — append attachment links to the outgoing message
@@ -278,6 +295,10 @@ export default function Chat({
                       toolCalls: (meta as any).tool_calls || undefined,
                       evidence: (meta as any).evidence || null,
                       rawOutput: (meta as any).raw_output || undefined,
+                      // meta.servers_scope is what the turn was ALLOWED to reach; the
+                      // evidence card shows it next to what it actually used, so a
+                      // restricted turn is visibly restricted rather than merely quiet.
+                      serversScope: (meta as any).servers_scope || undefined,
                       sources: (meta.hits ?? []).map((h: any) => ({
                         page_id: h.page_id ?? null,
                         title: h.title ?? "Untitled",
@@ -357,6 +378,7 @@ export default function Chat({
         },
         llmProvider,
         sendMode,
+        sendServers,
       );
       historyRef.current = [
         ...historyRef.current,
@@ -740,6 +762,16 @@ export default function Chat({
               onModeChange={setChatMode}
               className="sm:hidden"
             />
+            {/* Same placement rule as the mode control: a session-level setting belongs
+                in the header on a phone, where the composer keeps only attach / send.
+                Hidden in knowledge-base mode, where scoping connectors cannot change
+                anything. */}
+            <ScopeControl
+              servers={mcpServers}
+              value={chatServers}
+              onChange={setChatServers}
+              className={chatMode === "kb" ? "hidden" : "sm:hidden"}
+            />
             {/* v1.6.65 — the panel was `hidden xl:flex`, so on a phone (where this app
                 is mostly used) "what produced this answer" was unreachable. This opens
                 it inline BELOW the header, so it participates in layout and can never
@@ -853,6 +885,9 @@ export default function Chat({
                 onModeChange={setChatMode}
                 engine={llmProvider}
                 onEngineChange={setLlmProvider}
+                servers={mcpServers}
+                scope={chatServers}
+                onScopeChange={setChatServers}
               />
               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-2 shadow-xs transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900/80 dark:focus-within:bg-slate-900">
                 <button

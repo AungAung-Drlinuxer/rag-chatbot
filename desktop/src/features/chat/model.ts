@@ -50,6 +50,10 @@ export type Message = {
   } | null;
   /** v1.6.68 — verbatim tool output; shown only in the evidence card's viewer. */
   rawOutput?: string;
+  /** Which connectors the turn was ALLOWED to use (meta.servers_scope). Absent when the
+   *  conversation is unscoped, which is the default — so its absence means 'all', not
+   *  'none', and it must never be coerced to an empty array by a `?? []`. */
+  serversScope?: string[];
   latencyMs?: number;
   serverId?: string;  // v0.21.90 — DB row id from the done event (feedback target)
   feedback?: 1 | -1;  // v0.21.90 — recorded rating (button state)

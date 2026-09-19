@@ -264,3 +264,101 @@ def test_a_failed_resolve_is_not_cached():
     finally:
         client.get_mcp_cfg = real
         ia._CLUSTER_REF_CACHE.clear()
+
+# ---------------------------------------------------------------- connector scope
+
+
+def test_an_empty_scope_means_every_server():
+    """`servers: []` is an untouched picker, not a request for no servers at all.
+
+    Getting this backwards would silently disable infrastructure answers for every client
+    that sends an empty list — a failure that looks like "the tools are down".
+    """
+    import app.mcp.infra_agent as ia
+
+    tok = ia.set_server_scope([])
+    try:
+        assert ia.server_scope() is None
+        assert ia._in_scope("rancher") and ia._in_scope("grafana")
+    finally:
+        ia.reset_server_scope(tok)
+
+    tok = ia.set_server_scope(None)
+    try:
+        assert ia.server_scope() is None
+        assert ia._in_scope("anything")
+    finally:
+        ia.reset_server_scope(tok)
+
+
+def test_a_scope_restricts_and_is_normalised():
+    import app.mcp.infra_agent as ia
+
+    tok = ia.set_server_scope(["Grafana", "grafana", "  "])
+    try:
+        assert ia.server_scope() == ["grafana"]
+        assert ia._in_scope("grafana")
+        assert not ia._in_scope("rancher")
+    finally:
+        ia.reset_server_scope(tok)
+
+
+def test_the_scope_is_reset_even_when_the_answer_raises():
+    """A scoped turn must not leak its restriction into the next question on the worker."""
+    import app.mcp.infra_agent as ia
+
+    real = ia._answer_infra_scoped
+    try:
+        def boom(q):
+            assert ia.server_scope() == ["grafana"]     # scope in force inside the call
+            raise RuntimeError("tool exploded")
+
+        ia._answer_infra_scoped = boom
+        try:
+            ia.answer_infra("q", servers=["grafana"])
+        except RuntimeError:
+            pass
+        assert ia.server_scope() is None, "scope leaked after a failed turn"
+    finally:
+        ia._answer_infra_scoped = real
+
+
+def test_a_scoped_out_rancher_is_not_asked_for_clusters():
+    """The point of the scope: a Grafana-only turn must not pay a Rancher round trip."""
+    import app.mcp.infra_agent as ia
+    import app.mcp.client as client
+
+    real = client.get_mcp_cfg
+    calls = {"n": 0}
+
+    def counting_call(name, args):
+        calls["n"] += 1
+        return '[{"id": "c-m-k6rln5bs", "name": "drlinuxer-prod"}]'
+
+    try:
+        client.get_mcp_cfg = lambda: {"mode": "rancher"}
+        ia._CLUSTER_REF_CACHE.clear()
+        tok = ia.set_server_scope(["grafana"])
+        try:
+            ref = ia._cluster_ref(counting_call)
+        finally:
+            ia.reset_server_scope(tok)
+        assert calls["n"] == 0, f"cluster_list called {calls['n']} times with rancher scoped out"
+        assert ref == "local"
+    finally:
+        client.get_mcp_cfg = real
+        ia._CLUSTER_REF_CACHE.clear()
+
+
+def test_enabled_servers_shapes_the_picker_payload():
+    import app.mcp.infra_agent as ia
+
+    out = ia.enabled_servers()
+    assert isinstance(out, list)
+    for row in out:
+        assert set(row) == {"name", "label", "curated"}, row
+        # The picker names connectors; it has no business shipping the transport.
+        # An earlier revision returned `url`, i.e. http://rancher-mcp-mgmt:8080 and
+        # friends, to every admin/agent browser. Assert the ABSENCE, not just the shape.
+        assert "url" not in row and "token" not in row
+        assert str(row["name"]).islower()

@@ -53,6 +53,11 @@ class RAGState(TypedDict):
     # v1.6.55 — "kb" | "infra" | None (auto). Declared here because LangGraph only
     # carries keys the state type declares.
     mode: str | None
+    # WHICH CONNECTORS the turn may use — the per-conversation scope. None = all enabled.
+    # A separate key from `mode` on purpose: `mode` decides whether live tooling is used
+    # at all, this decides which of it. Declared here because LangGraph only carries keys
+    # the state type declares.
+    servers: list[str] | None
     # Why the tool path ended the way it did: "ok" | "failed" | "error" |
     # "not_permitted". Surfaced to the UI so a tool failure is never mistaken for a
     # knowledge-base gap.
@@ -183,7 +188,8 @@ def _node_tools(state: RAGState) -> dict:
                                             "knowledge base.\n\n"
                                             + (state.get("context") or ""))}
                 elif mode == "infra" or detect_infra_intent(q):
-                    findings, note, tool_calls, raw_output = answer_infra(q)
+                    findings, note, tool_calls, raw_output = answer_infra(
+                        q, servers=state.get("servers"))
                     if findings:
                         logger.info("infra agent answered %r (%d chars, %s)",
                                     q[:40], len(findings), note)
@@ -517,7 +523,8 @@ STAGE_LABELS = {
 
 def run_rag_graph_stream(query: str, history: list[dict] | None = None,
                          top_k: int | None = None, user: str | None = None,
-                         thread_id: str | None = None, mode: str | None = None):
+                         thread_id: str | None = None, mode: str | None = None,
+                         servers: list[str] | None = None):
     """Generator version: yields (stage_label) as each node completes, then the
     final dict at the end (same shape as run_rag_graph). Powers SSE progress
     feedback so the UI can show what the pipeline is doing (v0.21.90)."""
@@ -530,6 +537,9 @@ def run_rag_graph_stream(query: str, history: list[dict] | None = None,
         "tool_used": None, "needs_approval": False,
         # v1.6.55 — "kb" | "infra" | None(auto), chosen in the composer.
         "mode": mode, "tool_note": None,
+        # The per-conversation connector scope. None/[] = every enabled server,
+        # which is what every caller sent before this existed.
+        "servers": servers,
         "thread_id": thread_id or user or "default",
         "approval_status": "pending", "ticket_id": None,
         "escalation_messages": [], "ticket_rows": [],

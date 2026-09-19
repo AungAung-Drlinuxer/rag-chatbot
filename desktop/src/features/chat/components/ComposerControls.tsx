@@ -14,6 +14,7 @@
  * wrapping, and the active state carries the only colour.
  */
 import { useEffect, useRef, useState } from "react";
+import ScopeControl, { type McpServer } from "@/features/chat/components/ScopeControl";
 
 export type Option<T extends string> = {
   value: T;
@@ -159,11 +160,17 @@ export function ModeControl({
 
 export default function ComposerControls({
   mode, onModeChange, engine, onEngineChange,
+  servers = [], scope = [], onScopeChange,
 }: {
   mode: "auto" | "kb" | "infra";
   onModeChange: (v: "auto" | "kb" | "infra") => void;
   engine: "auto" | "cloud" | "local";
   onEngineChange: (v: "auto" | "cloud" | "local") => void;
+  /** Connectors the conversation may use. An empty list hides the control. */
+  servers?: McpServer[];
+  /** Selected connector names. EMPTY = every enabled server. */
+  scope?: string[];
+  onScopeChange?: (v: string[]) => void;
 }) {
   return (
     <div className="mb-1.5 flex items-center gap-1.5 px-1">
@@ -204,6 +211,11 @@ export default function ComposerControls({
           ) : undefined
         }
       />
+      {/* Hidden in knowledge-base mode: with documents-only answers there is no
+          connector to scope, and a visible-but-inert control reads as a bug. */}
+      {onScopeChange && mode !== "kb" && (
+        <ScopeControl servers={servers} value={scope} onChange={onScopeChange} />
+      )}
     </div>
   );
 }

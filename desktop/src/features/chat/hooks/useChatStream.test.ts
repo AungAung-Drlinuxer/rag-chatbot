@@ -88,9 +88,10 @@ describe("runChatStream", () => {
     });
     expect(streamChat).toHaveBeenCalledWith(
       // 5th = llmProvider, 6th = mode (v1.6.55, what the answer may draw on),
-      // 7th = AbortSignal. Both optionals are undefined when the caller omits them.
+      // 7th = connector scope (which servers this turn may use),
+      // 8th = AbortSignal. All three optionals are undefined when the caller omits them.
       "why", "sess-9", [{ role: "user", content: "hi" }], expect.any(Function),
-      undefined, undefined, undefined
+      undefined, undefined, undefined, undefined
     );
   });
 
@@ -101,7 +102,34 @@ describe("runChatStream", () => {
       onApprovalRequest: vi.fn(), onDone: vi.fn(),
     }, "auto", "infra");
     expect(streamChat).toHaveBeenCalledWith(
-      "why", "sess-9", [], expect.any(Function), "auto", "infra", undefined
+      "why", "sess-9", [], expect.any(Function), "auto", "infra", undefined, undefined
+    );
+  });
+
+  it("forwards the connector scope through to streamChat", async () => {
+    (globalThis as any).__emit = () => {};
+    await runChatStream("why", "sess-9", [], {
+      onMeta: vi.fn(), onToken: vi.fn(), onStage: vi.fn(),
+      onApprovalRequest: vi.fn(), onDone: vi.fn(),
+    }, "auto", "infra", ["grafana"]);
+    // Position matters: `servers` sits BETWEEN mode and signal, so a caller that still
+    // passes the signal 7th would send an AbortSignal as the scope and silently scope
+    // the turn to nothing.
+    expect(streamChat).toHaveBeenCalledWith(
+      "why", "sess-9", [], expect.any(Function), "auto", "infra", ["grafana"], undefined
+    );
+  });
+
+  it("sends no scope when none is selected, so the turn stays unscoped", async () => {
+    (globalThis as any).__emit = () => {};
+    await runChatStream("why", "sess-9", [], {
+      onMeta: vi.fn(), onToken: vi.fn(), onStage: vi.fn(),
+      onApprovalRequest: vi.fn(), onDone: vi.fn(),
+    }, "auto", "infra", []);
+    // [] is passed through as [] by the hook; streamChat is what drops it. Asserting the
+    // array (not undefined) here pins WHICH layer owns that conversion.
+    expect(streamChat).toHaveBeenCalledWith(
+      "why", "sess-9", [], expect.any(Function), "auto", "infra", [], undefined
     );
   });
 });
