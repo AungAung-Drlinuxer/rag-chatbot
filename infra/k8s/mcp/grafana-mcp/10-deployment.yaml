@@ -14,11 +14,26 @@
 #                     addressed as grafana-mcp:8000. "*" is correct HERE only because the
 #                     Service is ClusterIP and nothing outside the cluster can reach it.
 #
-# NO GRAFANA TOKEN IN THIS MANIFEST, ON PURPOSE
-# The Grafana service-account token is supplied PER REQUEST as the connector's bearer
-# token and forwarded upstream, exactly like the Rancher management token. That keeps the
-# credential out of the cluster manifest, lets a Rancher/Grafana role decide what is
-# visible, and means revoking it is a Grafana-side action with no redeploy.
+# NO GRAFANA TOKEN IN THIS MANIFEST, ON PURPOSE — but NOT for the reason first assumed.
+#
+# The original design supplied the Grafana service-account token PER REQUEST as the
+# connector's bearer token, on the assumption that mcp-grafana forwards the caller's
+# Authorization header upstream like the Rancher management server does. **It does not.**
+# Measured against this build: `--help` offers no header-forwarding option and no
+# `--grafana-token`; the only Grafana credential inputs are environment variables
+# (GRAFANA_URL + GRAFANA_SERVICE_ACCOUNT_TOKEN). So a token pasted into Settings arrived at
+# the backend, was attached to the request, and was then ignored — every tool answered
+# `401 getDataSourcesUnauthorized` with a perfectly valid token sitting unused.
+#
+# The credential therefore comes from a Secret, like every other one in this estate:
+#   kubectl -n rag-chatbot create secret generic grafana-mcp-credentials \
+#     --from-literal=GRAFANA_SERVICE_ACCOUNT_TOKEN='glsa_...'
+#
+# TRADE-OFF, stated plainly: one service account means every user queries Grafana as that
+# one identity, so Grafana-side per-user RBAC is not enforced. Reach it through Grafana's
+# folder/datasource permissions on the service account, or run a header-forwarding build
+# and go back to per-request tokens. What must not happen is the token being silently
+# dropped: `401 with a valid token` is the failure mode to watch for.
 apiVersion: v1
 kind: Service
 metadata:
@@ -75,6 +90,15 @@ spec:
           env:
             - name: GRAFANA_URL
               value: "http://10.10.10.18:3000"
+            # The ONLY way this server receives a Grafana credential. Optional so the pod
+            # still starts without it (healthz works, tool LISTING works) and the failure is
+            # a visible 401 on a query rather than a crash loop.
+            - name: GRAFANA_SERVICE_ACCOUNT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-mcp-credentials
+                  key: GRAFANA_SERVICE_ACCOUNT_TOKEN
+                  optional: true
           ports:
             - name: sse
               containerPort: 8000

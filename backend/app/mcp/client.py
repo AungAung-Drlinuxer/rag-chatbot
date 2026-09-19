@@ -158,6 +158,20 @@ class McpClient:
                 u = u[: -len(suffix)]
         return u
 
+    def _sse_headers(self, accept: str = "text/event-stream") -> dict:
+        """Headers for an SSE request, INCLUDING the token.
+
+        The token was only ever attached on the streamable-HTTP path, so any connector whose
+        transport is `sse` silently sent nothing — a Grafana service-account token could be
+        saved in Settings, arrive at the client, and still be dropped on the wire, leaving
+        every query answered 401 with the token sitting unused. The SSE GET and the SSE POST
+        are one session with the server, so both halves have to carry it.
+        """
+        headers = {"Accept": accept}
+        if self.rancher_token:
+            headers["Authorization"] = "Bearer " + self.rancher_token
+        return headers
+
     def _sse_open(self) -> None:
         """Open the event stream and learn the message endpoint."""
         if self._sse_started:
@@ -174,7 +188,7 @@ class McpClient:
                     # "…/sse/sse" -> 404 -> "endpoint not advertised", which is how both
                     # new connectors failed on first contact.
                     with client.stream("GET", self._sse_base() + "/sse",
-                                       headers={"Accept": "text/event-stream"}) as r:
+                                       headers=self._sse_headers()) as r:
                         r.raise_for_status()
                         event = None
                         for line in r.iter_lines():
@@ -229,14 +243,16 @@ class McpClient:
         # same base for both halves makes either URL form work.
         if notify:
             with httpx.Client(timeout=self.timeout) as client:
-                client.post(self._sse_base() + self._sse_endpoint, json=body).raise_for_status()
+                client.post(self._sse_base() + self._sse_endpoint, json=body,
+                            headers=self._sse_headers("application/json")).raise_for_status()
             return {}
 
         q: queue.Queue = queue.Queue()
         self._sse_q[rid] = q
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                client.post(self._sse_base() + self._sse_endpoint, json=body).raise_for_status()
+                client.post(self._sse_base() + self._sse_endpoint, json=body,
+                            headers=self._sse_headers("application/json")).raise_for_status()
             msg = q.get(timeout=timeout or self.timeout)
         except queue.Empty:
             raise RuntimeError(f"MCP SSE timeout waiting for {method}")
