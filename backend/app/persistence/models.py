@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import (
     Integer,
     Boolean,
+    Text,
     JSON,
     BigInteger,
     DateTime,
@@ -52,6 +53,9 @@ class ChatSession(Base):
     # v0.21.38 — conversation management
     title: Mapped[str | None] = mapped_column(String(200))
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # JSON array of connector names this conversation is restricted to. NULL/"" = every
+    # enabled server, which is what every conversation meant before this column existed.
+    connector_scope: Mapped[str | None] = mapped_column(Text)
 
 
 class ChatMessage(Base):

@@ -15,6 +15,20 @@ from app.persistence.models import ChatSession, ChatMessage
 
 router = APIRouter()
 
+def _decode_scope(raw: str | None) -> list[str]:
+    """Stored TEXT -> list of server names. Anything unreadable reads as unscoped.
+
+    Deliberately forgiving: a corrupt value must widen the conversation back to every
+    connector, never narrow it to none. `[]` from here means "no restriction".
+    """
+    if not raw:
+        return []
+    try:
+        val = json.loads(raw)
+    except Exception:  # noqa: BLE001
+        return []
+    return [str(x) for x in val if str(x).strip()] if isinstance(val, list) else []
+
 @router.get("/api/conversations")
 def list_conversations(user: str = Depends(get_current_user), limit: int = 20) -> dict:
     """Recent conversations for the current user (RECENT CONVERSATIONS sidebar)."""
@@ -31,6 +45,7 @@ def list_conversations(user: str = Depends(get_current_user), limit: int = 20) -
                 func.count(ChatMessage.id).label("messages"),
                 ChatSession.title,
                 ChatSession.is_pinned,
+                ChatSession.connector_scope,
             )
             .join(ChatMessage, ChatMessage.session_id == ChatSession.id)
             .filter(ChatSession.username == user)
@@ -73,6 +88,9 @@ def list_conversations(user: str = Depends(get_current_user), limit: int = 20) -
                 "last_at": r[1].isoformat() if r[1] else None,
                 "messages": r[2],
                 "is_pinned": bool(r[4]),
+                # Restores the picker when the conversation is reopened. [] = every
+                # connector, which is also what a pre-existing row means (NULL).
+                "connector_scope": _decode_scope(r[5]),
             })
         return {"conversations": convs}
     finally:
@@ -98,8 +116,17 @@ def update_conversation(session_id: str, payload: dict, user: str = Depends(get_
             sess.title = title or None
         if "is_pinned" in payload:
             sess.is_pinned = bool(payload.get("is_pinned"))
+        if "connector_scope" in payload:
+            # Validated against the LIVE server list before it is stored: a name that
+            # survives here becomes a scope later, and a scope matching no server
+            # answers every question with "no tools matched".
+            from app.mcp.infra_agent import validate_scope
+
+            clean = validate_scope(payload.get("connector_scope"))
+            sess.connector_scope = json.dumps(clean) if clean else None
         s.commit()
-    return {"ok": True, "title": sess.title, "is_pinned": sess.is_pinned}
+    return {"ok": True, "title": sess.title, "is_pinned": sess.is_pinned,
+            "connector_scope": _decode_scope(sess.connector_scope)}
 
 
 @router.get("/api/conversations/{session_id}/messages")
@@ -119,6 +146,7 @@ def conversation_messages(session_id: str, user: str = Depends(get_current_user)
         sess = s.get(ChatSession, sid)
         if sess is None or sess.username != user:
             raise HTTPException(status_code=404, detail="Conversation not found")
+        scope = _decode_scope(sess.connector_scope)
         rows = (
             s.query(ChatMessage)
             .filter(ChatMessage.session_id == sid)
@@ -143,7 +171,10 @@ def conversation_messages(session_id: str, user: str = Depends(get_current_user)
                 "caution": caution,
                 "message_id": str(m.id),  # v0.21.90 — real row id so feedback survives reload
             })
-        return {"session_id": session_id, "messages": messages}
+        return {"session_id": session_id, "messages": messages,
+                # The picker restores from here on reload — reading it off the messages
+                # would tie a conversation-level setting to per-message metadata.
+                "connector_scope": scope}
     finally:
         s.close()
 

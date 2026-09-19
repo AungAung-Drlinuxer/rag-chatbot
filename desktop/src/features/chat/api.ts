@@ -128,3 +128,18 @@ export async function getMcpServers(): Promise<{ servers: { name: string; label:
     return { servers: [] };
   }
 }
+
+/** Persist a conversation-level setting (currently only the connector scope).
+ *
+ * PATCHes `/api/conversations/{id}` — the same endpoint the sidebar uses to rename and
+ * pin, so the ownership check and the 404 semantics are already in place.
+ */
+export async function patchConversation(sessionId: string, body: Record<string, unknown>) {
+  const r = await apiFetch(`${BASE}/api/conversations/${sessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`patch conversation failed: ${r.status}`);
+  return r.json();
+}

@@ -1598,6 +1598,27 @@ def _answer_infra_scoped(question: str) -> tuple[str, str, list, str]:
     return "", "failed", (_TOOL_CALLS.get() or []), ""
 
 
+def validate_scope(names) -> list[str]:
+    """Keep only names that are real, ENABLED servers, in configured order.
+
+    Validation on WRITE, not on read, and that is the whole point: a bogus name persisted
+    into a conversation would later become a scope that matches no server, and an empty
+    tool list answers every question with "no tools matched" — a failure that reads as
+    "the tools are down", three screens away from the typo that caused it.
+
+    Returns [] for anything unusable, and [] means UNSCOPED (every server), never "none".
+    """
+    wanted = {str(n).strip().lower() for n in (names or []) if str(n).strip()}
+    if not wanted:
+        return []
+    try:
+        known = enabled_servers()
+    except Exception:  # noqa: BLE001 — a config read failure must not block a chat
+        return []
+    # Configured order, not request order: the stored value then round-trips to the same
+    # label and the same tool-list order however the client happened to send it.
+    return [s["name"] for s in known if s["name"] in wanted]
+
 def enabled_servers() -> list[dict]:
     """The connectors a conversation can be scoped to, for the chat's scope picker.
 

@@ -14,7 +14,13 @@ import {
   type FormEvent,
 } from "react";
 
-import { decideApproval, getMcpServers, submitFeedback as pushFeedback, uploadAttachment } from "@/features/chat/api";
+import {
+  decideApproval,
+  getMcpServers,
+  patchConversation,
+  submitFeedback as pushFeedback,
+  uploadAttachment,
+} from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import ComposerControls, { ModeControl } from "@/features/chat/components/ComposerControls";
 import ScopeControl from "@/features/chat/components/ScopeControl";
@@ -186,12 +192,32 @@ useEffect(() => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /**
+   * The picker writes through to the conversation.
+   *
+   * Best-effort on purpose: a brand-new conversation has no row yet, so this 404s until the
+   * first message — and the stream endpoint persists the same value anyway. Failing here
+   * must not block the composer, so the local state is set first and nothing is awaited by
+   * the caller.
+   */
+  function changeScope(next: string[]) {
+    setChatServers(next);
+    const id = sessionRef.current;
+    if (!id) return;
+    patchConversation(id, { connector_scope: next }).catch(() => { /* row not created yet */ });
+  }
+
+
   async function openConversation(id: string) {
     setSelectedConversation(id);
     sessionRef.current = id;
     setMobileHistory(false);
     try {
       const r: any = await getConversationMessages(id);
+      // Restore this conversation's connector scope. [] decodes to unscoped, which is also
+      // what a pre-existing row means (NULL) — so an old conversation keeps today's
+      // behaviour rather than becoming unreachable.
+      setChatServers(Array.isArray(r?.connector_scope) ? r.connector_scope : []);
       const list: Message[] = (r.messages ?? []).map((m: any, i: number) => ({
         id: `${id}-${i}`,
         role: m.role,
@@ -483,6 +509,7 @@ useEffect(() => {
     setInput("");
     setSelectedConversation("");
     sessionRef.current = crypto.randomUUID();
+
     historyRef.current = [];
     setMobileHistory(false);
     setStage("");
@@ -769,7 +796,7 @@ useEffect(() => {
             <ScopeControl
               servers={mcpServers}
               value={chatServers}
-              onChange={setChatServers}
+              onChange={changeScope}
               className={chatMode === "kb" ? "hidden" : "sm:hidden"}
             />
             {/* v1.6.65 — the panel was `hidden xl:flex`, so on a phone (where this app
@@ -887,7 +914,7 @@ useEffect(() => {
                 onEngineChange={setLlmProvider}
                 servers={mcpServers}
                 scope={chatServers}
-                onScopeChange={setChatServers}
+                onScopeChange={changeScope}
               />
               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-2 shadow-xs transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900/80 dark:focus-within:bg-slate-900">
                 <button

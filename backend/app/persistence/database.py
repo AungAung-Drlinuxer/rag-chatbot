@@ -25,6 +25,9 @@ def init_db() -> None:
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS meta TEXT"))
+            # Per-conversation connector scope, JSON array of server names (TEXT, like
+            # chat_messages.meta — this schema stores JSON as TEXT, not jsonb).
+            conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS connector_scope TEXT"))
             conn.execute(text("ALTER TABLE kb_meta ADD COLUMN IF NOT EXISTS body TEXT"))
             conn.execute(text("ALTER TABLE kb_meta ADD COLUMN IF NOT EXISTS updated_by VARCHAR(64)"))
             conn.execute(text("ALTER TABLE jira_tickets ADD COLUMN IF NOT EXISTS subject VARCHAR(200)"))

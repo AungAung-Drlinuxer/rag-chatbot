@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Options — action list</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#f1f5f9; --panel:#fff; --soft:#f8fafc; --line:#e2e8f0;
+    --fg:#0f172a; --muted:#64748b; --faint:#94a3b8;
+    --accent:#2563eb; --violet:#7c3aed;
+  }
+  html,body{height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+       -webkit-font-smoothing:antialiased;color:var(--fg);background:var(--bg);
+       display:flex;align-items:center;justify-content:center;padding:24px}
+  .phone{width:390px;max-width:100%;height:760px;background:var(--panel);border-radius:28px;
+         border:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;
+         position:relative;box-shadow:0 20px 50px -20px rgba(15,23,42,.25)}
+  .bar{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .bar .t{font-size:13px;font-weight:650;letter-spacing:-.01em}
+  .bar .s{margin-left:auto;font-size:11px;color:var(--faint)}
+  .thread{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px;background:var(--soft)}
+  .msg{max-width:88%;font-size:12.5px;line-height:1.55;border-radius:14px;padding:9px 12px}
+  .me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .ai{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:5px}
+  .ai b{font-weight:650}
+  .ev{align-self:flex-start;font-size:10.5px;color:#0f766e;background:#ecfdf5;border:1px solid #a7f3d0;
+      border-radius:9px;padding:6px 9px}
+  .comp{padding:10px 12px 14px;border-top:1px solid var(--line);background:#fff;position:relative}
+  .row{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:550;color:var(--muted);
+        background:#f1f5f9;border:1px solid transparent;border-radius:999px;padding:4px 9px;cursor:pointer}
+  .pill.v{color:var(--violet);border-color:#ddd6fe;background:#f5f3ff}
+  .box{display:flex;align-items:flex-end;gap:8px;background:#f8fafc;border:1px solid var(--line);
+       border-radius:16px;padding:6px}
+  .plus{width:34px;height:34px;border-radius:12px;border:none;background:transparent;color:var(--muted);
+        display:grid;place-items:center;cursor:pointer;flex:0 0 auto;transition:.18s;font-size:17px}
+  .plus:hover{background:#e2e8f0;color:var(--fg)}
+  .plus[aria-expanded="true"]{background:#e2e8f0;color:var(--fg);transform:rotate(45deg)}
+  .ta{flex:1;min-height:34px;font-size:12.5px;color:var(--faint);display:flex;align-items:center}
+  .send{width:34px;height:34px;border-radius:12px;border:none;background:var(--accent);color:#fff;
+        display:grid;place-items:center;cursor:pointer;flex:0 0 auto}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;
+         border-top:1px solid var(--line);box-shadow:0 -14px 34px -14px rgba(15,23,42,.3);
+         padding:8px 14px 16px;transform:translateY(102%);transition:.24s cubic-bezier(.2,.8,.2,1)}
+  .sheet.open{transform:translateY(0)}
+  .scrim{position:absolute;inset:0;background:rgba(15,23,42,.32);opacity:0;pointer-events:none;transition:.24s}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .grab{width:38px;height:4px;border-radius:99px;background:#cbd5e1;margin:0 auto 10px}
+  .sh{display:flex;align-items:center;margin-bottom:12px}
+  .sh h3{font-size:13px;font-weight:650}
+  .x{margin-left:auto;width:26px;height:26px;border-radius:50%;border:none;background:#f1f5f9;color:var(--muted);
+     display:grid;place-items:center;cursor:pointer;font-size:13px}
+  .hint{font-size:10.5px;color:var(--faint);line-height:1.5;margin-top:10px}
+  .sec{font-size:9.5px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);padding:12px 2px 6px}
+  .switch{width:34px;height:19px;border-radius:99px;background:#cbd5e1;position:relative;transition:.18s;flex:0 0 auto}
+  .switch.on{background:var(--accent)}
+  .switch i{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.18s}
+  .switch.on i{left:17px}
+
+  .list{display:flex;flex-direction:column}
+  .item{display:flex;align-items:center;gap:11px;padding:13px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+  .item:hover{background:#f8fafc}
+  .item .ic{width:30px;height:30px;border-radius:10px;background:#f1f5f9;display:grid;place-items:center;flex:0 0 auto;font-size:14px}
+  .item .lbl{font-size:12.5px;font-weight:560}
+  .item .d{font-size:10.5px;color:var(--faint);margin-top:1px;line-height:1.45}
+  .item .chev{margin-left:auto;color:#cbd5e1;font-size:15px;flex:0 0 auto}
+  .item .val{margin-left:auto;font-size:10.5px;font-weight:550;color:var(--violet);background:#f5f3ff;
+             border:1px solid #ddd6fe;border-radius:999px;padding:3px 8px;flex:0 0 auto}
+  .recent{display:flex;gap:7px;overflow-x:auto;padding:2px 0 4px}
+  .rc{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:11px;padding:7px 9px;
+      font-size:10.5px;white-space:nowrap;cursor:pointer;background:#fff}
+  .rc .th{width:22px;height:22px;border-radius:6px;background:#e2e8f0;display:grid;place-items:center;font-size:10px}
+</style></head><body>
+<div class="phone">
+  <div class="bar"><div class="t">IT Help Desk</div><div class="s">Infrastructure mode</div></div>
+  <div class="thread">
+    <div class="msg me">worker node တစ်လုံး NotReady ဖြစ်နေတယ်၊ screenshot ပို့လိုက်မယ်</div>
+    <div class="msg ai">ပို့ပါ — <b>kubectl describe node</b> ရဲ့ output ဒါမှမဟုတ် Rancher က node list ကို ကြည့်ပြီး စစ်ပေးမယ်။</div>
+    <div class="ev">⚡ Live infrastructure · Rancher / Kubernetes · read-only</div>
+</div>
+  <div class="comp">
+    <div class="row"><span class="pill">⚡ Auto</span><span class="pill v">🔌 All connectors</span></div>
+    
+    <div class="box">
+      <button class="plus" id="plus" aria-expanded="false">＋</button>
+      <div class="ta">Ask an IT question...</div>
+      <button class="send">↑</button>
+    </div>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <div class="sh"><h3>Attach or reach</h3><button class="x" id="x">✕</button></div>
+    <div class="list">
+      <div class="item"><span class="ic">📷</span><span><span class="lbl">Take a photo</span>
+        <span class="d">Error screen, rack, asset label</span></span><span class="chev">›</span></div>
+      <div class="item"><span class="ic">📎</span><span><span class="lbl">Attach a file</span>
+        <span class="d">PDF, log, xlsx — indexed for this question</span></span><span class="chev">›</span></div>
+      <div class="item"><span class="ic">🔌</span><span><span class="lbl">Connectors</span>
+        <span class="d">Which systems this chat may read</span></span><span class="val">All · 4</span></div>
+      <div class="sec">Answer settings</div>
+      <div class="item"><span class="ic">🔍</span><span><span class="lbl">Search knowledge base</span>
+        <span class="d">Off: live infrastructure only</span></span><span class="chev">›</span></div>
+    </div>
+    <div class="sec" style="padding-bottom:2px">Recent</div>
+    <div class="recent">
+      <span class="rc"><span class="th">📄</span>node-notready.log</span>
+      <span class="rc"><span class="th">🖼️</span>rancher-nodes.png</span>
+      <span class="rc"><span class="th">🔌</span>Grafana only</span>
+    </div>
+  </div>
+</div>
+<script>
+  const plus=document.getElementById('plus'),sheet=document.getElementById('sheet'),scrim=document.getElementById('scrim');
+  function set(o){sheet.classList.toggle('open',o);scrim.classList.toggle('open',o);plus.setAttribute('aria-expanded',String(o))}
+  plus.onclick=()=>set(!sheet.classList.contains('open'));
+  scrim.onclick=()=>set(false);document.getElementById('x').onclick=()=>set(false);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')set(false)});
+  document.querySelectorAll('.none').forEach(c=>c.onclick=()=>c.classList.toggle('on'));
+  document.querySelector('.switch').parentElement.onclick=function(){this.querySelector('.switch').classList.toggle('on')};
+</script></body></html>

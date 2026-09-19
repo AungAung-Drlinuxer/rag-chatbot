@@ -140,6 +140,16 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                                    title=auto_title(req.message))
                 s.add(sess)
                 s.flush()  # ensure session row exists before the FK'd message insert
+            # Persist the scope with the conversation, not with the message: the picker
+            # is conversation-level, so reopening the chat must restore it — and a scope
+            # chosen mid-conversation must survive the next question.
+            #
+            # Validated, because this value becomes a scope on every later turn.
+            if req.servers is not None:
+                from app.mcp.infra_agent import validate_scope
+
+                _clean = validate_scope(req.servers)
+                sess.connector_scope = json.dumps(_clean) if _clean else None
             s.add(ChatMessage(session_id=session_id, role="user", content=req.message))
             s.commit()
         except Exception as exc:
