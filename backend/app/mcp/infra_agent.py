@@ -1091,12 +1091,20 @@ def _as_answer_body(raw: str, max_rows: int = 200, markdown: bool = False) -> st
         # table, so it was fenced and arrived as literal `**6 label(s)** | \`container\` …`.
         # The datasource answer was fine only because it happens to contain a table.
         #
-        # The flag is explicit rather than sniffing for `**`, because the default caller
-        # feeds raw kubectl/JSON output where a backtick or asterisk inside a string must
-        # keep its literal meaning.
-        shown = lines[:40] if markdown else lines[:14]
+        # `markdown=True` is a statement about the CALLER (the deterministic path emits
+        # presentation-ready markdown), not a guarantee about every payload it returns. When
+        # the deterministic branch falls back to a raw payload — `cluster status` returns the
+        # Rancher cluster array because no summariser handles that shape — passing it through
+        # unfenced turns it into a wall of plain-text JSON, which is worse than the code block
+        # it replaced. So a line that OPENS with `**` or with a table pipe is treated as
+        # markdown; anything else is still fenced.
+        #
+        # Deliberately not a general "contains `**`" sniff: the default caller feeds raw
+        # kubectl/JSON output where a backtick or asterisk inside a string is literal.
+        _looks_md = bool(re.search(r"^\s*(?:\*\*|\|)", raw, re.M))
+        shown = lines[:40] if (markdown and _looks_md) else lines[:14]
         hidden = max(0, len(lines) - len(shown))
-        if markdown:
+        if markdown and _looks_md:
             out = "\n".join(shown)
         else:
             out = "```\n" + "\n".join(shown) + "\n```"
@@ -1113,6 +1121,71 @@ def _as_answer_body(raw: str, max_rows: int = 200, markdown: bool = False) -> st
     if hidden:
         md += f"\n\n_{hidden} more row(s) — open \"Show full output\" below_"
     return md
+
+
+# Cached cluster reference for the Rancher management instance. See _cluster_ref().
+_CLUSTER_REF_CACHE: dict = {}
+
+
+def _cluster_ref(call) -> str:
+    """The cluster reference the Kubernetes tools expect — IT DIFFERS BY INSTANCE.
+
+    The kubeconfig-backed server addresses this cluster as `kubeconfig:local`. The Rancher
+    management server has no kubeconfig at all and rejects that exact string with
+    `failed to create REST config: invalid cluster reference "kubeconfig:local": kubeconfig
+    source is not configured`. So pasting a Rancher token — the change that is supposed to
+    WIDEN access — silently broke every Kubernetes question instead, because the reference
+    was hardcoded in seven places. Measured: `cluster status` still worked (it is a Rancher
+    call) while `nodes status` failed outright.
+
+    Resolved from the instance's own inventory. In Rancher mode `local` is the management
+    cluster, which is not where this app runs, so any other cluster is the better default —
+    and `local` is still a valid id, so the fallback can never be the string that just failed.
+    """
+    try:
+        from app.mcp.client import get_mcp_cfg
+
+        cfg = get_mcp_cfg() or {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+
+    explicit = str(cfg.get("cluster") or "").strip()
+    if explicit:
+        return explicit
+    if str(cfg.get("mode") or "") != "rancher":
+        return "kubeconfig:local"
+
+    # Cached, because this runs on EVERY deterministic question — including Grafana and
+    # Proxmox ones that have nothing to do with Kubernetes — and without the cache each of
+    # them paid an extra cluster_list round trip (~300 ms measured) just to name a cluster
+    # it was never going to use. A cluster inventory changes on the order of minutes, so a
+    # five-minute TTL is generous; a failed resolve is not cached.
+    global _CLUSTER_REF_CACHE
+    now = time.monotonic()
+    hit = _CLUSTER_REF_CACHE.get("value")
+    if hit and now - _CLUSTER_REF_CACHE.get("at", 0.0) < 300.0:
+        return hit
+
+    raw = call("cluster_list", {})
+    ids: list[str] = []
+    if raw:
+        try:
+            data = json.loads(raw)
+            items = data if isinstance(data, list) else (
+                data.get("clusters") or data.get("data") or [])
+            for c in items:
+                if not isinstance(c, dict):
+                    continue
+                ref = c.get("id") or c.get("name")
+                if ref:
+                    ids.append(str(ref))
+        except Exception:  # noqa: BLE001
+            pass
+    if not ids:
+        return "local"
+    resolved = next((r for r in ids if r.lower() != "local"), ids[0])
+    _CLUSTER_REF_CACHE.update({"value": resolved, "at": now})
+    return resolved
 
 
 def _deterministic_lookup(question: str, tools):
@@ -1139,7 +1212,7 @@ def _deterministic_lookup(question: str, tools):
         tool = _first_tool(tools, ("kubernetes_list",))
         if tool:
             try:
-                largs = {"cluster": "kubeconfig:local", "kind": kb["kind"]}
+                largs = {"cluster": cref, "kind": kb["kind"]}
                 if ns and kb["kind"] not in ("Node", "Namespace", "PersistentVolume"):
                     largs["namespace"] = ns
                 out = str(tool.invoke(largs))
@@ -1185,6 +1258,11 @@ def _deterministic_lookup(question: str, tools):
             logger.info("deterministic %s failed: %s", tool_name, exc)
             return None
         return out if out.strip() and out.strip() not in ("[]", "{}") else None
+
+    # Resolved ONCE here, not hardcoded at each call site: the reference differs between the
+    # kubeconfig instance and the Rancher management instance, and the seven literals that
+    # used to sit below each broke together the moment a Rancher token changed the instance.
+    cref = _cluster_ref(_call)
 
     # 0a) Grafana / LGTM observability. MUST come before the Kubernetes rules below, and it
     #     is safe to put first because it only fires on observability vocabulary that no
@@ -1341,7 +1419,7 @@ def _deterministic_lookup(question: str, tools):
 
     # 2) Storage inventory -> PVC list (summarised).
     if re.search(r"\b(storage|pvc|persistent ?volumes?|volumes?|disk)\b", q):
-        largs = {"cluster": "kubeconfig:local", "kind": "PersistentVolumeClaim"}
+        largs = {"cluster": cref, "kind": "PersistentVolumeClaim"}
         if ns:
             largs["namespace"] = ns
         out = _call("kubernetes_list", largs)
@@ -1352,7 +1430,7 @@ def _deterministic_lookup(question: str, tools):
     #    memory", "show me cpu usage" name no object at all.
     if re.search(r"\b(cpu|memory|ram)\b", q) and re.search(
             r"usage|using|most|top|utilis|utiliz|consume|pressure", q):
-        out = _call("kubernetes_top", {"cluster": "kubeconfig:local"})
+        out = _call("kubernetes_top", {"cluster": cref})
         if out:
             return summarise_json(out) or out
 
@@ -1361,17 +1439,17 @@ def _deterministic_lookup(question: str, tools):
     #    summarised into Name/Status/Roles/Internal IP/Version/Age.
     if re.search(r"\bnodes?\b|\bno\b", q):
         if re.search(r"capacity|request|limit|allocat", q):
-            out = _call("kubernetes_capacity", {"cluster": "kubeconfig:local"})
+            out = _call("kubernetes_capacity", {"cluster": cref})
             if out:
                 return out
-        out = _call("kubernetes_list", {"cluster": "kubeconfig:local", "kind": "Node"})
+        out = _call("kubernetes_list", {"cluster": cref, "kind": "Node"})
         if out:
             return summarise_json(out) or out
 
     # 5) Events / warnings / anything wrong -> events. Before the generic health rule:
     #    "are there any warnings" should list events, not a workload summary.
     if re.search(r"events?|warnings?|wrong|errors?|problems?|issues?|alert", q):
-        eargs = {"cluster": "kubeconfig:local"}
+        eargs = {"cluster": cref}
         if ns:
             eargs["namespace"] = ns
         out = _call("kubernetes_events", eargs)
@@ -1382,7 +1460,7 @@ def _deterministic_lookup(question: str, tools):
     if re.search(r"unhealthy|not ready|failing|broken|crash|health|healthy|status|state|"
                  r"ready|how many|count|which|list|running|inventory|pod|deployment|"
                  r"workload|namespace|resource|everything|anything", q):
-        wargs = {"cluster": "kubeconfig:local"}
+        wargs = {"cluster": cref}
         if ns:
             wargs["namespace"] = ns
         out = _call("kubernetes_workload_health", wargs)

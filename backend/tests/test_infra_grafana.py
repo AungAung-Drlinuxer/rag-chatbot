@@ -143,3 +143,124 @@ def test_a_table_is_passed_through_either_way():
     body = "**3 datasource(s)**\n\n| Name | Type |\n|---|---|\n| Loki | loki |"
     assert "| Name | Type |" in _as_answer_body(body, markdown=True)
     assert "```" not in _as_answer_body(body, markdown=True)
+
+
+def test_raw_payload_is_fenced_even_from_the_markdown_path():
+    """`markdown=True` describes the caller, not every payload it returns.
+
+    `cluster status` falls through every summariser and returns the Rancher cluster array;
+    passing that through unfenced turns a readable code block into a wall of plain JSON.
+    """
+    from app.mcp.infra_agent import _as_answer_body
+
+    raw = '[\n  {\n    "cpu": "18.02/48",\n    "name": "drlinuxer-prod"\n  }\n]'
+    assert _as_answer_body(raw, markdown=True).startswith("```")
+
+
+# ---------------------------------------------------------------- cluster reference
+
+
+def test_cluster_ref_is_kubeconfig_local_on_the_kubeconfig_instance(monkeypatch=None):
+    """No Rancher token -> the kubeconfig instance, which addresses this cluster that way."""
+    import app.mcp.infra_agent as ia
+
+    def fake_call(name, args):
+        raise AssertionError("cluster_list must not be called in kubeconfig mode")
+
+    # get_mcp_cfg reads SETTINGS/DB; force the mode directly through the module's import.
+    import app.mcp.client as client
+    real = client.get_mcp_cfg
+    try:
+        client.get_mcp_cfg = lambda: {"mode": "kubeconfig"}
+        assert ia._cluster_ref(fake_call) == "kubeconfig:local"
+    finally:
+        client.get_mcp_cfg = real
+
+
+def test_cluster_ref_uses_a_rancher_id_and_avoids_local():
+    """Rancher mode has no kubeconfig, so the reference must be a Rancher cluster id."""
+    import app.mcp.infra_agent as ia
+    import app.mcp.client as client
+
+    payload = '[{"id": "local", "name": "local"}, {"id": "c-m-k6rln5bs", "name": "drlinuxer-prod"}]'
+    only_local = '[{"id": "local", "name": "local"}]'
+    real = client.get_mcp_cfg
+    try:
+        client.get_mcp_cfg = lambda: {"mode": "rancher"}
+        # Each case must start from an empty cache — the resolve is cached for 5 minutes, so
+        # without this the first answer is returned for all three (which is the cache working,
+        # not the resolver failing).
+        ia._CLUSTER_REF_CACHE.clear()
+        assert ia._cluster_ref(lambda n, a: payload) == "c-m-k6rln5bs"
+        # `local` is the management cluster, not where the app runs - but it is still valid,
+        # so it is the fallback rather than the string the server rejects.
+        ia._CLUSTER_REF_CACHE.clear()
+        assert ia._cluster_ref(lambda n, a: only_local) == "local"
+        ia._CLUSTER_REF_CACHE.clear()
+        assert ia._cluster_ref(lambda n, a: None) == "local"
+    finally:
+        client.get_mcp_cfg = real
+        ia._CLUSTER_REF_CACHE.clear()
+
+
+def test_cluster_ref_honours_an_explicit_setting():
+    import app.mcp.infra_agent as ia
+    import app.mcp.client as client
+
+    real = client.get_mcp_cfg
+    try:
+        client.get_mcp_cfg = lambda: {"mode": "rancher", "cluster": "c-abc12"}
+        assert ia._cluster_ref(lambda n, a: "[]") == "c-abc12"
+    finally:
+        client.get_mcp_cfg = real
+
+def test_cluster_ref_is_cached_after_the_first_resolve():
+    """Every deterministic question calls this, including Grafana/Proxmox ones.
+
+    Uncached, each of those paid a cluster_list round trip just to name a cluster it would
+    never use (~300 ms measured on the live server).
+    """
+    import app.mcp.infra_agent as ia
+    import app.mcp.client as client
+
+    real = client.get_mcp_cfg
+    calls = {"n": 0}
+
+    def counting_call(name, args):
+        calls["n"] += 1
+        return '[{"id": "local", "name": "local"}, {"id": "c-m-k6rln5bs", "name": "drlinuxer-prod"}]'
+
+    try:
+        client.get_mcp_cfg = lambda: {"mode": "rancher"}
+        ia._CLUSTER_REF_CACHE.clear()
+        first = ia._cluster_ref(counting_call)
+        second = ia._cluster_ref(counting_call)
+        assert first == second == "c-m-k6rln5bs"
+        assert calls["n"] == 1, f"cluster_list called {calls['n']} times, expected 1"
+    finally:
+        client.get_mcp_cfg = real
+        ia._CLUSTER_REF_CACHE.clear()
+
+
+def test_a_failed_resolve_is_not_cached():
+    """A transient failure must not pin the wrong cluster for five minutes."""
+    import app.mcp.infra_agent as ia
+    import app.mcp.client as client
+
+    real = client.get_mcp_cfg
+    tries = {"n": 0}
+
+    def flaky_complete(name, args):
+        tries["n"] += 1
+        if tries["n"] == 1:
+            return None                      # server briefly unhappy
+        return '[{"id": "c-m-k6rln5bs", "name": "drlinuxer-prod"}]'
+
+    try:
+        client.get_mcp_cfg = lambda: {"mode": "rancher"}
+        ia._CLUSTER_REF_CACHE.clear()
+        assert ia._cluster_ref(flaky_complete) == "local"
+        assert ia._cluster_ref(flaky_complete) == "c-m-k6rln5bs"
+    finally:
+        client.get_mcp_cfg = real
+        ia._CLUSTER_REF_CACHE.clear()
