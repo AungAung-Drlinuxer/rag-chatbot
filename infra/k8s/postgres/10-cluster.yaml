@@ -70,6 +70,29 @@ spec:
     size: 30Gi
     storageClass: truenas-iscsi   # <-- replace with your StorageClass
 
+  # Default `postgres` superuser — password access ENABLED (admin account
+  # for managing databases/roles/replication). CNPG takes the password from
+  # the SuperuserSecret `postgres-ha-superuser` (default name: <cluster>-superuser,
+  # keys: username / password). If the secret is missing the operator creates
+  # one with a generated password; when it exists, CNPG reconciles the secret's
+  # content into the `postgres` role — but OBSERVED on this cluster (2026-10-22,
+  # operator 1.30.0): a pre-existing secret did NOT get applied to the role and
+  # TCP auth failed until the password was synced manually from the writer:
+  #
+  #   PW=$(kubectl -n rag-chatbot get secret postgres-ha-superuser \
+  #          -o jsonpath='{.data.password}' | base64 -d)
+  #   printf '%s' "$PW" | kubectl -n rag-chatbot exec -i postgres-ha-1 -c postgres \
+  #     -- sh -c 'read PW; psql -U postgres -c "ALTER ROLE postgres PASSWORD '"'"'$PW'"'"'"'
+  #
+  # Verify after enabling/rotating (password flows through the env only):
+  #   kubectl -n rag-chatbot exec postgres-ha-1 -c postgres -- env PGPASSWORD="$PW" \
+  #     psql -U postgres -h 127.0.0.1 -tAc "SELECT current_user"
+  #
+  # Inside a pod, plain `psql -U postgres` (local socket, peer auth via
+  # pg_ident map=local) needs no password; `-h 127.0.0.1` uses scram-sha-256.
+  # When false, CNPG blanks the postgres password (NULL) and deletes the secret.
+  enableSuperuserAccess: true
+
   # Managed pooled connection (PgBouncer) — 2 replicas fronting the writer.
   enablePools: true
   pools:
