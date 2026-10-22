@@ -17,6 +17,10 @@ dependencies = [
   "langchain-openai>=1.6.0",
   "ldap3>=2.9.1",
   "sentence-transformers>=5.2.0",
+  # Explicit so [tool.uv.sources] can pin the CPU wheel (see the torch entry there).
+  # Without the direct dependency uv treats torch as transitive and PyPI's CUDA
+  # build is used — 3.9 GB of GPU libraries this CPU-only service never loads.
+  "torch>=2.13.0",
   "opentelemetry-api>=1.44.0",
   "opentelemetry-exporter-otlp-proto-http>=1.44.0",
   "opentelemetry-instrumentation-fastapi>=0.65b0",
@@ -41,6 +45,18 @@ build-backend = "uv_build"
 
 [tool.uv]
 package = false
+
+# v0.22.1 — CPU-only torch. PyPI's linux torch wheel is the CUDA build and drags
+# in `nvidia-*` (2.7 GB) + `triton` (689 MB); this service runs on CPU pods only
+# (OMP threads pinned to 2, reranker on CPU), so the GPU stack was 3.9 GB of dead
+# weight in a 10.6 GB image. The CPU index pins the same torch version.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
