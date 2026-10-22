@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon, AlertCircle, ChevronDown, RefreshCw, Lock, ShieldCheck, Trash2, Pencil } from "lucide-react";
 import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
 import type { ProviderModel } from "@/features/settings/api";
+import { LLM_PRESETS, presetFor, providerLabel } from "../llmProviders";
 
 type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "notion" | "clickup" | "mcp";
 
@@ -60,13 +61,13 @@ const META: Record<IntegrationKey, {
   },
   llm: {
     label: "Models Provider",
-    desc: "Primary AI provider for generating answers (OpenAI-compatible: OpenRouter, DeepSeek, Anthropic, or an on-prem gateway). Credentials are write-only — once saved they can never be read back. Changes apply within 30 seconds without a rebuild.",
-    docs: "https://openrouter.ai/keys",
+    desc: "Primary AI provider for generating answers. Presets below are OpenAI-compatible gateways (ClinePass, OpenRouter, OpenAI, DeepSeek, Ollama). Credentials are write-only — once saved they can never be read back. Changes apply within 30 seconds without a rebuild.",
+    docs: "https://cline.bot/cline-pass",
     fields: [
-      { key: "provider", label: "Provider", placeholder: "openai or anthropic" },
-      { key: "base_url", label: "Base URL", placeholder: "https://openrouter.ai/api/v1" },
-      { key: "api_key", label: "API Key", placeholder: "sk-or-v1-...", isSecret: true },
-      { key: "model", label: "Model", placeholder: "z-ai/glm-5.3-flash" },
+      { key: "provider", label: "Provider", placeholder: "clinepass" },
+      { key: "base_url", label: "Base URL", placeholder: "https://api.cline.bot/api/v1" },
+      { key: "api_key", label: "API Key", placeholder: "your provider API key", isSecret: true },
+      { key: "model", label: "Model", placeholder: "cline-pass/deepseek-v4.1-flash" },
     ],
   },
   openproject: {
@@ -183,8 +184,28 @@ export function IntegrationsConfig() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // `provider` and `model` are plain (readable) config fields, unlike the
+  // credentials and endpoints, so the form can seed them and show what the
+  // database actually holds. Everything else stays write-only.
+  const [storedProvider, setStoredProvider] = useState("");
+  const [storedModel, setStoredModel] = useState("");
 
   const isLlm = active === "llm";
+  const activeProviderId = presetFor(form.provider || storedProvider).id;
+  const activePreset = presetFor(form.provider || storedProvider);
+
+  /** v0.22.1 — a preset writes provider + base URL + model id together, so the
+   *  backend never receives a ClinePass provider with an OpenRouter-style model. */
+  const applyPreset = (id: string) => {
+    const preset = presetFor(id);
+    const next: Record<string, string> = { ...form, provider: id };
+    if (preset.base_url) next.base_url = preset.base_url;
+    if (preset.model) next.model = preset.model;
+    setForm(next);
+    setModels([]);
+    setModelsError(null);
+    setResult(null);
+  };
 
   async function fetchModels() {
     setLoadingModels(true);
@@ -205,21 +226,30 @@ export function IntegrationsConfig() {
     setResult(null);
     try {
       const res = await getIntegrationSettings(key);
-      // Deliberately DO NOT seed `form` from the response: every value in
-      // `res.settings` is a mask token. Only the "which fields are set" flags
-      // are usable.
-      setForm({});
+      // Credentials and endpoints come back as mask tokens, so they are never
+      // seeded into the form. `provider` and `model` are plain fields — the
+      // server returns them readably, and showing the real values is what makes
+      // the provider switch visible instead of a mystery.
+      const plain = (res.settings || {}) as Record<string, unknown>;
+      const seeded: Record<string, string> = {};
+      if (typeof plain.provider === "string" && plain.provider.trim()) seeded.provider = plain.provider;
+      if (typeof plain.model === "string" && plain.model.trim()) seeded.model = plain.model;
+      setForm(seeded);
       setReplacing({});
       setFieldsSet(res.fields_set || []);
       setSecretFields(res.secret_fields || []);
       setUpdatedAt(res.updated_at || null);
       setTokenSet(!!res.token_set || (res.secret_fields || []).length > 0);
+      setStoredProvider(seeded.provider || "");
+      setStoredModel(seeded.model || "");
     } catch {
       setForm({});
       setFieldsSet([]);
       setSecretFields([]);
       setUpdatedAt(null);
       setTokenSet(false);
+      setStoredProvider("");
+      setStoredModel("");
     }
   };
 
@@ -317,7 +347,7 @@ export function IntegrationsConfig() {
           </button>
         ))}
         <a
-          href={META[active].docs}
+          href={isLlm ? activePreset.docs : META[active].docs}
           target="_blank"
           rel="noreferrer"
           className="ml-auto mr-2 text-2xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 inline-flex items-center gap-1"
@@ -328,6 +358,19 @@ export function IntegrationsConfig() {
 
       <div className="px-5 pb-5 space-y-4">
         <p className="text-xs text-slate-500 dark:text-slate-400">{META[active].desc}</p>
+
+        {isLlm && (
+          <div className="flex flex-wrap items-center gap-2 text-2xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              Database: {providerLabel(storedProvider)}
+            </span>
+            {storedModel && (
+              <span className="truncate rounded-full bg-slate-50 px-2 py-0.5 font-mono text-slate-500 dark:bg-slate-900 dark:text-slate-400" title={storedModel}>
+                model {storedModel}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* v1.6.35 — state the posture up front so nobody is surprised that values
             cannot be read back. */}
@@ -345,14 +388,18 @@ export function IntegrationsConfig() {
         <div className="grid grid-cols-1 gap-3">
           {META[active].fields.map((f) => {
             const isModelField = isLlm && f.key === "model";
+            const isProviderField = isLlm && f.key === "provider";
             const configured = isConfigured(f.key);
             const editable = isEditable(f.key);
             const isSecret = !!f.isSecret || secretFields.includes(f.key);
+            // provider/model are plain fields: the real value is shown, so the
+            // "configured — value hidden" badge would be a lie.
+            const showBadge = configured && !isProviderField && !isModelField;
             return (
             <div key={f.key} className="space-y-1">
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
                 {f.label}
-                {configured && (
+                {showBadge && (
                   <span className="ml-2 inline-flex items-center gap-1 text-2xs text-emerald-600">
                     {isSecret ? <Lock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
                     {isSecret ? "Secret saved — not retrievable" : "Configured — value hidden"}
@@ -384,7 +431,20 @@ export function IntegrationsConfig() {
               ) : (
               <>
               <div className="relative">
-                {isModelField ? (
+                {isProviderField ? (
+                  <div className="relative">
+                    <select
+                      value={activeProviderId}
+                      onChange={(e) => applyPreset(e.target.value)}
+                      className="w-full appearance-none rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-9 text-xs text-slate-900 dark:text-white"
+                    >
+                      {LLM_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                ) : isModelField ? (
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <select
@@ -436,6 +496,9 @@ export function IntegrationsConfig() {
                   </button>
                 )}
               </div>
+              {isProviderField && (
+                <p className="mt-1 text-2xs leading-relaxed text-slate-400">{activePreset.note}</p>
+              )}
               {isModelField && modelsError && (
                 <p className="mt-1 flex items-center gap-1 text-2xs text-rose-600">
                   <AlertCircle className="h-3 w-3" /> {modelsError}

@@ -184,6 +184,56 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama",
                     "openproject", "xwiki", "notion", "clickup", "mcp"}
 
+# ClinePass is an OpenAI-compatible gateway (api.cline.bot). Two things make it
+# different from the other providers and are handled below:
+#   * the generic GET /models listing omits cline-pass/* ids — the public
+#     recommended-models feed carries them under the `clinePass` key
+#   * GET /models answers 200 even without a key, so it cannot validate one;
+#     a 1-token chat completion returns 401/403 for a bad key instead
+CLINEPASS_CATALOG_URL = "https://api.cline.bot/api/v1/ai/cline/recommended-models"
+CLINEPASS_ALIASES = {"clinepass", "cline-pass", "cline"}
+CLINEPASS_HOSTS = {"api.cline.bot"}
+
+
+def _llm_provider_id(cfg: dict) -> str:
+    """Normalised provider id from a stored llm config ("ClinePass" -> "clinepass")."""
+    return str((cfg or {}).get("provider") or "").strip().lower()
+
+
+def _is_clinepass(cfg: dict) -> bool:
+    """True when the stored llm config points at ClinePass."""
+    if _llm_provider_id(cfg) in CLINEPASS_ALIASES:
+        return True
+    try:
+        from urllib.parse import urlparse
+
+        host = (urlparse(str((cfg or {}).get("base_url") or "")).hostname or "").lower()
+    except Exception:
+        host = ""
+    return host in CLINEPASS_HOSTS
+
+
+def _clinepass_catalog() -> list[dict] | None:
+    """Live ClinePass model catalogue as [{id, name}], or None when unreachable."""
+    import httpx
+
+    try:
+        r = httpx.get(CLINEPASS_CATALOG_URL, timeout=20,
+                      headers={"Accept": "application/json"})
+        if r.status_code != 200:
+            return None
+        block = (r.json() or {}).get("clinePass") or []
+    except Exception as exc:
+        logger.warning("clinepass catalogue fetch failed: %s", exc)
+        return None
+    out: list[dict] = []
+    for m in block:
+        mid = m.get("id") if isinstance(m, dict) else None
+        if not isinstance(mid, str) or not mid:
+            continue
+        out.append({"id": mid, "name": str(m.get("name") or mid)})
+    return out or None
+
 def _reload_after_change(key: str) -> None:
     """Drop any in-process cache that mirrors the integration config we just wrote."""
     if key == "llm":
@@ -356,9 +406,29 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
             if not _key:
                 raise ValueError("api_key not set — enter your provider API key and Save first")
             _hdrs = {"Authorization": f"Bearer {_key}"}
-            r = httpx.get(f"{base}/models", headers=_hdrs, timeout=15)
-            status = r.status_code
-            detail = r.text[:200] if status != 200 else ""
+            if _is_clinepass(cfg):
+                # ClinePass answers GET /models with 200 even for a bad key, so a
+                # catalogue fetch proves nothing about the credential. A 1-token
+                # completion does: the gateway returns 401/403 when the key is
+                # wrong, and also proves the stored model id is servable.
+                _model = (cfg.get("model") or "").strip() or "cline-pass/deepseek-v4.1-flash"
+                r = httpx.post(
+                    f"{base}/chat/completions",
+                    headers={**_hdrs, "Content-Type": "application/json"},
+                    json={
+                        "model": _model,
+                        "messages": [{"role": "user", "content": "ping"}],
+                        "max_tokens": 1,
+                        "stream": False,
+                    },
+                    timeout=20,
+                )
+                status = r.status_code
+                detail = "" if status in (200, 201) else r.text[:200]
+            else:
+                r = httpx.get(f"{base}/models", headers=_hdrs, timeout=15)
+                status = r.status_code
+                detail = r.text[:200] if status != 200 else ""
         elif key == "ollama":
             host = (cfg.get("host") or "").rstrip("/")
             if not host:
@@ -472,6 +542,16 @@ def list_llm_models(user: str = Depends(get_current_user)) -> dict:
         try: cfg = _json.loads(cfg)
         except Exception: cfg = {}
     cfg = cfg or {}
+    # ClinePass: the gateway's generic /models listing omits every cline-pass/*
+    # id, so the public recommended-models catalogue is the only correct source.
+    if _is_clinepass(cfg):
+        catalogue = _clinepass_catalog()
+        if not catalogue:
+            raise HTTPException(
+                status_code=502,
+                detail="ClinePass model catalogue unreachable — retry, or type a model id manually.",
+            )
+        return {"models": catalogue, "count": len(catalogue), "source": "clinepass"}
     base = (cfg.get("base_url") or "").rstrip("/")
     key = cfg.get("api_key") or ""
     if not base:

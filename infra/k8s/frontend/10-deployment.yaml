@@ -39,7 +39,7 @@ spec:
         fsGroup: 101
       containers:
         - name: frontend
-          image: harbor.drlinuxer.com/ragchatbot/frontend:0.0.24
+          image: harbor.drlinuxer.com/ragchatbot/frontend:0.0.25
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

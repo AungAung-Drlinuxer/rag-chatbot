@@ -122,17 +122,27 @@ def _build_anthropic():
     return prompt | llm | StrOutputParser()
 
 
-def _build_openai():
-    """OpenAI-compatible primary (e.g. OpenRouter, opencode-go, deepseek, etc.).
+_ANTHROPIC_PROVIDERS = {"anthropic", "claude", "anthropic-compatible"}
 
-    `stream_usage` triggers the OpenAI-compatible provider (OpenRouter, etc.) to
-    return a final chunk carrying `usage` (input/output/total tokens). Without it
-    the streaming response has no usage payload, and the pill on the chat falls
-    back to the `ctx≈… tok · k…` variant.
+
+def _build_openai():
+    """OpenAI-compatible primary.
+
+    Covers OpenRouter, ClinePass, DeepSeek, opencode-go and any other gateway
+    that speaks Chat Completions.
+
+    `stream_usage` makes the provider attach a final `usage` chunk; without it
+    the streaming response has no usage payload and the chat pill falls back to
+    the `ctx≈… tok · k…` variant. ClinePass is deliberately excluded: its
+    gateway rejects `stream_options`, and a rejected request costs the whole
+    primary answer (the chain silently degrades to the local fallback).
     """
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
+
+    _prov = str(_cfg("provider", SETTINGS.hchat_provider) or "").strip().lower()
+    _stream_usage = _prov not in ("clinepass", "cline-pass", "cline")
 
     llm = ChatOpenAI(
         model=_cfg("model", SETTINGS.hchat_model),
@@ -141,11 +151,11 @@ def _build_openai():
         streaming=True,
         max_tokens=SETTINGS.llm_max_tokens,
         temperature=0.4,
-        stream_usage=True,           # Ask the provider to include usage on the final chunk.
+        stream_usage=_stream_usage,  # see docstring — ClinePass cannot take stream_options
         timeout=15.0,                # Fail fast on unresponsive/down provider to trigger fallback quickly
         max_retries=1,
-        # NOTE: do NOT pass `extra_body={"stream_options": ...}` for OpenRouter —
-        # that key is rejected by their gateway (`Provider returned error`).
+        # NOTE: do NOT pass `extra_body` with `stream_options` — some gateways
+        # reject that key (`Provider returned error`).
     )
     prompt = ChatPromptTemplate.from_messages([("system", _SYSTEM_PROMPT), ("human", "{question}")])
     return prompt | llm | StrOutputParser()
@@ -225,13 +235,15 @@ def make_chain():
     if not _cfg("api_key", SETTINGS.hchat_api_key):
         return None
     try:
-        # Accept "openai", "openrouter", "deepseek", or any other OpenAI-compatible
-        # value as a directive to use the openai client. Only "anthropic" uses the
-        # Anthropic SDK (Claude-compatible H-Chat).
+        # anthropic-style values use the Anthropic SDK (Claude-compatible H-Chat);
+        # everything else — including ClinePass, OpenRouter, DeepSeek and custom
+        # OpenAI-compatible gateways — uses the openai client. Previously any
+        # value outside a fixed allow-list fell through to Anthropic, so a
+        # provider named "ClinePass" was sent to the wrong SDK entirely.
         _prov = str(_cfg("provider", SETTINGS.hchat_provider) or "").strip().lower()
-        if _prov in ("openai", "openrouter", "deepseek", "ollama", "") and not _prov.startswith("anthrop"):
-            return _build_openai()
-        return _build_anthropic()
+        if _prov in _ANTHROPIC_PROVIDERS or _prov.startswith("anthrop"):
+            return _build_anthropic()
+        return _build_openai()
     except Exception as exc:
         logger.warning(f"primary LLM build failed ({type(exc).__name__}): {exc}")
         return None

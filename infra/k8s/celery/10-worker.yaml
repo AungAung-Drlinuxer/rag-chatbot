@@ -33,7 +33,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: celery-worker
-          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.13
+          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.14
           command: ["celery","-A","app.workers.celery_app","worker","-l","info","-Q","celery","--concurrency=2"]
           envFrom:
             - configMapRef: { name: backend-config }
@@ -67,7 +67,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: celery-beat
-          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.13
+          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.14
           command: ["celery","-A","app.workers.celery_app","beat","-l","info"]
           envFrom:
             - configMapRef: { name: backend-config }

@@ -17,6 +17,7 @@ import {
   Plug,
   BookOpen,
   LayoutGrid,
+  ChevronDown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
@@ -27,9 +28,10 @@ import ConnectorsGallery from "../components/ConnectorsGallery";
 import { BrandingSettings } from "../components/BrandingSettings";
 import { Image as ImageIcon } from "lucide-react";
 import {
-  getUserSettings, putUserSettings, getIntegrationSettings,
+  getUserSettings, putUserSettings, getIntegrationSettings, putIntegrationSettings,
   getSmtpSettings, putSmtpSettings, sendTestEmail, getRuntime, putRuntime,
 } from "@/features/settings/api";
+import { LLM_PRESETS, presetFor, providerLabel } from "../llmProviders";
 
 /* v0.21.81 — Settings redesigned to the reference single-scroll layout:
    section cards (General/Appearance/Integrations/AI Assistant/Notifications/
@@ -180,14 +182,8 @@ export default function Settings({ role }: { role?: string }) {
   function applyThemeNow(dark: boolean, compact: boolean, anim: boolean) {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
     document.documentElement.dataset.compact = compact ? "1" : "0";
-    // v1.6.2 — THEME STABILITY: persist to localStorage so the pre-paint boot
-    // script in index.html restores the saved theme instantly on next load
-    // (previously nothing wrote "ith.dark", so reload always snapped to light)
-    try {
-      window.localStorage.setItem("ith.dark", dark ? "1" : "0");
-      window.localStorage.setItem("ith.compact", compact ? "1" : "0");
-      window.localStorage.setItem("ith.animations", anim ? "1" : "0");
-    } catch { /* storage may be unavailable in private mode */ }
+    // v0.22.1 — no localStorage: theme/compact/animations are persisted only in the
+    // server-side user settings row, and re-applied from there on every load.
     document.documentElement.classList.toggle("animations-off", !anim);
   }
 
@@ -293,12 +289,43 @@ export default function Settings({ role }: { role?: string }) {
 
   // v0.21.90 — real AI provider info (from /api/settings/integrations/llm), not a label
   const [llmCfg, setLlmCfg] = useState<Record<string, any> | null>(null);
+  // v0.22.1 — switching the provider here writes the same DB-backed integration
+  // config; nothing is kept on this device.
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmMsg, setLlmMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    getIntegrationSettings("llm")
-      .then((d: any) => setLlmCfg(d?.settings ?? d))
-      .catch(() => {});
-  }, []);
+  const refreshLlm = async () => {
+    try {
+      const d: any = await getIntegrationSettings("llm");
+      setLlmCfg(d?.settings ?? d);
+    } catch { /* non-admin or unconfigured */ }
+  };
+
+  useEffect(() => { refreshLlm(); }, []);
+
+  async function changeLlmProvider(id: string) {
+    const preset = presetFor(id);
+    setLlmSaving(true);
+    setLlmMsg(null);
+    try {
+      // provider + base URL + model travel together: a ClinePass provider with
+      // an OpenRouter-style model id (or the reverse) authenticates fine and
+      // then 404s on every request.
+      const body: Record<string, string> = { provider: id };
+      if (preset.base_url) body.base_url = preset.base_url;
+      if (preset.model) body.model = preset.model;
+      await putIntegrationSettings("llm", body);
+      await refreshLlm();
+      setLlmMsg("Saved to the database");
+      window.setTimeout(() => setLlmMsg(null), 3000);
+    } catch (err: any) {
+      setLlmMsg(err?.message || "Could not change the provider");
+    } finally {
+      setLlmSaving(false);
+    }
+  }
+
+  const llmPreset = presetFor(llmCfg?.provider);
 
   return (
     <PageShell>
@@ -505,21 +532,46 @@ export default function Settings({ role }: { role?: string }) {
                 <div className="flex items-center justify-between gap-6 px-5 py-4">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900 dark:text-white">AI provider</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Provider used for assistant responses</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {isAdmin
+                        ? "Provider used for assistant responses — saved to the database, not to this device"
+                        : "Provider used for assistant responses"}
+                    </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
-                      <Sparkles className="h-4 w-4 text-indigo-500" />
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                        {llmCfg?.model
-                          ? llmCfg.model
-                          : (llmCfg ? "configured" : "…")}
-                      </span>
-                    </div>
-                    {llmCfg?.provider && (
-                      <span className="text-[10px] text-muted-foreground">
-                        via {llmCfg.provider}
-                        {llmCfg.fallback_model ? ` · fallback: ${llmCfg.fallback_model}` : ""}
+                  <div className="flex min-w-0 flex-col items-end gap-1">
+                    {isAdmin ? (
+                      <div className="relative">
+                        <select
+                          value={llmPreset.id}
+                          onChange={(e) => changeLlmProvider(e.target.value)}
+                          disabled={llmSaving}
+                          aria-label="AI provider"
+                          className="h-9 w-56 appearance-none rounded-xl border border-[var(--border)] bg-background px-3 pr-9 text-xs font-medium text-foreground outline-none transition focus:border-blue-500 disabled:opacity-60"
+                        >
+                          {LLM_PRESETS.map((p) => (
+                            <option key={p.id} value={p.id}>{p.label}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                        <Sparkles className="h-4 w-4 text-indigo-500" />
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                          {providerLabel(llmCfg?.provider)}
+                        </span>
+                      </div>
+                    )}
+                    <span className="max-w-[220px] truncate text-[10px] text-muted-foreground" title={String(llmCfg?.model || "")}>
+                      {llmCfg?.model ? `model: ${llmCfg.model}` : "no model selected"}
+                    </span>
+                    {llmSaving && <span className="text-[10px] text-muted-foreground">Saving…</span>}
+                    {llmMsg && (
+                      <span className={[
+                        "max-w-[220px] truncate text-[10px]",
+                        /saved/i.test(llmMsg) ? "text-emerald-600" : "text-rose-600",
+                      ].join(" ")} title={llmMsg}>
+                        {llmMsg}
                       </span>
                     )}
                   </div>
@@ -566,7 +618,10 @@ export default function Settings({ role }: { role?: string }) {
                   </div>
                   <div className="rounded-xl bg-indigo-50/60 px-3 py-2.5 text-[10px] leading-4 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
                     Threshold and Top K are shared backend settings (runtime_kv). They update
-                    the assistant for everyone once you press Save changes.
+                    the assistant for everyone once you press Save changes. The provider and
+                    model are stored in the database (system_settings) as well — this page
+                    keeps no copy on the device. Enter or replace credentials under
+                    Settings → Integrations → Models Provider.
                   </div>
                 </div>
               </div>
