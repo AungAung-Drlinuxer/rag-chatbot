@@ -32,6 +32,12 @@ data:
   RAG_TOP_K: "5"
   RAG_FETCH_K: "32"
   RERANK_ENABLED: "true"
+  # v0.22.1 — scoring runs in the rerank-svc Deployment (2 replicas), so the
+  # backend image no longer bakes BAAI/bge-reranker-base (-1.1 GB). This key was
+  # live in the cluster ConfigMap but missing from the manifest, so re-applying
+  # the manifest silently flipped the backend back to "local" — where the model
+  # is absent (HF_HUB_OFFLINE=1) and reranking degrades to vector order.
+  RERANK_MODE: "remote"
   HYBRID_ENABLED: "true"
   SIMILARITY_THRESHOLD: "0.55"
   # LangGraph bounds
