@@ -30,9 +30,8 @@ export function applyUserPrefs(s: any): void {
     theme = prefersDark ? "dark" : "light";
   }
   root.setAttribute("data-theme", theme);
-  if (typeof s?.compact === "boolean") {
-    root.dataset.compact = s.compact ? "1" : "0";
-  }
+  const compact = typeof s?.compact === "boolean" ? s.compact : s?.density === "compact";
+  root.dataset.compact = compact ? "1" : "0";
   if (typeof s?.animations === "boolean") {
     root.classList.toggle("animations-off", !s.animations);
   }

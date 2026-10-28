@@ -515,7 +515,7 @@ export default function Knowledge({
         }
       />
 
-      <main className="mx-auto max-w-[1560px] p-4 lg:p-6 space-y-5">
+      <main className="space-y-5">
         {/* ==============================================================
             MODERN TAB NAVIGATION
         ============================================================== */}
@@ -578,7 +578,7 @@ export default function Knowledge({
         {activeTab === "articles" && (
           <div className="space-y-5">
             {/* TOP SEARCH BAR & DOMAIN CHIPS */}
-            <section className="rounded-2xl border border-[var(--border)] bg-gradient-to-r from-blue-50/40 via-card to-indigo-50/20 p-5 shadow-xs dark:from-blue-950/15 dark:via-card dark:to-indigo-950/15">
+            <section className="rounded-xl border border-[var(--border)] bg-gradient-to-r from-blue-50/40 via-card to-indigo-50/20 p-5 shadow-xs dark:from-blue-950/15 dark:via-card dark:to-indigo-950/15">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
@@ -820,7 +820,7 @@ export default function Knowledge({
                 <ReclassifyPanel onApplied={() => { void loadList(chip, query); void loadBrowse(); }} />
               )}
 
-              <Card className="rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden">
+              <Card className="rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[860px] text-xs">
                     <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
@@ -1092,7 +1092,7 @@ export default function Knowledge({
               </Badge>
             </div>
 
-            <div className="rounded-2xl border border-[var(--border)] bg-card shadow-xs overflow-hidden">
+            <div className="rounded-xl border border-[var(--border)] bg-card shadow-xs overflow-hidden">
               {domainsError && (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-xs border-b border-rose-200 dark:border-rose-900">
                   {domainsError}

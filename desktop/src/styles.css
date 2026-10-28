@@ -127,6 +127,11 @@
 }
 
 /* ---- Global ---- */
+@layer base {
+  /* Tailwind's preflight defaults borders to currentColor, which made legacy
+     cards unexpectedly black. Utilities such as border-emerald-200 still win. */
+  *, *::before, *::after { border-color: var(--border); }
+}
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {

@@ -283,7 +283,7 @@ export default function Users() {
 
   return (
     <PageShell>
-      <div className="text-[13px]">
+      <div>
         <PageHeader
           icon={<UsersIcon className="size-5" />}
           title="Users"
@@ -315,8 +315,8 @@ export default function Users() {
           }
         />
 
-        <div className="p-5 lg:p-8">
-          <div className="mx-auto max-w-[1400px]">
+        <div>
+          <div>
             {/* STAT CARDS */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard icon={<UsersIcon className="size-5" />} title="Total users" value={totalUsers} description="All system users" />
@@ -332,7 +332,7 @@ export default function Users() {
             </div>
 
             {/* USERS TABLE */}
-            <div className="mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="mt-6 overflow-hidden rounded-xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="border-b p-4 dark:border-slate-800">
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -447,7 +447,7 @@ function StatCard({ icon, title, value, description, positive, warning }: {
   icon: ReactNode; title: string; value: number; description: string; positive?: boolean; warning?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-xl border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-start justify-between">
         <div className="grid size-10 place-items-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-300">
           {icon}
@@ -796,7 +796,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   </div>
-                  <p className="mt-1.5 text-[9.5px] leading-4 text-muted-foreground">
+                  <p className="mt-1.5 text-2xs leading-4 text-muted-foreground">
                     {ROLE_DESCRIPTIONS[selectedRole]}
                   </p>
                 </div>

@@ -20,7 +20,7 @@ import {
 import {
   connectConnector, disconnectConnector, listConnectors, testConnector,
   type Connector, type ConnectorField,
-} from "../api";
+} from "@/features/settings/api";
 
 /* Per-category accent so the grid is legible at a glance without per-brand logos. */
 const TONE: Record<string, string> = {

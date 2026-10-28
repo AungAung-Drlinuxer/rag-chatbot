@@ -190,7 +190,7 @@ export default function InventoryPage({ role, onToast }: Props) {
         }
       />
 
-      <div className="mx-auto max-w-[1200px] space-y-5 p-5 lg:p-8">
+      <div className="space-y-5">
         {/* Filters and Search Bar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
@@ -227,7 +227,7 @@ export default function InventoryPage({ role, onToast }: Props) {
         </div>
 
         {/* Assets Table */}
-        <Card className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+        <Card className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between border-b px-5 py-4 dark:border-slate-800">
             <h2 className="text-sm font-semibold">Asset Inventory Records</h2>
             <span className="text-[10px] text-muted-foreground">

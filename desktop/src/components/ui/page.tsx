@@ -7,14 +7,14 @@
  *
  * Sizes are fixed here so pages can never drift:
  *   header height 72px · content padding p-5 lg:p-8 · max width 1400px
- *   card radius 16px · titles: page=h1(text-xl) section=text-sm
+ *   card radius 12px · titles: page=h1(text-xl) section=text-sm
  */
 import type { ReactNode } from "react";
 
 export function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className="mx-auto w-full max-w-[1400px] p-5 lg:p-8">{children}</div>
+    <div data-slot="page-shell" className="min-h-screen bg-[var(--background)] font-[var(--font)] text-[13px] leading-normal text-[var(--foreground)]">
+      <div data-slot="page-content" className="mx-auto w-full max-w-[1400px] p-5 lg:p-8">{children}</div>
     </div>
   );
 }
@@ -70,7 +70,7 @@ export function PageHeader({
         </div>
       </div>
         </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div data-slot="page-actions" className="flex flex-wrap items-center gap-2 [&_button]:text-xs">{actions}</div>}
     </header>
   );
 }

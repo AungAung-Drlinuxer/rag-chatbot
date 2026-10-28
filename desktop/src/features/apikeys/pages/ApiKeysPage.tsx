@@ -181,9 +181,9 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
         }
       />
 
-      <div className="mx-auto max-w-[1000px] space-y-5 p-5 lg:p-8">
+      <div className="space-y-5">
           {/* Info banner */}
-          <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
+          <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-950/20">
             <ShieldAlert className="mt-0.5 size-4 shrink-0 text-blue-600" />
             <div className="text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
               <p className="font-medium">Use keys as <code className="rounded bg-muted px-1 font-mono">Authorization: Bearer &lt;key&gt;</code></p>
@@ -196,7 +196,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
 
           {/* Created-once panel — v1.5.9: once copied, the raw key is hidden permanently */}
           {created && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
               <div className="flex items-center justify-between">
                 {copied ? (
                   <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
@@ -233,7 +233,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
           )}
 
           {/* Keys table */}
-          <Card className="overflow-hidden rounded-2xl">
+          <Card className="overflow-hidden rounded-xl">
             <div className="flex items-center justify-between border-b px-5 py-4">
               <h2 className="text-sm font-semibold">
                 {isAdmin ? "All keys" : "Your keys"}
@@ -288,7 +288,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                         </span>
                         <span
                           className={[
-                            "rounded-full px-2 py-0.5 text-[9px] font-medium capitalize",
+                            "rounded-full px-2 py-0.5 text-2xs font-medium capitalize",
                             k.scope === "chat"
                               ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                               : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
@@ -298,12 +298,12 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                         </span>
                         {/* v1.5.8 — explicit status badges for both states */}
                         {k.active ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                             <span className="size-1.5 rounded-full bg-emerald-500" />
                             active
                           </span>
                         ) : (
-                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[9px] font-medium text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-2xs font-medium text-red-600 dark:bg-red-950/40 dark:text-red-400">
                             revoked
                           </span>
                         )}
@@ -335,7 +335,7 @@ export default function ApiKeysPage({ role, userName, onToast }: Props) {
                         )}
                         {isAdmin && (
                           <span className="inline-flex items-center gap-1">
-                            · <span className="rounded bg-slate-100 px-1 py-px text-[9px] font-medium dark:bg-slate-800">{k.owner}</span>
+                            · <span className="rounded bg-slate-100 px-1 py-px text-2xs font-medium dark:bg-slate-800">{k.owner}</span>
                           </span>
                         )}
                       </div>

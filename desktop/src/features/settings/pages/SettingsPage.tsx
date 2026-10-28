@@ -4,7 +4,6 @@ import {
   Check,
   Globe,
   Mail,
-  Info,
   Link2,
   Monitor,
   Save,
@@ -28,7 +27,7 @@ import ConnectorsGallery from "../components/ConnectorsGallery";
 import { BrandingSettings } from "../components/BrandingSettings";
 import { Image as ImageIcon } from "lucide-react";
 import {
-  getUserSettings, putUserSettings, getIntegrationSettings, putIntegrationSettings,
+  getMySettings, updateMySettings, getIntegrationSettings, putIntegrationSettings,
   getSmtpSettings, putSmtpSettings, sendTestEmail, getRuntime, putRuntime,
 } from "@/features/settings/api";
 import { LLM_PRESETS, presetFor, providerLabel } from "../llmProviders";
@@ -91,16 +90,16 @@ const SETTINGS_NAV: { group: string; items: { id: string; label: string; icon: R
   {
     group: "Application",
     items: [
-      { id: "general", label: "General", icon: <Globe className="size-4" /> },
+      { id: "general", label: "Preferences", icon: <Monitor className="size-4" /> },
       { id: "integrations", label: "Integrations", icon: <Plug className="size-4" /> },
     ],
   },
   {
     group: "Customize",
     items: [
-      { id: "skills", label: "Skills", icon: <BookOpen className="size-4" /> },
+      { id: "skills", label: "AI service", icon: <BookOpen className="size-4" /> },
       { id: "connectors", label: "Connectors", icon: <LayoutGrid className="size-4" /> },
-      { id: "notifications", label: "Notifications", icon: <Bell className="size-4" /> },
+      { id: "notifications", label: "Email server", icon: <Bell className="size-4" /> },
     ],
   },
 ];
@@ -109,7 +108,7 @@ function SectionCard({ icon, iconTone, title, description, children }: {
   icon: React.ReactNode; iconTone: string; title: string; description: string; children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
       <div className="border-b border-[var(--border)] px-6 py-4.5 bg-muted/20">
         <div className="flex items-center gap-3.5">
           <div className={`flex size-9 items-center justify-center rounded-xl ${iconTone}`}>{icon}</div>
@@ -122,6 +121,14 @@ function SectionCard({ icon, iconTone, title, description, children }: {
       <div className="divide-y divide-[var(--border)]">{children}</div>
     </section>
   );
+}
+
+function applyThemeNow(dark: boolean, dense: boolean, anim: boolean, fontSize: number) {
+  const root = document.documentElement;
+  root.setAttribute("data-theme", dark ? "dark" : "light");
+  root.dataset.compact = dense ? "1" : "0";
+  root.classList.toggle("animations-off", !anim);
+  root.style.setProperty("--chat-font-size", `${fontSize}px`);
 }
 
 /* ============================================================
@@ -138,106 +145,42 @@ export default function Settings({ role }: { role?: string }) {
   const [saved, setSaved] =
     useState(false);
 
-  // General — server DB backed live state
-  const [appName, setAppName] = useState("IT Help Chatbot");
-  const [language, setLanguage] = useState("English");
+  // Personal preferences backed by typed user_settings fields where available.
   const [darkMode, setDarkMode] = useState(false);
   const [compact, setCompact] = useState(false);
-  const [timezone, setTimezone] = useState(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-  );
-  const [dateFormat, setDateFormat] = useState("YYYY-MM-DD");
-  const [itemsPerPage, setItemsPerPage] = useState(20);
   const [animations, setAnimations] = useState(true);
-  const [sounds, setSounds] = useState(false);
-  const [welcome, setWelcome] = useState(true);
-  const [rememberLast, setRememberLast] = useState(true);
-
-  // other sections (unchanged)
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [ticketNotifications, setTicketNotifications] = useState(true);
+  const [chatFontSize, setChatFontSize] = useState(14);
   const [sourceCitations, setSourceCitations] = useState(true);
-  const [strictRBAC, setStrictRBAC] = useState(true);
-  const [autoSync, setAutoSync] = useState(true);
-  const [syncInterval, setSyncInterval] = useState("30");
+  const [showTokenUsage, setShowTokenUsage] = useState(true);
+  const [markdownRendering, setMarkdownRendering] = useState(true);
+
+  // Shared assistant runtime controls (administrator only).
   const [topK, setTopK] = useState("5");
   const [similarityThreshold, setSimilarityThreshold] = useState("0.72");
-
-  // v0.21.30 — wire the remaining settings (Integrations/Security/Notifications/AI)
-  const [sessionTimeout, setSessionTimeout] = useState("8 hours");
-  const [requireHttps, setRequireHttps] = useState(true);
-  const [apiAuth, setApiAuth] = useState(true);
-  const [rateLimiting, setRateLimiting] = useState(true);
-  const [systemAlerts, setSystemAlerts] = useState(true);
-  const [dailyDigest, setDailyDigest] = useState(false);
-  const [llmProvider, setLlmProvider] = useState("Models Provider");
-  const [embeddingModel, setEmbeddingModel] = useState("nomic-embed-text");
-  const [confidenceGate, setConfidenceGate] = useState(true);
-
-  // Real DOM side-effects (visual only, server DB is the source of truth)
-    useEffect(() => {
-      applyThemeNow(darkMode, compact, animations);
-    }, [darkMode, compact, animations]);
-
-  function applyThemeNow(dark: boolean, compact: boolean, anim: boolean) {
-    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-    document.documentElement.dataset.compact = compact ? "1" : "0";
-    // v0.22.1 — no localStorage: theme/compact/animations are persisted only in the
-    // server-side user settings row, and re-applied from there on every load.
-    document.documentElement.classList.toggle("animations-off", !anim);
-  }
-
-  useEffect(() => {
-    document.documentElement.dataset.compact = compact ? "1" : "0";
-  }, [compact]);
-
-  useEffect(() => {
-    document.title = appName;
-  }, [appName]);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load saved settings from server DB on mount
+  // The API returns a flat preference object (older servers may wrap it).
   useEffect(() => {
     let mounted = true;
-    getUserSettings()
-      .then((d) => {
-        if (!mounted || !d.settings) return;
-        const s = d.settings;
-        if (typeof s.appName === "string") setAppName(s.appName);
-        if (typeof s.language === "string") setLanguage(s.language);
-        if (typeof s.darkMode === "boolean") setDarkMode(s.darkMode);
-        else if (s.theme === "dark") setDarkMode(true);
-        else if (s.theme === "light") setDarkMode(false);
-        if (typeof s.compact === "boolean") setCompact(s.compact);
-        if (typeof s.timezone === "string") setTimezone(s.timezone);
-        if (typeof s.dateFormat === "string") setDateFormat(s.dateFormat);
-        if (typeof s.itemsPerPage === "number") setItemsPerPage(s.itemsPerPage);
-        if (typeof s.animations === "boolean") setAnimations(s.animations);
-        if (typeof s.sounds === "boolean") setSounds(s.sounds);
-        if (typeof s.welcome === "boolean") setWelcome(s.welcome);
-        if (typeof s.rememberLast === "boolean") setRememberLast(s.rememberLast);
-        if (typeof s.emailNotifications === "boolean") setEmailNotifications(s.emailNotifications);
-        if (typeof s.ticketNotifications === "boolean") setTicketNotifications(s.ticketNotifications);
-        if (typeof s.sourceCitations === "boolean") setSourceCitations(s.sourceCitations);
-        if (typeof s.strictRBAC === "boolean") setStrictRBAC(s.strictRBAC);
-        if (typeof s.autoSync === "boolean") setAutoSync(s.autoSync);
-        if (typeof s.syncInterval === "string") setSyncInterval(s.syncInterval);
-        if (typeof s.topK === "string") setTopK(s.topK);
-        if (typeof s.similarityThreshold === "string") setSimilarityThreshold(s.similarityThreshold);
-        if (typeof s.sessionTimeout === "string") setSessionTimeout(s.sessionTimeout);
-        if (typeof s.requireHttps === "boolean") setRequireHttps(s.requireHttps);
-        if (typeof s.apiAuth === "boolean") setApiAuth(s.apiAuth);
-        if (typeof s.rateLimiting === "boolean") setRateLimiting(s.rateLimiting);
-        if (typeof s.systemAlerts === "boolean") setSystemAlerts(s.systemAlerts);
-        if (typeof s.dailyDigest === "boolean") setDailyDigest(s.dailyDigest);
-        if (typeof s.llmProvider === "string") setLlmProvider(s.llmProvider);
-        if (typeof s.embeddingModel === "string") setEmbeddingModel(s.embeddingModel);
-        if (typeof s.confidenceGate === "boolean") setConfidenceGate(s.confidenceGate);
-        // Apply theme immediately so the user sees the change even if the
-        // state setter is batched or hasn't propagated yet.
-        applyThemeNow(!!s.darkMode, !!s.compact, s.animations !== false);
+    getMySettings()
+      .then((s) => {
+        if (!mounted) return;
+        const dark = s.theme === "system"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          : s.theme ? s.theme === "dark" : !!s.darkMode;
+        const dense = typeof s.compact === "boolean" ? s.compact : s.density === "compact";
+        const fontSize = typeof s.chat_font_size === "number" ? s.chat_font_size : 14;
+        const anim = s.animations !== false;
+        setDarkMode(dark);
+        setCompact(dense);
+        setAnimations(anim);
+        setChatFontSize(fontSize);
+        if (typeof s.show_rag_sources === "boolean") setSourceCitations(s.show_rag_sources);
+        if (typeof s.show_token_usage === "boolean") setShowTokenUsage(s.show_token_usage);
+        if (typeof s.markdown_rendering === "boolean") setMarkdownRendering(s.markdown_rendering);
+        applyThemeNow(dark, dense, anim, fontSize);
       })
       .catch((e) => { if (mounted) setSaveError(e?.message || "Could not load saved settings"); });
     return () => { mounted = false; };
@@ -246,27 +189,25 @@ export default function Settings({ role }: { role?: string }) {
   async function saveSettings() {
     setSaving(true); setSaveError(null);
     const payload = {
-      appName, language, darkMode, compact, timezone, dateFormat,
-      theme: darkMode ? "dark" : "light",
-      itemsPerPage, animations, sounds, welcome, rememberLast,
-      emailNotifications, ticketNotifications, sourceCitations,
-      strictRBAC, autoSync, syncInterval, topK, similarityThreshold,
-      sessionTimeout, requireHttps, apiAuth, rateLimiting,
-      systemAlerts, dailyDigest, llmProvider, embeddingModel, confidenceGate,
+      theme: darkMode ? "dark" as const : "light" as const,
+      density: compact ? "compact" as const : "comfortable" as const,
+      compact,
+      animations,
+      chat_font_size: chatFontSize,
+      show_rag_sources: sourceCitations,
+      show_token_usage: showTokenUsage,
+      markdown_rendering: markdownRendering,
     };
     try {
-      await putUserSettings(payload);
-      // v1.6.2 — BUGFIX: putRuntime previously ran only in the catch branch, so RAG
-      // runtime knobs (top_k / confidence threshold) were never persisted when the
-      // settings save succeeded. Save them on the success path now.
-      try {
+      await updateMySettings(payload);
+      if (isAdmin && active === "skills") {
         await putRuntime({
           retrieval_top_k: Number(topK) || 5,
           confidence_gate_threshold: Number(similarityThreshold) || 0.75,
         });
-      } catch { /* non-admin: user prefs already saved */ }
-      // Apply the just-saved theme immediately (synchronous DOM update)
-      applyThemeNow(!!darkMode, !!compact, animations);
+      }
+      applyThemeNow(darkMode, compact, animations, chatFontSize);
+      window.dispatchEvent(new CustomEvent("ith:settings-saved", { detail: payload }));
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
     } catch (err: any) {
@@ -277,6 +218,7 @@ export default function Settings({ role }: { role?: string }) {
   // v0.21.83 — load real backend runtime knobs on mount (admin only; silently
   // ignored for other roles since /api/runtime is gated 403).
   useEffect(() => {
+    if (!isAdmin) return;
     getRuntime()
       .then((d) => {
         if (!d) return;
@@ -285,7 +227,7 @@ export default function Settings({ role }: { role?: string }) {
         if (o.confidence_gate_threshold != null) setSimilarityThreshold(String(o.confidence_gate_threshold));
       })
       .catch(() => {});
-  }, []);
+  }, [isAdmin]);
 
   // v0.21.90 — real AI provider info (from /api/settings/integrations/llm), not a label
   const [llmCfg, setLlmCfg] = useState<Record<string, any> | null>(null);
@@ -301,7 +243,7 @@ export default function Settings({ role }: { role?: string }) {
     } catch { /* non-admin or unconfigured */ }
   };
 
-  useEffect(() => { refreshLlm(); }, []);
+  useEffect(() => { if (isAdmin) refreshLlm(); }, [isAdmin]);
 
   async function changeLlmProvider(id: string) {
     const preset = presetFor(id);
@@ -326,6 +268,12 @@ export default function Settings({ role }: { role?: string }) {
   }
 
   const llmPreset = presetFor(llmCfg?.provider);
+  const visibleNav = SETTINGS_NAV
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isAdmin || item.id === "general"),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <PageShell>
@@ -343,19 +291,21 @@ export default function Settings({ role }: { role?: string }) {
                 </span>
               )}
               {saveError && <span className="max-w-[200px] truncate text-[11px] text-red-600" title={saveError}>{saveError}</span>}
-              <button type="button" onClick={saveSettings} disabled={saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
-                <Save className="size-3.5" />
-                {saving ? "Saving…" : "Save changes"}
-              </button>
+              {(active === "general" || active === "skills") && (
+                <button type="button" onClick={saveSettings} disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
+                  <Save className="size-3.5" />
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
+              )}
             </div>
           }
         />
 
         {/* Main content — grouped nav on the left, one panel at a time (v1.6.75) */}
-        <main className="mx-auto flex max-w-[1400px] gap-6 pb-8">
+        <main className="flex gap-6">
           <nav aria-label="Settings sections" className="hidden w-52 shrink-0 lg:block">
-            {SETTINGS_NAV.map((g) => (
+            {visibleNav.map((g) => (
               <div key={g.group} className="mb-5">
                 <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   {g.group}
@@ -367,7 +317,7 @@ export default function Settings({ role }: { role?: string }) {
                       type="button"
                       onClick={() => setActive(it.id)}
                       aria-current={active === it.id ? "page" : undefined}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[12.5px] font-medium transition ${
+                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition ${
                         active === it.id
                           ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
                           : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60"
@@ -387,7 +337,7 @@ export default function Settings({ role }: { role?: string }) {
           {/* On small screens the nav is a horizontal strip so nothing is unreachable. */}
           <div className="min-w-0 flex-1">
             <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 lg:hidden">
-              {SETTINGS_NAV.flatMap((g) => g.items).map((it) => (
+              {visibleNav.flatMap((g) => g.items).map((it) => (
                 <button
                   key={it.id}
                   type="button"
@@ -404,32 +354,26 @@ export default function Settings({ role }: { role?: string }) {
             </div>
           <div className="space-y-5">
 
-            {/* ==================== GENERAL ==================== */}
+            {/* Personal chat preferences: every control changes message rendering. */}
             {active === "general" && (
-            <SectionCard icon={<Globe className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
+            <SectionCard icon={<Bot className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
               iconTone="bg-sky-50 dark:bg-sky-950/40"
-              title="General" description="Basic application settings and preferences.">
-              <div className="flex items-center justify-between gap-6 px-6 py-3.5">
-                <div className="min-w-0 pr-4">
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Application name</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Name displayed throughout the application</p>
-                </div>
-                <div className="w-52">
-                  <input type="text" value={appName} onChange={(e) => setAppName(e.target.value)}
-                    className="h-9 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-blue-500" />
-                </div>
-              </div>
-              <SelectRow label="Language" description="Language used by the application"
-                value={language} onChange={setLanguage} options={["English"]} />
-              <SelectRow label="Time zone" description="Used for timestamps and notifications"
-                value={timezone} onChange={setTimezone}
-                options={["Asia/Singapore", "Asia/Bangkok", "Asia/Yangon", "UTC", "Asia/Kolkata", "Europe/London"]} />
-              <SelectRow label="Date format" description="Format used for dates in tables and details"
-                value={dateFormat} onChange={setDateFormat}
-                options={["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY", "DD MMM YYYY"]} />
-              <SelectRow label="Items per page" description="Rows shown in ticket and knowledge lists"
-                value={String(itemsPerPage)} onChange={(v) => setItemsPerPage(Number(v) || 20)}
-                options={["10", "20", "25", "50", "100"]} />
+              title="Chat" description="Choose how answers appear in your desktop app.">
+              <SelectRow label="Chat font size" description="Text size used throughout the conversation"
+                value={String(chatFontSize)} onChange={(v) => {
+                  const size = Number(v);
+                  setChatFontSize(size);
+                  applyThemeNow(darkMode, compact, animations, size);
+                }} options={["12", "14", "16", "18"]} />
+              <ToggleRow checked={sourceCitations} onChange={setSourceCitations}
+                title="Show source citations"
+                description="Show referenced knowledge articles with assistant answers." />
+              <ToggleRow checked={showTokenUsage} onChange={setShowTokenUsage}
+                title="Show token usage"
+                description="Show input and output token counts below assistant answers." />
+              <ToggleRow checked={markdownRendering} onChange={setMarkdownRendering}
+                title="Format Markdown"
+                description="Render headings, lists, tables, links, and code blocks in answers." />
             </SectionCard>
             )}
 
@@ -449,7 +393,7 @@ export default function Settings({ role }: { role?: string }) {
                       <button key={option} type="button"
                         onClick={() => {
                           setDarkMode(option === "dark");
-                          applyThemeNow(option === "dark", compact, animations);
+                          applyThemeNow(option === "dark", compact, animations, chatFontSize);
                         }}
                         className={`rounded-lg px-3.5 py-1.5 text-xs font-medium capitalize transition ${
                           (option === "dark") === darkMode
@@ -461,10 +405,12 @@ export default function Settings({ role }: { role?: string }) {
                   </div>
                 </div>
                 <div className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
-                  <ToggleRow checked={compact} onChange={(v) => { setCompact(v); applyThemeNow(darkMode, v, animations); }} title="Compact mode"
+                  <ToggleRow checked={compact} onChange={(v) => { setCompact(v); applyThemeNow(darkMode, v, animations, chatFontSize); }} title="Compact mode"
                     description="Reduce space between elements." />
-                  <ToggleRow checked={animations} onChange={setAnimations} title="Animations"
-                    description="Interface transitions and motion." />
+                  <ToggleRow checked={animations} onChange={(v) => {
+                    setAnimations(v);
+                    applyThemeNow(darkMode, compact, v, chatFontSize);
+                  }} title="Animations" description="Interface transitions and motion." />
                 </div>
               </div>
             </SectionCard>
@@ -486,21 +432,9 @@ export default function Settings({ role }: { role?: string }) {
               iconTone="bg-teal-50 dark:bg-teal-950/40"
               title="Integrations" description="Connect external tools and services.">
               <IntegrationsConfig />
-              <div className="border-t border-slate-100 dark:border-slate-800 px-5 pb-5 pt-4">
+              <div className="border-t border-slate-100 px-5 pb-5 pt-4 dark:border-slate-800">
                 <p className="mb-3 text-2xs font-semibold uppercase tracking-wider text-slate-400">Service status</p>
                 <IntegrationStatusCards />
-                <div className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
-                  <ToggleRow checked={autoSync} onChange={setAutoSync}
-                    title="Automatic knowledge sync"
-                    description="Periodically import updated pages from Confluence into the knowledge base." />
-                </div>
-                <div className="mt-4 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-900">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                  <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    Knowledge base sync: {autoSync ? `automatic every ${syncInterval} minutes` : "manual only"}.
-                    Integration credentials are managed by administrators.
-                  </p>
-                </div>
               </div>
             </SectionCard>
             )}
@@ -597,12 +531,6 @@ export default function Settings({ role }: { role?: string }) {
                   </div>
                 </div>
                 <div className="px-5 pb-3">
-                  <ToggleRow checked={sourceCitations} onChange={setSourceCitations}
-                    title="Show source citations"
-                    description="Display the knowledge sources used to generate an answer." />
-                  <ToggleRow checked={confidenceGate} onChange={setConfidenceGate}
-                    title="Confidence gate"
-                    description="Hold the answer when retrieval confidence is below the threshold." />
                   <div className="flex items-center justify-between gap-6 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-900 dark:text-white">Top K results</p>
@@ -630,30 +558,8 @@ export default function Settings({ role }: { role?: string }) {
 
             
 
-            {/* ==================== NOTIFICATIONS ==================== */}
-            {active === "notifications" && (
-            <SectionCard icon={<Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-              iconTone="bg-amber-50 dark:bg-amber-950/40"
-              title="Notifications" description="Control how you receive updates and alerts.">
-              <div className="px-5">
-                <ToggleRow checked={ticketNotifications} onChange={setTicketNotifications}
-                  title="Ticket updates"
-                  description="Receive notifications when Jira tickets are created or updated." />
-                <ToggleRow checked={systemAlerts} onChange={setSystemAlerts}
-                  title="System notifications"
-                  description="Important system alerts and announcements." />
-                <ToggleRow checked={emailNotifications} onChange={setEmailNotifications}
-                  title="Email notifications"
-                  description="Email delivery for the enabled notifications (configured under Mail — admin only)." />
-                <ToggleRow checked={dailyDigest} onChange={setDailyDigest}
-                  title="Daily digest"
-                  description="Daily summary of usage and system activity." />
-              </div>
-            </SectionCard>
-            )}
-
             {/* ==================== SECURITY INFO ==================== */}
-            <section className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
+            <section className="rounded-xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
               <div className="flex gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" />
                 <div>
@@ -818,7 +724,7 @@ function MailSettings() {
   const labelCls = "mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="overflow-hidden rounded-xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/40">
@@ -981,7 +887,7 @@ function IntegrationStatusCards() {
               {chip(c.key)}
             </div>
             <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{c.desc}</p>
-            <div className="mt-1 truncate text-[9.5px] text-slate-400">{c.detail}</div>
+            <div className="mt-1 truncate text-2xs text-slate-400">{c.detail}</div>
           </div>
         </div>
       ))}

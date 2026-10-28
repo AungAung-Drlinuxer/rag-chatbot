@@ -28,6 +28,9 @@ function MessageBubble({
   busy = false,
   liveStageText,
   liveElapsedMs,
+  showSources = true,
+  showTokenUsage = true,
+  markdownRendering = true,
 }: {
   message: Message;
   onHelpful: () => void;
@@ -41,6 +44,9 @@ function MessageBubble({
   /** v1.6.38 — live pipeline stage (detail text) for the animated indicator */
   liveStageText?: string;
   liveElapsedMs?: number;
+  showSources?: boolean;
+  showTokenUsage?: boolean;
+  markdownRendering?: boolean;
 }) {
   const isUser = message.role === "user";
   const caution = message.decision === "caution";
@@ -163,7 +169,9 @@ function MessageBubble({
                 </div>
               )}
               {message.content ? (
-                <MarkdownMessage content={message.content} />
+                markdownRendering
+                  ? <MarkdownMessage content={message.content} />
+                  : <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</div>
               ) : busy ? (
                 /* v1.6.45 — the animated agent indicator, restored after the markdown
                    renderer was extracted into MarkdownMessage. */
@@ -234,7 +242,7 @@ function MessageBubble({
               cluster, and listing KB articles under it claims a provenance the answer
               does not have. The backend no longer sends them; this guard means a stale
               conversation or a cached payload cannot reintroduce them either. */}
-          {!isUser && message.toolUsed !== "mcp_infra" && (message.sources?.length ?? 0) > 0 && (
+          {showSources && !isUser && message.toolUsed !== "mcp_infra" && (message.sources?.length ?? 0) > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
               <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">
@@ -357,7 +365,7 @@ function MessageBubble({
           {!isUser && message.toolUsed !== "mcp_infra" && message.confidence != null && (
             <ConfidenceBadge confidence={message.confidence} />
           )}
-          {!isUser && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
+          {showTokenUsage && !isUser && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
             <span
               className="flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)]"
               title={message.latencyMs ? `Generated in ${(message.latencyMs / 1000).toFixed(1)}s` : undefined}

@@ -323,7 +323,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
               CONTENT
           ================================================= */}
 
-          <div className="mx-auto max-w-[1400px] space-y-5 p-5 lg:p-8">
+          <div className="space-y-5">
 
             {/* KPI */}
 
@@ -424,7 +424,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* Conversations */}
 
-              <Card className="rounded-2xl p-5">
+              <Card className="rounded-xl p-5">
 
                 <div className="flex items-start justify-between">
 
@@ -466,7 +466,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* Escalation */}
 
-              <Card className="rounded-2xl p-5">
+              <Card className="rounded-xl p-5">
 
                 <h2 className="text-sm font-semibold">
                   Escalation rate
@@ -518,7 +518,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* Domains */}
 
-              <Card className="rounded-2xl p-5">
+              <Card className="rounded-xl p-5">
 
                 <h2 className="text-sm font-semibold">
                   Top domains
@@ -549,7 +549,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 CONFIDENCE GATE TREND (v1.1.6 — real meta.decision data)
             ================================================= */}
 
-            <Card className="rounded-2xl p-5">
+            <Card className="rounded-xl p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-sm font-semibold">Confidence gate trend</h2>
@@ -581,7 +581,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* Recent conversations */}
 
-              <Card className="overflow-hidden rounded-2xl">
+              <Card className="overflow-hidden rounded-xl">
 
                 <SectionHeader
                   title="Recent conversations"
@@ -765,7 +765,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* Recent tickets */}
 
-              <Card className="overflow-hidden rounded-2xl">
+              <Card className="overflow-hidden rounded-xl">
 
                 <SectionHeader
                   title="Recent tickets"
@@ -812,7 +812,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* System health */}
 
-              <Card className="overflow-hidden rounded-2xl">
+              <Card className="overflow-hidden rounded-xl">
 
                 {/* #3 — three items packed into one flex row squeezed the title and
                     wrapped the badge onto two lines. Title + status line stack on the
@@ -1009,7 +1009,7 @@ function KpiCard({
     violet: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400",
   };
   return (
-    <Card className="relative overflow-hidden rounded-2xl p-4">
+    <Card className="relative overflow-hidden rounded-xl p-4">
 
       <div className="flex items-start justify-between">
 
@@ -1723,14 +1723,14 @@ function HealthRow({ item }: { item: HealthItem }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-[10px] font-medium leading-tight">{item.name}</div>
         {!healthy && item.detail && (
-          <div className="mt-0.5 truncate text-[9px] leading-tight text-rose-600/90 dark:text-rose-400/90" title={item.detail}>
+          <div className="mt-0.5 truncate text-2xs leading-tight text-rose-600/90 dark:text-rose-400/90" title={item.detail}>
             {item.detail}
           </div>
         )}
       </div>
 
       {healthy && item.latency_ms != null && (
-        <span className="shrink-0 text-[9px] tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
           {item.latency_ms}ms
         </span>
       )}
@@ -1796,7 +1796,7 @@ function GateTrendChart({
             x={left - 6}
             y={top + chartHeight - f * chartHeight + 3}
             textAnchor="end"
-            className="fill-slate-400 text-[9px]"
+            className="fill-slate-400 text-2xs"
           >
             {Math.round(f * max)}
           </text>
@@ -1819,7 +1819,7 @@ function GateTrendChart({
             key={d.day}
             x={x} y={height - 8}
             textAnchor="middle"
-            className="fill-slate-400 text-[9px]"
+            className="fill-slate-400 text-2xs"
           >
             {d.day}
           </text>

@@ -21,6 +21,13 @@ describe("theme engine", () => {
     expect(document.documentElement.style.getPropertyValue("--chat-font-size")).toBe("16px");
   });
 
+  it("applies typed density preferences from the settings API", () => {
+    applyUserPrefs({ density: "compact" });
+    expect(document.documentElement.dataset.compact).toBe("1");
+    applyUserPrefs({ density: "comfortable" });
+    expect(document.documentElement.dataset.compact).toBe("0");
+  });
+
   it("never writes 'undefined' into data-theme", () => {
     applyUserPrefs({});
     const val = document.documentElement.getAttribute("data-theme");

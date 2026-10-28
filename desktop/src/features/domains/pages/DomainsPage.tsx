@@ -50,8 +50,8 @@ export default function DomainsPage({
           title="Domain Manager"
           description="Manage routing domains, keywords, and classifier thresholds"
         />
-        <main className="mx-auto max-w-4xl p-6">
-          <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <main className="mx-auto max-w-4xl">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-full text-rose-600 mb-4">
               <ShieldAlert className="size-8" />
             </div>
@@ -74,7 +74,7 @@ export default function DomainsPage({
         description="Live management of classification domains, dynamic keyword matching, and Jira routes."
       />
 
-      <main className="mx-auto max-w-[1400px] p-6">
+      <main>
         {/* Quick Guide for Domain Managers */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40 text-xs">
@@ -96,7 +96,7 @@ export default function DomainsPage({
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
           {error && (
             <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-sm border-b border-rose-200 dark:border-rose-900">
               {error}

@@ -38,6 +38,7 @@ import {
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import { currentTime, type Message, type Source } from "@/features/chat/model";
 import { uploadAttachment } from "@/features/chat/api";
+import { useUserPreferences } from "@/app/useUserPreferences";
 
 /* ---------------- Context ---------------- */
 
@@ -106,6 +107,7 @@ function CopyButton({ getText, label }: { getText: () => string; label: string }
 type Msg = Message & { sources?: Source[]; confidence?: number; failed?: boolean; retryQuestion?: string };
 
 export function FloatingChatPopup() {
+  const preferences = useUserPreferences();
   const { open, setOpen, minimized, setMinimized } = useFloatingChat();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -430,7 +432,9 @@ export function FloatingChatPopup() {
                         one-click Copy button on code blocks). `compact` scales it down
                         for the 380px widget. */}
                     <div className="contents">
-                      <MarkdownMessage content={m.content} compact />
+                      {preferences.markdown_rendering
+                        ? <MarkdownMessage content={m.content} compact />
+                        : <p className="whitespace-pre-wrap">{m.content}</p>}
                     </div>
                     {m.failed && (
                       <button
@@ -442,7 +446,7 @@ export function FloatingChatPopup() {
                         Retry
                       </button>
                     )}
-                    {(m.sources?.length ?? 0) > 0 && (
+                    {preferences.show_rag_sources && (m.sources?.length ?? 0) > 0 && (
                       <div className="mt-2 border-t border-[var(--border)] pt-2">
                         <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
                           <Sparkles className="size-3 text-blue-500" /> Sources

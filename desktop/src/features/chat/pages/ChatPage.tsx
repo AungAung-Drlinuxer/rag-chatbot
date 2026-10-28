@@ -48,6 +48,7 @@ import {
 } from "@/features/conversations/api";
 import { createTicketApi, listActiveDomains, listTicketDestinations } from "@/features/tickets/api";
 import { assignableUsers } from "@/features/users/api";
+import { useUserPreferences } from "@/app/useUserPreferences";
 
 /* ============================================================
    MAIN COMPONENT
@@ -71,6 +72,7 @@ export default function Chat({
   onLogout?: () => void;
 }) {
 
+  const preferences = useUserPreferences();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [conversations, setConversations] = useState<Conv[]>([]);
@@ -841,6 +843,9 @@ useEffect(() => {
                     key={m.id}
                     message={m}
                     busy={isTyping}
+                    showSources={preferences.show_rag_sources}
+                    showTokenUsage={preferences.show_token_usage}
+                    markdownRendering={preferences.markdown_rendering}
                     liveStageText={stage}
                     liveElapsedMs={pipeline.elapsed}
                     onHelpful={() => submitFeedback(m, 1)}
@@ -983,12 +988,12 @@ useEffect(() => {
       {/* ================= RIGHT SOURCE PANEL ================= */}
       {/* S2.6 — always mounted on xl (was gated on messages.length > 0, which made
           the message column jump 300px narrower the moment the first answer landed). */}
-      {showSources && (
+      {preferences.show_rag_sources && showSources && (
         <aside className="hidden w-[300px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--card)] xl:flex">
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
             <div>
               <h2 className="text-[12px] font-semibold leading-tight">Knowledge sources</h2>
-              <p className="text-[9px] leading-tight text-muted-foreground">
+              <p className="text-2xs leading-tight text-muted-foreground">
                 Retrieved for this conversation
               </p>
             </div>

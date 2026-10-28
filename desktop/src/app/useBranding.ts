@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BASE } from "@/shared/api/client";
+import { apiFetch, BASE } from "@/shared/api/client";
 
 export type Branding = { logo: string | null; appName: string | null };
 
@@ -18,7 +18,7 @@ export function useBranding(): Branding {
     const l = (v: Branding) => setB(v);
     listeners.add(l);
     if (!cache) {
-      fetch(`${BASE}/api/branding`)
+      apiFetch(`${BASE}/api/branding`)
         .then((r) => (r.ok ? r.json() : { logo: null, appName: null }))
         .then((v) => { cache = v; setB(v); listeners.forEach((x) => x(v)); })
         .catch(() => {});

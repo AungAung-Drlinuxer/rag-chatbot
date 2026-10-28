@@ -127,7 +127,7 @@ export default function ConversationHistoryPage() {
 
   return (
     <PageShell>
-      <div className="text-[13px]">
+      <div>
         <PageHeader
           icon={<MessagesSquare className="size-5" />}
           title="Conversation History"
@@ -147,15 +147,15 @@ export default function ConversationHistoryPage() {
 
         {/* Stat cards */}
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Conversations</div>
             <div className="mt-1 text-2xl font-bold text-sky-700 dark:text-sky-300">{convs.length}</div>
           </div>
-          <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total messages</div>
             <div className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-300">{totalMsgs}</div>
           </div>
-          <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Users active</div>
             <div className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">{activeUsers}</div>
           </div>
@@ -268,7 +268,7 @@ export default function ConversationHistoryPage() {
 
           {/* Detail side panel */}
           <div className="hidden lg:block">
-            <div className="sticky top-8 flex h-[588px] flex-col overflow-hidden rounded-2xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="sticky top-8 flex h-[588px] flex-col overflow-hidden rounded-xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               {detail ? (
                 <>
                   <div className="border-b px-4 py-3 dark:border-slate-800">
@@ -279,7 +279,7 @@ export default function ConversationHistoryPage() {
                         </span>
                         <div className="min-w-0">
                           <div className="truncate text-[12px] font-semibold">{openUser}</div>
-                          <div className="truncate text-[9.5px] text-muted-foreground">{detail.title}</div>
+                          <div className="truncate text-2xs text-muted-foreground">{detail.title}</div>
                         </div>
                       </div>
                       <button

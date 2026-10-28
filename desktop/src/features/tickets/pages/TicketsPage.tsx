@@ -627,7 +627,7 @@ function SyncMenu({
       }
     />
 
-          <div className="mx-auto grid max-w-[1400px] grid-cols-1 items-start gap-5 p-5 lg:p-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-6">
 
             {/* =================================================
@@ -681,7 +681,7 @@ function SyncMenu({
             {/* =================================================
                 FILTER TOOLBAR
             ================================================= */}
-            <Card className="rounded-2xl p-4">
+            <Card className="rounded-xl p-4">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
 
                 <div className="relative flex-1 xl:max-w-xl">
@@ -779,7 +779,7 @@ function SyncMenu({
             {/* =================================================
                 TABLE
             ================================================= */}
-            <Card className="overflow-hidden rounded-2xl">
+            <Card className="overflow-hidden rounded-xl">
 
               <div className="flex items-center justify-between border-b px-5 py-4">
                 <div>
@@ -1058,7 +1058,7 @@ function SyncMenu({
               {/* ==========================================================
                   TICKET DETAIL — persistent right panel (split-pane)
               ========================================================== */}
-              <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-sm xl:block">
+              <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-sm xl:block">
                 {!selected ? (
                   <div className="flex h-64 flex-col items-center justify-center gap-3 p-8 text-center">
                     <div className="grid size-12 place-items-center rounded-2xl bg-muted">

@@ -1,0 +1,134 @@
+# === rag-chatbot — Valkey Sentinel =========================================
+# 3 sentinels form a Raft group, automatically elect a master after failover.
+# Application connects via `valkey-service` ClusterIP which the backend
+# python-redis (or valkey-py) client resolves through sentinel topology discovery.
+#
+# Sentinel master set name: rag-chatbot-valkey  → set REDIS_MASTER_NAME accordingly.
+#
+# v1 "fix" is baked in: sentinels crash at boot when CoreDNS is not yet ready
+# (worker node restart) — Sentinel resolves `sentinel monitor` hostnames ONCE
+# at startup and FATAL-exits on failure. The init wait loop retries until DNS
+# is live so the server never boots into a FATAL config error.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey-sentinel
+  namespace: rag-chatbot
+spec:
+  serviceName: valkey-sentinel-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+      app.kubernetes.io/component: sentinel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/component: sentinel
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: valkey
+                    app.kubernetes.io/component: sentinel
+      initContainers:
+        - name: sentinel-config-init
+          image: valkey/valkey:9.1.2
+          imagePullPolicy: IfNotPresent
+          # Sentinel rewrites its config at runtime → needs a WRITABLE /conf.
+          command:
+            - sh
+            - -c
+            - |
+              cp /readonly-config/sentinel.conf /conf/sentinel.conf
+              chmod 644 /conf/sentinel.conf
+              echo "Waiting for master hostname DNS to resolve..."
+              i=0
+              until getent hosts valkey-data-0.valkey-data-headless.rag-chatbot.svc.cluster.local >/dev/null 2>&1; do
+                i=$((i+1))
+                if [ "$i" -ge 60 ]; then
+                  echo "DNS still unresolved after 120s - continuing anyway"
+                  break
+                fi
+                sleep 2
+              done
+              echo "DNS check done"
+          volumeMounts:
+            - { name: conf, mountPath: /conf }
+            - { name: readonly-config, mountPath: /readonly-config }
+      containers:
+        - name: sentinel
+          image: valkey/valkey:9.1.2
+          imagePullPolicy: IfNotPresent
+          command: ["valkey-server", "/conf/sentinel.conf", "--sentinel"]
+          ports:
+            - name: sentinel
+              containerPort: 26379
+          volumeMounts:
+            - { name: conf, mountPath: /conf }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+          livenessProbe:
+            exec:
+              command: ["valkey-cli","-a","__REPLACE_WITH_RANDOM_32_BYTES__","-p","26379","ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: conf
+          emptyDir: {}
+        - name: readonly-config
+          configMap:
+            name: valkey-config
+            items: [{ key: sentinel.conf, path: sentinel.conf }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-sentinel-headless
+  namespace: rag-chatbot
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: sentinel
+  ports:
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-sentinel-service
+  namespace: rag-chatbot
+spec:
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: sentinel
+  ports:
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-service
+  namespace: rag-chatbot
+spec:
+  # Points at the valkey DATA pods (the current master is discovered via Sentinel).
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: data
+  ports:
+    - name: client
+      port: 6379
+      targetPort: client

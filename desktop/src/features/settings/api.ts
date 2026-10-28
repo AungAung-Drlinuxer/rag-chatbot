@@ -3,9 +3,13 @@ import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
 
 export type UserSettings = {
   username?: string;
-  theme: string;                 // light | dark | system
-  density: string;               // comfortable | compact
+  theme: "light" | "dark" | "system";
+  density: "comfortable" | "compact";
   chat_font_size: number;
+  /** Legacy JSON preferences still used by the appearance engine. */
+  compact?: boolean;
+  animations?: boolean;
+  darkMode?: boolean;
   code_font: string;
   show_token_usage: boolean;
   show_rag_sources: boolean;

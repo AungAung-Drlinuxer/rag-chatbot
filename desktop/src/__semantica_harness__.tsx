@@ -24,7 +24,7 @@ function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-const fx: Fixture = await (await fetch("/semantica_fixture.json")).json();
+const fx: Fixture = await (await window.fetch("/semantica_fixture.json")).json();
 
 // Serve the captured payloads for the page's own API calls. Everything else falls through, so
 // the page's real fetch/auth code path is exercised rather than bypassed.

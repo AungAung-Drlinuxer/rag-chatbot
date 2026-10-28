@@ -131,7 +131,7 @@ export default function AuditsPage() {
 
   return (
     <PageShell>
-      <div className="text-[13px]">
+      <div>
         <PageHeader
           icon={<ScrollText className="size-5" />}
           title="Audit Log"
@@ -161,26 +161,26 @@ export default function AuditsPage() {
 
         {/* stats */}
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               <Activity className="size-3.5 text-sky-600" /> Events shown
             </div>
             <div className="mt-1 text-2xl font-bold text-sky-700 dark:text-sky-300">{shown.length.toLocaleString()}</div>
-            <div className="text-[9.5px] text-muted-foreground">of {total.toLocaleString()} total events in log</div>
+            <div className="text-2xs text-muted-foreground">of {total.toLocaleString()} total events in log</div>
           </div>
-          <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               <ShieldCheck className="size-3.5 text-cyan-600" /> Today
             </div>
             <div className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-300">{today}</div>
-            <div className="text-[9.5px] text-muted-foreground">events in current page</div>
+            <div className="text-2xs text-muted-foreground">events in current page</div>
           </div>
-          <div className="rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               <UserCheck className="size-3.5 text-teal-600" /> Distinct users
             </div>
             <div className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">{users}</div>
-            <div className="text-[9.5px] text-muted-foreground">in current page</div>
+            <div className="text-2xs text-muted-foreground">in current page</div>
           </div>
         </div>
 
