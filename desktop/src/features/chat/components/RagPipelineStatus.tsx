@@ -375,14 +375,20 @@ export default function RagPipelineStatus({
                 data-state={isActive ? "running" : isDone ? "done" : "pending"}
                 className="flex w-[5.5rem] shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1"
               >
+                {/* Badge colour alternates blue/green down the strip, exactly as the
+                    reference draws it: steps 1-4 are all complete there (127/76/13/1 ms)
+                    yet only 2 and 4 are green, so this is a 2-tone rhythm and not a state
+                    signal. State is still readable from the ms slot below ("Running", the
+                    measured ms, or "pending"). Steps that have not started stay muted so a
+                    fresh run does not look finished. */}
                 <span
                   className={`grid size-8 shrink-0 place-items-center rounded-full shadow-sm ${
-                    isActive
-                      ? "animate-pulse bg-blue-600 text-white"
-                      : isDone
-                        ? "bg-emerald-500 text-white"
-                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
-                  }`}
+                    !isActive && !isDone
+                      ? "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+                      : idx % 2 === 0
+                        ? "bg-blue-600 text-white"
+                        : "bg-emerald-500 text-white"
+                  } ${isActive ? "animate-pulse" : ""}`}
                 >
                   <step.icon aria-hidden className="size-4" />
                 </span>
