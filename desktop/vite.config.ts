@@ -28,7 +28,6 @@ export default defineConfig({
         manualChunks: {
           react: ["react", "react-dom"],
           markdown: ["react-markdown", "remark-gfm"],
-          motion: ["framer-motion"],
         },
       },
     },
