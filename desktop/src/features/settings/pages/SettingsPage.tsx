@@ -221,11 +221,11 @@ export default function Settings({ role }: { role?: string }) {
           actions={
             <div className="flex items-center gap-2">
               {saved && (
-                <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
                   <Check className="size-3.5" /> Saved
                 </span>
               )}
-              {saveError && <span className="max-w-[200px] truncate text-[11px] text-red-600" title={saveError}>{saveError}</span>}
+              {saveError && <span className="max-w-[200px] truncate text-xs text-red-600" title={saveError}>{saveError}</span>}
               {active === "general" && (
                 <button type="button" onClick={saveSettings} disabled={saving}
                   className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
@@ -242,7 +242,7 @@ export default function Settings({ role }: { role?: string }) {
           <nav aria-label="Settings sections" className="hidden w-52 shrink-0 lg:block">
             {visibleNav.map((g) => (
               <div key={g.group} className="mb-5">
-                <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="mb-1.5 px-3 text-2xs font-semibold uppercase tracking-wider text-slate-400">
                   {g.group}
                 </p>
                 <div className="space-y-0.5">
@@ -252,7 +252,7 @@ export default function Settings({ role }: { role?: string }) {
                       type="button"
                       onClick={() => setActive(it.id)}
                       aria-current={active === it.id ? "page" : undefined}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition ${
+                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
                         active === it.id
                           ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
                           : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60"
@@ -277,7 +277,7 @@ export default function Settings({ role }: { role?: string }) {
                   key={it.id}
                   type="button"
                   onClick={() => setActive(it.id)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                     active === it.id
                       ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                       : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -517,7 +517,7 @@ function MailSettings() {
       <span className={labelCls}>
         {label}
         {smtpConfigured(fieldKey) && (
-          <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-emerald-600">
+          <span className="ml-2 inline-flex items-center gap-1 text-2xs text-emerald-600">
             <Lock className="h-3 w-3" /> saved — not retrievable
           </span>
         )}
@@ -527,7 +527,7 @@ function MailSettings() {
           <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
             <Lock className="h-3 w-3 shrink-0 text-slate-400" />
             <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
-            <span className="ml-auto text-[10px] text-slate-400">write-only</span>
+            <span className="ml-auto text-2xs text-slate-400">write-only</span>
           </div>
           <button
             type="button"
@@ -560,7 +560,7 @@ function MailSettings() {
   }
 
   const inputCls = "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white";
-  const labelCls = "mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
+  const labelCls = "mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground";
 
   return (
     <section className="overflow-hidden rounded-xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -637,22 +637,22 @@ function MailSettings() {
                     onKeyDown={(e) => { if (e.key === "Enter") sendTest(); }} />
                 </label>
                 <button onClick={sendTest} disabled={testing}
-                  className="h-10 shrink-0 rounded-xl border px-5 text-[11px] font-semibold transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800">
+                  className="h-10 shrink-0 rounded-xl border px-5 text-xs font-semibold transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800">
                   {testing ? "Sending…" : "Send test"}
                 </button>
                 <button onClick={save} disabled={saving}
-                  className="h-10 shrink-0 rounded-xl bg-sky-700 px-5 text-[11px] font-semibold text-white transition hover:bg-sky-600 disabled:opacity-50">
+                  className="h-10 shrink-0 rounded-xl bg-[var(--primary)] px-5 text-xs font-semibold text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50">
                   {saving ? "Saving…" : "Save mail settings"}
                 </button>
               </div>
-              <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
+              <p className="mt-2 text-2xs leading-4 text-muted-foreground">
                 Gmail: use a 16-character App Password (Google Account → Security → 2-Step Verification → App passwords),
                 not your normal password. Host smtp.gmail.com, port 587, TLS on.
               </p>
             </div>
-            {saved && <p className="text-[11px] font-medium text-emerald-600">Mail settings saved ✓</p>}
-            {testMsg && <p className="text-[11px] font-medium text-emerald-600">{testMsg}</p>}
-            {error && <p className="text-[11px] font-medium text-red-600">{error}</p>}
+            {saved && <p className="text-xs font-medium text-emerald-600">Mail settings saved ✓</p>}
+            {testMsg && <p className="text-xs font-medium text-emerald-600">{testMsg}</p>}
+            {error && <p className="text-xs font-medium text-red-600">{error}</p>}
           </>
         )}
       </div>
@@ -690,7 +690,7 @@ function IntegrationStatusCards() {
     if (!s) return null;
     const ok = /healthy|ok|up/i.test(s);
     return (
-      <span className={["inline-flex items-center gap-1 text-[10px] font-medium", ok ? "text-emerald-500" : "text-red-400"].join(" ")}>
+      <span className={["inline-flex items-center gap-1 text-2xs font-medium", ok ? "text-emerald-500" : "text-red-400"].join(" ")}>
         <span className={["size-1.5 rounded-full", ok ? "bg-emerald-500" : "bg-red-400"].join(" ")} />
         {ok ? "Connected" : s}
       </span>
@@ -721,10 +721,10 @@ function IntegrationStatusCards() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[12px] font-semibold">{c.name}</span>
+              <span className="text-xs font-semibold">{c.name}</span>
               {chip(c.key)}
             </div>
-            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{c.desc}</p>
+            <p className="mt-0.5 truncate text-2xs text-muted-foreground">{c.desc}</p>
             <div className="mt-1 truncate text-2xs text-slate-400">{c.detail}</div>
           </div>
         </div>

@@ -92,7 +92,7 @@ export function NotificationBell({
         {notices.length > 0 && (
           <>
             <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-red-500" />
-            <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-red-500 text-[8px] font-bold text-white">
+            <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-red-500 text-3xs font-bold text-white">
               {notices.length > 9 ? "9+" : notices.length}
             </span>
           </>
@@ -129,7 +129,7 @@ function NoticeList({ notices, onOpen, onClose }: { notices: Notice[]; onOpen?: 
           <span className={"mt-1 size-1.5 shrink-0 rounded-full " + (n.kind === "approval" ? "bg-amber-500" : n.kind === "monitoring" ? "bg-red-500" : "bg-sky-500")} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium">{n.label}</span>
-            <span className="block text-[10px] text-muted-foreground">{n.sub}</span>
+            <span className="block text-2xs text-muted-foreground">{n.sub}</span>
           </span>
         </button>
       ))}

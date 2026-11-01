@@ -121,7 +121,7 @@ export default function AgentActivity({
           {compact ? def.chip : def.label}
         </span>
         {extra && !compact && (
-          <span className="mt-0.5 truncate text-[10px] text-muted-foreground">{extra}</span>
+          <span className="mt-0.5 truncate text-2xs text-muted-foreground">{extra}</span>
         )}
       </span>
 
@@ -137,7 +137,7 @@ export default function AgentActivity({
       </span>
 
       {seconds != null && seconds > 0 && (
-        <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+        <span className="ml-auto shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
           {seconds}s
         </span>
       )}

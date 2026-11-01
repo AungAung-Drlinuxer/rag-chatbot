@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  BookOpen,
-  Check,
-  Clock3,
-  ExternalLink,
-  RefreshCw,
-  Search,
-  Sparkles,
-  X,
   AlertTriangle,
-  FolderInput,
+  ArrowUpDown,
+  BookOpen,
   ChevronDown,
   ChevronUp,
-  ArrowUpDown,
+  Clock3,
+  Database,
+  ExternalLink,
+  FolderInput,
+  Layers,
+  RefreshCw,
+  Search,
+  SearchX,
+  X,
 } from "lucide-react";
 
 import {
@@ -33,7 +34,7 @@ import {
   ICON_OPTIONS,
 } from "@/features/domains/components/DomainClassifierManager";
 
-import { PageShell, PageHeader } from "@/components/ui/page";
+import { EmptyState, ErrorState, PageHeader, PageShell } from "@/components/ui/page";
 import { providerOf, allProviders } from "@/lib/kbProvider";
 import ReclassifyPanel from "../components/ReclassifyPanel";
 import { Badge } from "@/components/ui/badge";
@@ -164,11 +165,38 @@ function highlight(text: string, term: string) {
   return (
     <>
       {text.slice(0, i)}
-      <mark className="rounded bg-amber-200/70 px-0.5 text-slate-900 dark:bg-amber-500/30 dark:text-amber-100">
+      <mark className="rounded bg-amber-200/70 px-0.5 text-amber-950 dark:bg-amber-500/30 dark:text-amber-100">
         {text.slice(i, i + t.length)}
       </mark>
       {text.slice(i + t.length)}
     </>
+  );
+}
+
+/** Column names as the table shows them, so the sort summary matches the header. */
+const SORT_LABELS: Record<"last_synced" | "title" | "domain", string> = {
+  last_synced: "Synced",
+  title: "Article Title",
+  domain: "Domain",
+};
+
+/**
+ * A removable filter chip. The label is the filter's human name and the × is the way out,
+ * so the user never has to hunt for which control set the filter.
+ */
+function FilterPill({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--accent-soft)] px-1.5 py-0.5 font-medium text-[var(--accent-foreground)]">
+      {label}
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label={`Remove filter ${label}`}
+        className="rounded p-0.5 transition hover:bg-black/10 dark:hover:bg-white/10"
+      >
+        <X className="size-2.5" />
+      </button>
+    </span>
   );
 }
 
@@ -286,8 +314,12 @@ export default function Knowledge({
   const [chip, setChip] = useState("all");
   const [busy, setBusy] = useState(false);
   const [listing, setListing] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
+
+  /** True when anything is narrowing the list — drives the filter summary row. */
+  const hasFilters = chip !== "all" || providerFilter !== "all" || query.trim().length > 0;
 
   async function loadBrowse() {
     const [domainResponse, syncResponse] = await Promise.all([
@@ -314,6 +346,7 @@ export default function Knowledge({
 
   async function loadList(domain: string, q = "", offset = 0) {
     setListing(true);
+    setListError(null);
     try {
       // Keyword search still goes through the vector/hybrid endpoint when the user
       // asks for relevance; the plain list endpoint handles filters + paging.
@@ -321,7 +354,12 @@ export default function Knowledge({
       setItems(res.articles ?? []);
       if (typeof res.total === "number") setKbTotal(res.total);
       setPage(Math.floor(offset / pageSize) + 1);
-    } catch {
+    } catch (err) {
+      // Kept the toast (it is the app-wide convention for transient failures) AND added
+      // the inline state, because a toast disappears and leaves an empty table behind —
+      // which reads as "you have no articles" rather than "the request failed".
+      setListError(err instanceof Error ? err.message : String(err));
+      setItems([]);
       onToast("Failed to load article list", "err");
     } finally {
       setListing(false);
@@ -419,10 +457,10 @@ export default function Knowledge({
                 ].join(" ")}
               />
               <div>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                <span className="font-semibold text-foreground">
                   {status?.healthy ? "KB Synced" : "Sync Pending"}
                 </span>
-                <span className="text-[10px] text-muted-foreground ml-1.5">
+                <span className="text-2xs text-muted-foreground ml-1.5">
                   {status?.last_run ? `(${relTime(status.last_run.at)})` : ""}
                 </span>
               </div>
@@ -443,119 +481,127 @@ export default function Knowledge({
       />
 
       <main className="space-y-5">
-          <div className="space-y-5">
-            {/* TOP SEARCH BAR & DOMAIN CHIPS */}
-            <section className="rounded-xl border border-[var(--border)] bg-gradient-to-r from-blue-50/40 via-card to-indigo-50/20 p-5 shadow-xs dark:from-blue-950/15 dark:via-card dark:to-indigo-950/15">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Sparkles className="size-4 text-blue-600" />
-                    Find Knowledge & Verify Document Coverage
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Real-time lexical and semantic search across indexed documents retrieved for AI answers.
-                  </p>
-                </div>
+          {/* ---------------------------------------------------------------
+              TOOLBAR
 
-                <form onSubmit={handleSearch} className="flex items-center gap-2 w-full md:w-[420px]">
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search solutions, errors, procedures..."
-                      className="h-10 w-full rounded-xl border border-[var(--border)] bg-white pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 dark:bg-slate-900"
-                    />
-                  </div>
-                  <select
-                    value={qField}
-                    onChange={(e) => setQField(e.target.value as "all" | "title" | "body")}
-                    title="Where to look for the search text"
-                    className="h-10 shrink-0 rounded-xl border border-[var(--border)] bg-white px-2 text-xs outline-none dark:bg-slate-900"
-                  >
-                    <option value="all">Title + body</option>
-                    <option value="title">Title only</option>
-                    <option value="body">Body only</option>
-                  </select>
-                  <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-10 rounded-xl bg-blue-600 px-5 text-xs text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:text-white dark:disabled:bg-blue-950">
-                    Search
-                  </Button>
-                </form>
+              Was: a blue→indigo gradient panel containing TWO separately
+              labelled chip bands (domain and source), each with its own
+              "active" treatment — blue for one, near-black for the other —
+              for the same kind of control. Three problems: the gradient was
+              the only one in the app, two full bands of vertical space went
+              to filters, and the same interaction was styled two ways.
+
+              Now: one flat surface on the standard card token. Search is the
+              primary action, the source filter is a refinement so it lives in
+              the toolbar, and the domain chips stay as chips because domain is
+              the primary browse axis and the counts are worth seeing.
+              --------------------------------------------------------------- */}
+          <section className="rounded-xl border border-[var(--border)] bg-card p-4 shadow-xs">
+            <form onSubmit={handleSearch} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search solutions, errors, procedures…"
+                  aria-label="Search the knowledge base"
+                  className="h-9 w-full rounded-lg border border-[var(--border)] bg-background pl-9 pr-3 text-xs outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
+                />
               </div>
 
-              <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pt-3 border-t border-[var(--border)]/60 [scrollbar-width:thin]">
-                <span className="text-[11px] font-semibold text-slate-400 mr-1 shrink-0">Filter Domain:</span>
-                {chips.map((domain) => {
-                  const active = domain === chip;
-                  const meta = domain === "all" ? null : metaFor(domain);
-                  const label = domain === "all" ? "All Domains" : meta!.label;
-                  const apiCount = domains?.find((d) => d.domain === domain)?.pages;
-                  const count = typeof apiCount === "number" ? apiCount : domainCardMap.get(domain)?.pages;
-                  const desc = meta?.description;
-                  return (
-                    <button
-                      key={domain}
-                      type="button"
-                      onClick={() => {
-                        setChip(domain);
-                        setPage(1);
-                        setSelected(new Set());
-                        void loadList(domain, query, 0);
-                      }}
-                      /* P0#1 — the per-domain colour and wording come from the DB, so a
-                         domain whose display_name is wrong is visible at a glance instead
-                         of silently reading like its neighbour. */
-                      title={desc ? `${label} — ${desc}` : label}
-                      className={[
-                        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition shrink-0",
-                        active
-                          ? "border-blue-600 bg-blue-600 text-white shadow-xs"
-                          : `border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800`,
-                      ].join(" ")}
-                    >
-                      {meta && <meta.icon className={`size-3 ${active ? "text-white" : meta.iconClass}`} />}
-                      {label}
-                      {typeof count === "number" && (
-                        <span className={active ? "text-white/70" : "text-slate-400"}>{count}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              <select
+                value={qField}
+                onChange={(e) => setQField(e.target.value as "all" | "title" | "body")}
+                title="Where to look for the search text"
+                aria-label="Search field"
+                className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+              >
+                <option value="all">Title + body</option>
+                <option value="title">Title only</option>
+                <option value="body">Body only</option>
+              </select>
 
-              {/* P1#6 — provider filter. Six sources feed this KB and there was no way
-                  to see which provider an article set came from beyond the row badge. */}
-              <div className="mt-3 flex items-center gap-1.5 overflow-x-auto border-t border-[var(--border)]/60 pt-3 [scrollbar-width:thin]">
-                <span className="text-[11px] font-semibold text-slate-400 mr-1 shrink-0">Filter Source:</span>
-                {[{ k: "all", l: "All" }, ...allProviders().map((p) => ({ k: p.key, l: p.label }))].map((o) => {
-                  const active = providerFilter === o.k;
-                  return (
-                    <button
-                      key={o.k}
-                      type="button"
-                      onClick={() => { setProviderFilter(o.k); setSelected(new Set()); void loadList(chip, query, 0); }}
-                      className={[
-                        "inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium transition shrink-0",
-                        active
-                          ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
-                          : "border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300",
-                      ].join(" ")}
-                    >
-                      {o.l}
-                    </button>
-                  );
-                })}
-                {(providerFilter !== "all" || chip !== "all" || query.trim()) && (
+              {/* Source was a second chip band. It is a refinement, not a browse
+                  axis, so a select communicates the same thing in one row. */}
+              <select
+                value={providerFilter}
+                onChange={(e) => { setProviderFilter(e.target.value); setSelected(new Set()); void loadList(chip, query, 0); }}
+                title="Filter by knowledge source"
+                aria-label="Filter by knowledge source"
+                className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+              >
+                <option value="all">All sources</option>
+                {allProviders().map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+
+              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-9 rounded-lg px-5 text-xs">
+                Search
+              </Button>
+            </form>
+
+            {/* Domain chips — the primary browse axis, with real per-domain counts. */}
+            <div className="mt-3 flex items-center gap-1.5 overflow-x-auto border-t border-[var(--border)]/60 pt-3 [scrollbar-width:thin]">
+              <Layers className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              {chips.map((domain) => {
+                const active = domain === chip;
+                const meta = domain === "all" ? null : metaFor(domain);
+                const label = domain === "all" ? "All Domains" : meta!.label;
+                const apiCount = domains?.find((d) => d.domain === domain)?.pages;
+                const count = typeof apiCount === "number" ? apiCount : domainCardMap.get(domain)?.pages;
+                const desc = meta?.description;
+                return (
                   <button
+                    key={domain}
                     type="button"
-                    onClick={() => { setProviderFilter("all"); setChip("all"); setQuery(""); setSelected(new Set()); void loadList("all", "", 0); }}
-                    className="ml-1 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-blue-600 underline shrink-0"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setChip(domain);
+                      setPage(1);
+                      setSelected(new Set());
+                      void loadList(domain, query, 0);
+                    }}
+                    /* P0#1 — the per-domain colour and wording come from the DB, so a
+                       domain whose display_name is wrong is visible at a glance instead
+                       of silently reading like its neighbour. */
+                    title={desc ? `${label} — ${desc}` : label}
+                    className={[
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
+                      active
+                        ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs"
+                        : "border-[var(--border)] bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    ].join(" ")}
                   >
-                    <X className="size-3" /> Clear filters
+                    {meta && <meta.icon className={`size-3 ${active ? "text-[var(--primary-foreground)]" : meta.iconClass}`} />}
+                    {label}
+                    {typeof count === "number" && (
+                      <span className={active ? "text-[var(--primary-foreground)]/70" : "text-muted-foreground"}>{count}</span>
+                    )}
                   </button>
+                );
+              })}
+            </div>
+
+            {/* One summary of what is narrowing the list, with one way out. The old
+                layout offered "Clear filters" only inside the source band, so a user
+                who had filtered by domain had no visible way to reset it. */}
+            {hasFilters && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)]/60 pt-3 text-xs">
+                <span className="text-muted-foreground">Filtered by</span>
+                {query.trim() && <FilterPill label={`"${query.trim()}"`} onClear={() => { setQuery(""); void loadList(chip, "", 0); }} />}
+                {chip !== "all" && <FilterPill label={metaFor(chip).label} onClear={() => { setChip("all"); void loadList("all", query, 0); }} />}
+                {providerFilter !== "all" && (
+                  <FilterPill label={allProviders().find((p) => p.key === providerFilter)?.label ?? providerFilter} onClear={() => { setProviderFilter("all"); void loadList(chip, query, 0); }} />
                 )}
+                <button
+                  type="button"
+                  onClick={() => { setProviderFilter("all"); setChip("all"); setQuery(""); setSelected(new Set()); void loadList("all", "", 0); }}
+                  className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-soft)]"
+                >
+                  <X className="size-3" /> Clear all
+                </button>
               </div>
-            </section>
+            )}
+          </section>
 
             {/* P1#10 — surface the articles no domain claimed. After the LLM pass this
                 is small, but it is exactly the set that silently goes missing from
@@ -567,19 +613,22 @@ export default function Knowledge({
               const noDesc = (domains ?? []).filter((d) => !d.description || d.description.trim().length < 25);
               if (gen === 0 && noDesc.length === 0) return null;
               return (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200">
                   <span className="flex items-center gap-1.5 font-semibold">
                     <AlertTriangle className="size-3.5" /> Needs review
                   </span>
                   {gen > 0 && (
-                    <button type="button" className="underline" onClick={() => { setChip("general"); void loadList("general", "", 0); }}>
-                      {gen} article(s) still in General IT
+                    <button
+                      type="button"
+                      onClick={() => { setChip("general"); void loadList("general", "", 0); }}
+                      className="rounded-md border border-amber-300/70 bg-white/50 px-2 py-0.5 font-medium underline-offset-2 transition hover:bg-white/80 hover:underline dark:border-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+                    >
+                      {gen} article{gen === 1 ? "" : "s"} still in General IT
                     </button>
                   )}
                   {noDesc.length > 0 && (
                     <span title={noDesc.map((d) => d.display_name).join(", ")}>
-                      {noDesc.length} domain(s) have no description — the AI classifier cannot
-                      route to them
+                      {noDesc.length} domain{noDesc.length === 1 ? "" : "s"} have no description — the AI classifier cannot route to them
                     </span>
                   )}
                 </div>
@@ -588,14 +637,14 @@ export default function Knowledge({
 
             {/* P1#7 — bulk actions. Appears only when rows are selected. */}
             {selected.size > 0 && (
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2 dark:border-blue-900 dark:bg-blue-950/30">
-                <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-200">
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--primary)]/30 bg-[var(--accent-soft)] px-3 py-2">
+                <span className="text-xs font-semibold text-[var(--accent-foreground)]">
                   {selected.size} selected
                 </span>
                 <select
                   value={bulkDomain}
                   onChange={(e) => setBulkDomain(e.target.value)}
-                  className="h-8 rounded-lg border border-[var(--border)] bg-white px-2 text-[11px] dark:bg-slate-900"
+                  className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
                 >
                   <option value="">Move to domain…</option>
                   {chips.filter((c) => c !== "all").map((c) => (
@@ -604,7 +653,7 @@ export default function Knowledge({
                 </select>
                 <Button
                   size="sm"
-                  className="h-8 rounded-lg text-[11px]"
+                  className="h-8 rounded-lg text-xs"
                   disabled={!bulkDomain || bulkBusy}
                   onClick={async () => {
                     setBulkBusy(true);
@@ -622,26 +671,37 @@ export default function Knowledge({
                 <button
                   type="button"
                   onClick={() => setSelected(new Set())}
-                  className="text-[11px] text-muted-foreground underline"
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                 >
                   Clear selection
                 </button>
               </div>
             )}
 
-            {/* FULL WIDTH ARTICLES LIST */}
+            {/* RESULTS
+                This heading used to repeat "Knowledge Base Articles" — the exact string the
+                PageHeader already shows two inches above it. It now reports the RESULT SET
+                instead: how many articles matched, and what the list is sorted by. The count
+                is a live region so a filter change is announced rather than silent. */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                    <BookOpen className="size-4 text-blue-600 dark:text-blue-400" />
-                    Knowledge Base Articles
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Indexed documents retrieved for RAG context and user inquiries
-                  </p>
-                </div>
-
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1">
+                <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                  {listing ? (
+                    "Loading articles…"
+                  ) : listError ? (
+                    "Could not load articles"
+                  ) : (
+                    <>
+                      <span className="font-semibold text-foreground">{kbTotal ?? items?.length ?? 0}</span>{" "}
+                      article{(kbTotal ?? items?.length ?? 0) === 1 ? "" : "s"}
+                      {hasFilters ? " matching the current filters" : " in the knowledge base"}
+                    </>
+                  )}
+                </p>
+                <p className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground">
+                  Sorted by {SORT_LABELS[sortKey]}
+                  {sortDir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
+                </p>
               </div>
 
               {/* P3c — LLM re-classification audit. Gated on manage_domains, since
@@ -654,8 +714,11 @@ export default function Knowledge({
               <Card className="rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[860px] text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-900 border-b border-[var(--border)]">
-                      <tr className="text-left text-slate-600 dark:text-slate-300">
+                    {/* Sticky: the list is long and paging scrolls the header out of
+                        view, so the column names — and the sort control inside them —
+                        have to stay reachable. */}
+                    <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm border-b border-[var(--border)]">
+                      <tr className="text-left text-muted-foreground">
                         <th className="w-9 px-3 py-3.5">
                           {canManage && items && items.length > 0 && (
                             <input
@@ -667,7 +730,7 @@ export default function Knowledge({
                                 items.forEach((a) => (e.target.checked ? next.add(a.page_id) : next.delete(a.page_id)));
                                 setSelected(next);
                               }}
-                              className="size-3.5 rounded border-slate-300 align-middle"
+                              className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
                             />
                           )}
                         </th>
@@ -689,7 +752,8 @@ export default function Knowledge({
                                   setSortDir(nextDir);
                                   void loadList(chip, query, 0);
                                 }}
-                                className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white"
+                                className="inline-flex items-center gap-1 transition hover:text-foreground"
+                                aria-label={`Sort by ${h.l}`}
                                 title={`Sort by ${h.l}`}
                               >
                                 {h.l}
@@ -704,38 +768,62 @@ export default function Knowledge({
                             )}
                           </th>
                         ))}
-                        <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {listing ? (
                         <tr>
-                          <td colSpan={6} className="p-4">
+                          <td colSpan={5} className="p-4">
                             <Skeleton className="h-9 w-full rounded-lg" />
+                          </td>
+                        </tr>
+                      ) : listError ? (
+                        <tr>
+                          <td colSpan={5}>
+                            <ErrorState
+                              compact
+                              title="Could not load the knowledge base"
+                              detail={listError}
+                              onRetry={() => void loadList(chip, query, (page - 1) * pageSize)}
+                            />
                           </td>
                         </tr>
                       ) : !items || items.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="p-8 text-center">
-                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                              <span className="text-xs">No articles match this filter.</span>
-                              {canManageDomains && (
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/60 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
-                                  onClick={() => { setChip("all"); setProviderFilter("all"); setQuery(""); void loadList("all", "", 0); }}
-                                >
-                                  <Sparkles className="size-3" /> Clear filters, or run Re-classify KB
-                                </button>
-                              )}
-                            </div>
+                          <td colSpan={5}>
+                            {/* "Nothing here yet" and "nothing matches" need different
+                                words: only the second is something the user caused and can
+                                undo, so only it gets the clear-filters action. */}
+                            {(kbTotal ?? 0) === 0 && !query && chip === "all" && providerFilter === "all" ? (
+                              <EmptyState
+                                icon={<BookOpen className="size-5" />}
+                                title="No articles yet"
+                                description="Articles arrive from your knowledge sources and from the sync jobs. Connect a source in Settings → Integrations, or create one manually."
+                              />
+                            ) : (
+                              <EmptyState
+                                icon={<SearchX className="size-5" />}
+                                title="No articles match this filter"
+                                description={kbTotal && kbTotal > 0 ? `${kbTotal} article${kbTotal === 1 ? "" : "s"} in the knowledge base, but none match the current filters.` : "No articles match the current filters."}
+                                actionLabel="Clear filters"
+                                onAction={() => { setChip("all"); setProviderFilter("all"); setQuery(""); void loadList("all", "", 0); }}
+                              />
+                            )}
                           </td>
                         </tr>
                       ) : (
                         items.map((article) => {
                           const meta = metaFor(article.domain);
                           return (
-                            <tr key={article.page_id} className={`border-t border-[var(--border)]/60 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60 ${selected.has(article.page_id) ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}`}>
+                            <tr
+                              key={article.page_id}
+                              className={[
+                                "border-t border-[var(--border)]/60 transition",
+                                selected.has(article.page_id)
+                                  ? "bg-[var(--accent-soft)]"
+                                  : "hover:bg-muted/40",
+                              ].join(" ")}
+                            >
                               <td className="px-3 py-3 align-middle">
                                 {canManage && (
                                   <input
@@ -747,49 +835,54 @@ export default function Knowledge({
                                       if (e.target.checked) next.add(article.page_id); else next.delete(article.page_id);
                                       setSelected(next);
                                     }}
-                                    className="size-3.5 rounded border-slate-300 align-middle"
+                                    className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
                                   />
                                 )}
                               </td>
-                              <td className="max-w-[400px] truncate px-5 py-3 font-medium text-slate-900 dark:text-white">
-                                {/* P1#8 — show WHERE the search text matched so the
-                                    result does not look arbitrary. */}
-                                {query.trim() ? highlight(article.title, query) : article.title}
+                              {/* Was `truncate` on a fixed max-width, which cut long
+                                  article titles with no way to read the rest — the title
+                                  is the whole point of the row. Two lines, then ellipsis,
+                                  plus the full text in the tooltip. */}
+                              <td className="max-w-[400px] px-5 py-3 font-medium text-foreground">
+                                <span className="line-clamp-2" title={article.title}>
+                                  {/* P1#8 — show WHERE the search text matched so the
+                                      result does not look arbitrary. */}
+                                  {query.trim() ? highlight(article.title, query) : article.title}
+                                </span>
                               </td>
                               <td className="px-4 py-3">
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[10px] ${providerOf(article).className}`}
-                                  title={article.source_url || undefined}
-                                >
-                                  {providerOf(article).label}
-                                </Badge>
+                                {/* The badge IS the link to the source. Previously a
+                                    separate "Actions" column held a lone external-link icon
+                                    pointing at the same URL. */}
+                                {article.source_url ? (
+                                  <a
+                                    href={article.source_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={`Open source: ${article.source_url}`}
+                                    className="inline-flex items-center gap-1 rounded-md transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                                  >
+                                    <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
+                                      {providerOf(article).label}
+                                    </Badge>
+                                    <ExternalLink className="size-2.5 text-muted-foreground" />
+                                  </a>
+                                ) : (
+                                  <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
+                                    {providerOf(article).label}
+                                  </Badge>
+                                )}
                               </td>
                               <td className="px-4 py-3">
-                                <Badge variant="outline" className="text-[10px] capitalize bg-slate-50 dark:bg-slate-800">
+                                <Badge variant="outline" className="text-2xs capitalize bg-muted/60">
                                   {meta.label}
                                 </Badge>
                               </td>
                               <td
-                                className="px-4 py-3 text-muted-foreground text-[11px]"
+                                className="px-4 py-3 text-muted-foreground text-xs"
                                 title={article.last_synced ? new Date(article.last_synced).toLocaleString() : "never synced"}
                               >
                                 {relTime(article.last_synced)}
-                              </td>
-                              <td className="px-5 py-3 text-right">
-                                <div className="flex justify-end gap-1.5 items-center">
-                                  {article.source_url && (
-                                    <a
-                                      href={article.source_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="rounded-md p-1 text-slate-400 hover:text-blue-600 transition"
-                                      title="Open source URL"
-                                    >
-                                      <ExternalLink className="size-3.5" />
-                                    </a>
-                                  )}
-                                </div>
                               </td>
                             </tr>
                           );
@@ -804,15 +897,15 @@ export default function Knowledge({
                     real statement. The table previously hardcoded 8 rows per page while
                     the API returned 50. */}
                 {items && kbTotal != null && kbTotal > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3 bg-muted/20">
-                    <p className="text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-muted/20 px-5 py-3">
+                    <p className="text-xs text-muted-foreground">
                       Showing {(page - 1) * pageSize + 1}–{Math.min((page - 1) * pageSize + items.length, kbTotal)} of {kbTotal}
                     </p>
                     <div className="flex items-center gap-2">
                       <select
                         value={pageSize}
                         onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
-                        className="h-7 rounded-lg border border-[var(--border)] bg-white px-2 text-[11px] dark:bg-slate-900"
+                        className="h-7 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
                         title="Rows per page"
                       >
                         {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
@@ -839,13 +932,13 @@ export default function Knowledge({
                           }
                           return nums.map((n, idx) =>
                             n === "…" ? (
-                              <span key={`e${idx}`} className="px-1 text-[11px] text-muted-foreground">…</span>
+                              <span key={`e${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
                             ) : (
                               <Button
                                 key={n}
                                 variant={n === page ? "default" : "outline"}
                                 size="sm"
-                                className="h-7 min-w-7 px-2 text-[11px] rounded-lg"
+                                className="h-7 min-w-7 px-2 text-xs rounded-lg"
                                 disabled={listing}
                                 onClick={() => { setSelected(new Set()); void loadList(chip, query, (Number(n) - 1) * pageSize); }}
                               >
@@ -868,29 +961,34 @@ export default function Knowledge({
               </Card>
             </div>
 
-            {/* Quick sync & integration summary footer */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <div className="rounded-xl border border-[var(--border)] bg-card p-3.5 text-xs shadow-xs">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium mb-1">
-                  <Clock3 className="size-3.5 text-blue-600" />
-                  Automatic Background Sync
+            {/* FACTS
+                These two cards held fixed prose — "runs every 30 minutes via Celery
+                worker", "synced with LangGraph hybrid retrieval". Nothing in them changed
+                with the data, so they occupied the bottom of the page telling the reader
+                what the system is instead of what it currently holds. They are now four
+                measured figures. */}
+            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                { icon: BookOpen, label: "Articles", value: kbTotal != null ? kbTotal.toLocaleString() : "—" },
+                { icon: Layers, label: "Domains", value: domains ? domains.length.toLocaleString() : "—" },
+                { icon: Database, label: "Sources", value: allProviders().length.toLocaleString() },
+                {
+                  icon: Clock3,
+                  label: "Last sync",
+                  value: status?.last_run?.at ? relTime(status.last_run.at) : "never",
+                  hint: `Runs every ${status?.beat_interval_minutes ?? 30} min`,
+                },
+              ].map((s) => (
+                <div key={s.label} className="rounded-xl border border-[var(--border)] bg-card p-3.5 shadow-xs">
+                  <div className="flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
+                    <s.icon className="size-3" aria-hidden />
+                    {s.label}
+                  </div>
+                  <div className="mt-1 text-lg font-semibold tracking-tight text-foreground">{s.value}</div>
+                  {s.hint && <div className="mt-0.5 text-3xs text-muted-foreground">{s.hint}</div>}
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Scheduled beat interval runs every {status?.beat_interval_minutes ?? 30} minutes via Celery worker.
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] bg-card p-3.5 text-xs shadow-xs">
-                <div className="flex items-center gap-2 text-slate-900 dark:text-white font-medium mb-1">
-                  <Check className="size-3.5 text-emerald-600" />
-                  RAG Vector Index Status
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  PGVector embeddings synced with LangGraph hybrid keyword + semantic retrieval.
-                </p>
-              </div>
-            </div>
-          </div>
+              ))}
+            </section>
 
       </main>
 

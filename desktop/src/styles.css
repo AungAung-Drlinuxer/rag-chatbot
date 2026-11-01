@@ -70,6 +70,50 @@
   --color-slate-900: #1D2130;
   --color-slate-950: #12151D;
 
+  /* ---------------------------------------------------------------------------
+     TYPE SCALE — semantic names for the sizes the pages were already using.
+
+     The app had 237 arbitrary font sizes (`text-[10px]` x283 app-wide, plus
+     `text-[10.5px]`, `text-[8.5px]`, `text-[8px]`, `text-[9px]`) — several spellings of
+     the same intent, which is what makes pages feel inconsistent. Arbitrary values cannot
+     be reached by a token override, so the fix is to give each intent ONE name and
+     migrate the call sites onto it.
+
+       3xs  9px   dense table badges only — below this, text stops being readable
+       2xs  10px  meta: timestamps, counts, table headers, eyebrow labels
+       xs   12px  secondary body, form labels
+       sm   14px  body copy (the page default)
+     --------------------------------------------------------------------------- */
+  --text-3xs: 0.5625rem;
+  --text-3xs--line-height: 1.4;
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 1.45;
+
+  /* ---------------------------------------------------------------------------
+     BLUE RAMP — pinned to the accent.
+
+     Tailwind's `blue-600` is #2563EB. The accent is #0048F0. Those are two different
+     blues, and the app used `blue-*` in 139 places (focus rings, active tabs, chart
+     series, filled buttons) — so every one of them was a near-miss against the accent,
+     which reads as sloppiness rather than as a decision. Overriding the ramp here moves
+     all 139 at once, including their `dark:` variants, exactly as the slate ramp does.
+
+     `blue-600` is the load-bearing step (filled buttons, active labels) and is set to the
+     accent itself: #0048F0 on white is 6.59:1, so it is safe as a background with white
+     text and as text on white.
+     --------------------------------------------------------------------------- */
+  --color-blue-50:  #E8EDFB;
+  --color-blue-100: #D0DCF7;
+  --color-blue-200: #A8BCF0;
+  --color-blue-300: #7F9CE9;
+  --color-blue-400: #5C8CFF;
+  --color-blue-500: #2563F5;
+  --color-blue-600: #0048F0;
+  --color-blue-700: #0039C4;
+  --color-blue-800: #002D9C;
+  --color-blue-900: #002177;
+  --color-blue-950: #001A5C;
+
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
   /* v0.21.52 — Refined light theme (deeper indigo + warmer card) */
@@ -97,20 +141,23 @@
      main content = soft blue-gray. Professional separation without borders. */
   --sidebar-bg: #0A1628;        /* deep ocean navy sidebar */
   --brand-chip: #0A1628;        /* page-header icon chip (v0.21.67) */
-  --brand-logo: #2563eb;        /* iTH logo blue (login + app) */
   --sidebar-border: #0F1D33;
   --sidebar-text: #CBD5E1;
   --sidebar-text-muted: #6782A0;
-  --sidebar-hover: rgba(14, 165, 233, 0.12);   /* sky glow hover */
-  --sidebar-active-bg: rgba(14, 165, 233, 0.18); /* sky active */
-  --sidebar-active-text: #38BDF8;              /* sky-400 */
+    /* Accent family, not sky. The nav highlighted in sky-400 while the app accent was
+       #0048F0 — two blues on one screen, which is what made the sidebar read as coming
+       from a different product. #5C8CFF is the accent lifted for text: #0048F0 is only
+       2.77:1 on the navy sidebar, #5C8CFF is 5.79:1. */
+    --sidebar-hover: rgba(0, 72, 240, 0.14);
+    --sidebar-active-bg: rgba(0, 72, 240, 0.22);
+    --sidebar-active-text: #5C8CFF;
   --topbar-bg: #FFFFFF;
   --shadow: 0 2px 8px rgb(15 23 42 / .06), 0 1px 2px rgb(15 23 42 / .04);
   --shadow-md: 0 4px 6px rgb(15 23 42 / .06), 0 2px 4px rgb(15 23 42 / .04);
   --shadow-lg: 0 10px 15px rgb(15 23 42 / .06), 0 4px 6px rgb(15 23 42 / .04);
   --shadow-xl: 0 20px 25px rgb(15 23 42 / .08), 0 8px 10px rgb(15 23 42 / .04);
   --bg: var(--background); --surface: var(--card); --surface-2: var(--muted); --text: var(--foreground);
-  --text-muted: var(--muted-foreground); --accent-2: #6366f1; --accent-soft: #eef2ff;
+  --text-muted: var(--muted-foreground); --accent-2: #0048F0; --accent-soft: #E8EDFB;
   --ok: #16a34a; --warn: #d97706; --danger: #dc2626;
   --chat-font-size: 14px;
 }
@@ -144,16 +191,16 @@
   --sidebar-border: #0F1D33;
   --sidebar-text: #C2C9D8;
   --sidebar-text-muted: #64748B;
-  --sidebar-hover: rgba(14, 165, 233, 0.10);
-  --sidebar-active-bg: rgba(14, 165, 233, 0.16);
-  --sidebar-active-text: #38BDF8;
+    --sidebar-hover: rgba(0, 72, 240, 0.16);
+    --sidebar-active-bg: rgba(0, 72, 240, 0.26);
+    --sidebar-active-text: #5C8CFF;
   --topbar-bg: #1D2130;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.4), 0 4px 6px rgba(0,0,0,.3);
   --shadow-xl: 0 20px 25px rgba(0,0,0,.5), 0 8px 10px rgba(0,0,0,.3);
   --bg: var(--background); --surface: var(--card); --surface-2: var(--muted); --text: var(--foreground);
-  --text-muted: var(--muted-foreground); --accent-2: #60A5FA; --accent-soft: rgba(96, 165, 250, 0.18);
+  --text-muted: var(--muted-foreground); --accent-2: #0048F0; --accent-soft: rgba(0, 72, 240, 0.16);
   --ok: #22c55e; --warn: #f59e0b; --danger: #ef4444;
 }
 
@@ -193,7 +240,7 @@ body {
 .brand { display: flex; align-items: center; gap: 10px; }
 .logo {
   width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #312e81, #6366f1); color: #fff; font-weight: 800; font-size: 14px;
+  background: linear-gradient(135deg, #002D9C, #0048F0); color: #fff; font-weight: 800; font-size: 14px;
 }
 .brand-text { font-weight: 700; font-size: 15px; }
 .sub { font-size: 11px; color: var(--text-muted); font-weight: 400; }
@@ -243,7 +290,7 @@ body {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center;
   font-weight: 700; font-size: 11px; margin-top: 4px; user-select: none;
 }
-.avatar.assistant { background: linear-gradient(135deg, #4338ca, #6366f1); color: #fff; box-shadow: 0 4px 10px rgba(79,70,229,.25); }
+.avatar.assistant { background: linear-gradient(135deg, #0036B8, #0048F0); color: #fff; box-shadow: 0 4px 10px rgba(0, 72, 240,.25); }
 .avatar.user { background: var(--accent-soft); color: var(--primary); border: 1.5px solid color-mix(in srgb, var(--primary) 25%, transparent); }
 [data-theme="dark"] .avatar.user { color: #a5b4fc; }
 .msg { min-width: 0; max-width: min(78%, 680px); display: flex; flex-direction: column; gap: 4px; }
@@ -341,9 +388,9 @@ body {
 
 /* ---- Login ---- */
 .login-shell { display: grid; grid-template-columns: 1.15fr 1fr; height: 100vh; }
-.login-left { background: radial-gradient(1200px 600px at -10% -20%, rgba(99,102,241,.28), transparent 60%), radial-gradient(900px 500px at 110% 120%, rgba(14,165,233,.18), transparent 55%), linear-gradient(160deg, #101538 0%, #1e1b4b 45%, #312e81 100%); color: #eef1ff; padding: 56px 58px; display: flex; flex-direction: column; gap: 26px; }
+.login-left { background: radial-gradient(1200px 600px at -10% -20%, rgba(0, 72, 240,.28), transparent 60%), radial-gradient(900px 500px at 110% 120%, rgba(14,165,233,.18), transparent 55%), linear-gradient(160deg, #101538 0%, #1e1b4b 45%, #002D9C 100%); color: #eef1ff; padding: 56px 58px; display: flex; flex-direction: column; gap: 26px; }
 .login-brand { display: flex; align-items: center; gap: 12px; }
-.logo-xl { width: 44px; height: 44px; border-radius: 12px; font-size: 17px; background: linear-gradient(135deg, #818cf8, #6366f1); box-shadow: 0 8px 22px rgba(99,102,241,.45); }
+.logo-xl { width: 44px; height: 44px; border-radius: 12px; font-size: 17px; background: linear-gradient(135deg, #5C8CFF, #0048F0); box-shadow: 0 8px 22px rgba(0, 72, 240,.45); }
 .login-headline { font-size: 38px; line-height: 1.12; font-weight: 800; letter-spacing: -.02em; margin-top: 8px; }
 .grad-text { background: linear-gradient(90deg, #a5b4fc, #67e8f9); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .login-feats { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
@@ -355,8 +402,8 @@ body {
 .login-card label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 8px; }
 .login-card input { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-family: var(--font); font-size: 14px; background: transparent; color: var(--text); transition: border-color .15s; }
 .login-card input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-soft); }
-.btn-login { margin-top: 12px; height: 44px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(135deg, #4338ca, #6366f1); color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 8px 20px rgba(79,70,229,.35); transition: transform .12s, box-shadow .12s; }
-.btn-login:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 10px 26px rgba(79,70,229,.42); }
+.btn-login { margin-top: 12px; height: 44px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(135deg, #0036B8, #0048F0); color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 8px 20px rgba(0, 72, 240,.35); transition: transform .12s, box-shadow .12s; }
+.btn-login:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 10px 26px rgba(0, 72, 240,.42); }
 .login-err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 12px; padding: 8px 11px; border-radius: 8px; }
 @media (max-width: 900px) { .login-shell { grid-template-columns: 1fr; } .login-left { display: none; } }
 
@@ -438,12 +485,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .profile-head { display: flex; align-items: center; gap: 10px; }
 .avatar.user-profile {
   width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #4338ca, #6366f1); color: #fff;
-  font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(79,70,229,.3);
+  background: linear-gradient(135deg, #0036B8, #0048F0); color: #fff;
+  font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(0, 72, 240,.3);
   flex-shrink: 0;
 }
 [data-theme="dark"] .avatar.user-profile {
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #0048F0, #5C8CFF);
 }
 .profile-info { min-width: 0; flex: 1; }
 .profile-info .name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -607,8 +654,8 @@ code, pre, .mono { font-family: var(--mono); }
 .brand .logo {
   width: 32px; height: 32px; border-radius: 9px;
   font-weight: 800; font-size: 14px;
-  background: linear-gradient(135deg, #4338ca 0%, #7c3aed 50%, #6366f1 100%);
-  box-shadow: 0 4px 12px rgba(99,102,241,.35), inset 0 1px 0 rgba(255,255,255,.18);
+  background: linear-gradient(135deg, #0036B8 0%, #0036B8 50%, #0048F0 100%);
+  box-shadow: 0 4px 12px rgba(0, 72, 240,.35), inset 0 1px 0 rgba(255,255,255,.18);
 }
 .brand-text { font-weight: 700; font-size: 14.5px; letter-spacing: -.01em; }
 .brand-text + .sub { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; letter-spacing: .02em; text-transform: uppercase; font-weight: 500; }
@@ -620,8 +667,8 @@ code, pre, .mono { font-family: var(--mono); }
 /* Avatar gradient (assistant + user) */
 .avatar.assistant {
   width: 34px; height: 34px; border-radius: 10px;
-  background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
-  box-shadow: 0 4px 12px rgba(99,102,241,.35);
+  background: linear-gradient(135deg, #0036B8 0%, #0048F0 100%);
+  box-shadow: 0 4px 12px rgba(0, 72, 240,.35);
   font-size: 11px; font-weight: 700;
 }
 .avatar.user { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); border: 1.5px solid color-mix(in srgb, var(--primary) 30%, transparent); font-size: 11px; font-weight: 700; }

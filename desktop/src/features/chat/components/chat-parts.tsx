@@ -98,7 +98,7 @@ export function EmptyChat({ onSuggestion, userName }: { onSuggestion: (question:
                   </span>
                   <ArrowRight className="size-3.5 shrink-0 text-slate-300 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 dark:text-slate-600" />
                 </div>
-                <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
+                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                   {s.desc}
                 </p>
               </div>

@@ -47,12 +47,12 @@ export default function SessionPanel({ summary }: { summary: SessionSummary }) {
         ) : (
           <History className="size-3.5 text-blue-500" />
         )}
-        <span className="text-[10px] font-semibold">
+        <span className="text-2xs font-semibold">
           {live ? "Live infrastructure" : "Retrieval information"}
         </span>
       </div>
 
-      <div className="mt-3 space-y-2 text-[10px] text-muted-foreground">
+      <div className="mt-3 space-y-2 text-2xs text-muted-foreground">
         {live ? (
           <>
             <Row

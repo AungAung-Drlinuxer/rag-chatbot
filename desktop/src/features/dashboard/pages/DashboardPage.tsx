@@ -21,7 +21,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { PageShell, PageHeader } from "@/components/ui/page";
+import { EmptyState, ErrorState, PageHeader, PageShell } from "@/components/ui/page";
 
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -119,6 +119,7 @@ export default function Dashboard({ role }: Props) {
   const [liveHealth, setLiveHealth] = useState<HealthItem[] | null>(null);
   const [gateTrend, setGateTrend] = useState<{ day: string; answered: number; cautioned: number }[]>([]);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // #3/#11 — overall status + the failing dependency names + the guardrail metric
   // (a security counter, no longer disguised as a service).
   const [healthSummary, setHealthSummary] = useState<{
@@ -171,6 +172,7 @@ export default function Dashboard({ role }: Props) {
     let mounted = true;
 
     async function load() {
+    setLoadError(null);
       try {
         const [s, c, d, rc, rt, h, g] = await Promise.all([
           dashStats(),
@@ -227,8 +229,11 @@ export default function Dashboard({ role }: Props) {
             guardrailEvents: h.security?.guardrail_events_7d ?? 0,
           });
         }
-      } catch {
-        // keep sample fallbacks on failure
+      } catch (err) {
+        // This used to read "keep sample fallbacks on failure" — a leftover from a version
+        // that seeded demo numbers. There are no fallbacks any more, so a failure left every
+        // metric at null with nothing said: the page looked like a genuinely quiet day.
+        setLoadError(err instanceof Error ? err.message : String(err));
       } finally {
         if (mounted) {
           setLoading(false);
@@ -314,7 +319,7 @@ export default function Dashboard({ role }: Props) {
                   onClick={() => setRangeOpen((v) => !v)}
                   title="Reporting window"
                   className={[
-                    "flex h-8 items-center gap-2 rounded-lg border bg-white px-2.5 text-[10px] font-medium transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800",
+                    "flex h-8 items-center gap-2 rounded-lg border bg-white px-2.5 text-2xs font-medium transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800",
                     win.kind === "custom" ? "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-300" : "",
                   ].join(" ")}
                 >
@@ -347,7 +352,7 @@ export default function Dashboard({ role }: Props) {
                     <div className="mt-1 border-t pt-1.5">
                       <p
                         className={[
-                          "px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide",
+                          "px-3 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide",
                           win.kind === "custom" ? "text-blue-600" : "text-muted-foreground",
                         ].join(" ")}
                       >
@@ -356,28 +361,28 @@ export default function Dashboard({ role }: Props) {
 
                       <div className="space-y-2 px-3 pb-1 pt-1">
                         <label className="block">
-                          <span className="text-[10px] font-medium text-muted-foreground">From</span>
+                          <span className="text-2xs font-medium text-muted-foreground">From</span>
                           <input
                             type="date"
                             value={customFrom}
                             max={todayIso}
                             onChange={(e) => setCustomFrom(e.target.value)}
-                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-[11px] dark:bg-slate-950"
+                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-xs dark:bg-slate-950"
                           />
                         </label>
                         <label className="block">
-                          <span className="text-[10px] font-medium text-muted-foreground">To</span>
+                          <span className="text-2xs font-medium text-muted-foreground">To</span>
                           <input
                             type="date"
                             value={customTo}
                             max={todayIso}
                             onChange={(e) => setCustomTo(e.target.value)}
-                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-[11px] dark:bg-slate-950"
+                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-xs dark:bg-slate-950"
                           />
                         </label>
 
                         {customInvalid && (
-                          <p className="text-[10px] leading-tight text-rose-600">
+                          <p className="text-2xs leading-tight text-rose-600">
                             {customFrom > todayIso
                               ? "Start date is in the future."
                               : "Start date must be on or before the end date."}
@@ -391,7 +396,7 @@ export default function Dashboard({ role }: Props) {
                             setWin({ kind: "custom", start: customFrom, end: customTo });
                             setRangeOpen(false);
                           }}
-                          className="h-7 w-full rounded-md bg-blue-600 text-[11px] font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-7 w-full rounded-md bg-blue-600 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Apply range
                         </button>
@@ -424,8 +429,34 @@ export default function Dashboard({ role }: Props) {
 
           <div className="space-y-5">
 
+            {/* A failure banner rather than a full-page error: some cards load from
+                different endpoints, so whatever DID arrive stays visible and useful. The
+                banner says which load failed and offers a retry. */}
+            {loadError && !loading && (
+              <ErrorState
+                banner
+                title="Some dashboard data could not be loaded"
+                detail={loadError}
+                onRetry={refreshDashboard}
+                retryLabel="Retry"
+              />
+            )}
+
             {/* KPI */}
 
+            {/* Nothing has happened in the selected window. Shown instead of a grid of
+                zeroes, which reads as "the system is idle" rather than "no data exists" —
+                a new install with an empty database produces exactly this. */}
+            {!loading && !loadError && stats === null && series.length === 0 && !liveTickets?.length && !liveConversations?.length ? (
+              <EmptyState
+                icon={<Activity className="size-5" />}
+                title="No activity in this reporting window"
+                description="Nothing has been recorded for the selected period. Try a wider range, or check that the chat and ticket integrations are connected in Settings."
+                actionLabel="Widen to 90 days"
+                onAction={() => setWin({ kind: "preset", days: 90 })}
+              />
+            ) : (
+            <>
             <section className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-3">
 
               <KpiCard
@@ -509,7 +540,7 @@ export default function Dashboard({ role }: Props) {
                       Conversations over time
                     </h2>
 
-                    <div className="mt-3 flex items-center gap-4 text-[10px] text-muted-foreground">
+                    <div className="mt-3 flex items-center gap-4 text-2xs text-muted-foreground">
 
                       <Legend
                         label="Total"
@@ -529,7 +560,7 @@ export default function Dashboard({ role }: Props) {
                     </div>
                   </div>
 
-                  <button className="flex h-8 items-center gap-2 rounded-lg border px-2.5 text-[10px] font-medium">
+                  <button className="flex h-8 items-center gap-2 rounded-lg border px-2.5 text-2xs font-medium">
                     7 Days
                     <ChevronDown className="size-3" />
                   </button>
@@ -603,7 +634,7 @@ export default function Dashboard({ role }: Props) {
                 <div className="mt-5 space-y-4">
 
                   {(domainsLive ?? []).length === 0 && (
-                    <div className="px-4 py-6 text-center text-[10px] text-muted-foreground">
+                    <div className="px-4 py-6 text-center text-2xs text-muted-foreground">
                       No domain data yet.
                     </div>
                   )}
@@ -629,17 +660,17 @@ export default function Dashboard({ role }: Props) {
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-sm font-semibold">Confidence gate trend</h2>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  <p className="mt-0.5 text-2xs text-muted-foreground">
                     Answers that passed the 0.75 confidence gate vs cautioned — daily
                   </p>
                 </div>
-                <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-4 text-2xs text-muted-foreground">
                   <Legend label="Answered" className="bg-emerald-500" />
                   <Legend label="Cautioned" className="bg-amber-500" />
                 </div>
               </div>
               {gateTrend.length === 0 ? (
-                <div className="py-10 text-center text-[10px] text-muted-foreground">
+                <div className="py-10 text-center text-2xs text-muted-foreground">
                   No gate data yet — trends appear as users chat.
                 </div>
               ) : (
@@ -668,7 +699,7 @@ export default function Dashboard({ role }: Props) {
                   {/* Mobile: stacked cards (md:hidden) */}
                   <div className="divide-y md:hidden">
                     {(liveConversations ?? []).length === 0 && (
-                      <p className="px-4 py-8 text-center text-[10px] text-muted-foreground">
+                      <p className="px-4 py-8 text-center text-2xs text-muted-foreground">
                         No conversations yet — data appears as users chat.
                       </p>
                     )}
@@ -681,12 +712,12 @@ export default function Dashboard({ role }: Props) {
                         <div className="flex items-center justify-between gap-2">
                           <span className="flex items-center gap-2 min-w-0">
                             <ResultBadge result={conversation.result} />
-                            <span className="truncate text-[11px] font-medium" title={conversation.user}>
+                            <span className="truncate text-xs font-medium" title={conversation.user}>
                               {conversation.user}
                             </span>
                           </span>
                           <span
-                            className="shrink-0 text-[10px] text-muted-foreground"
+                            className="shrink-0 text-2xs text-muted-foreground"
                             title={conversation.time}
                           >
                             {(() => {
@@ -708,7 +739,7 @@ export default function Dashboard({ role }: Props) {
                               detail: { user: conversation.user, question: conversation.question },
                             }));
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
                         >
                           <Eye className="size-3.5" />
                           View
@@ -737,7 +768,7 @@ export default function Dashboard({ role }: Props) {
 
                     <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
 
-                      <tr className="text-left text-[10px] text-muted-foreground">
+                      <tr className="text-left text-2xs text-muted-foreground">
 
                         <th className="px-4 py-3">
                           Time
@@ -767,7 +798,7 @@ export default function Dashboard({ role }: Props) {
 
                       {(liveConversations ?? []).length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-[10px] text-muted-foreground">
+                          <td colSpan={5} className="px-4 py-8 text-center text-2xs text-muted-foreground">
                             No conversations yet — data appears as users chat.
                           </td>
                         </tr>
@@ -782,7 +813,7 @@ export default function Dashboard({ role }: Props) {
 
                             {/* #8 — date and time on separate lines; the single-line
                                 form was clipped and hid the minutes. */}
-                            <td className="px-4 py-3 text-[10px] leading-tight text-muted-foreground" title={conversation.time}>
+                            <td className="px-4 py-3 text-2xs leading-tight text-muted-foreground" title={conversation.time}>
                               {(() => {
                                 const d = conversation.time ? new Date(conversation.time.endsWith("Z") || conversation.time.includes("+") ? conversation.time : conversation.time + "Z") : null;
                                 if (!d || Number.isNaN(d.getTime())) return conversation.time;
@@ -797,11 +828,11 @@ export default function Dashboard({ role }: Props) {
                               })()}
                             </td>
 
-                            <td className="max-w-[120px] truncate px-4 py-3 text-[10px] font-medium" title={conversation.user}>
+                            <td className="max-w-[120px] truncate px-4 py-3 text-2xs font-medium" title={conversation.user}>
                               {conversation.user}
                             </td>
 
-                            <td className="max-w-[190px] truncate px-4 py-3 text-[10px]" title={maskProfanity(conversation.question)}>
+                            <td className="max-w-[190px] truncate px-4 py-3 text-2xs" title={maskProfanity(conversation.question)}>
                               {maskProfanity(conversation.question)}
                             </td>
 
@@ -820,7 +851,7 @@ export default function Dashboard({ role }: Props) {
                                     detail: { user: conversation.user, question: conversation.question },
                                   }));
                                 }}
-                                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
                               >
                                 <Eye className="size-3.5" />
                                 View
@@ -850,7 +881,7 @@ export default function Dashboard({ role }: Props) {
                 <div className="max-h-[360px] min-h-0 flex-1 divide-y overflow-y-auto xl:max-h-none">
 
                   {(liveTickets ?? []).length === 0 && (
-                    <div className="px-4 py-8 text-center text-[10px] text-muted-foreground">
+                    <div className="px-4 py-8 text-center text-2xs text-muted-foreground">
                       No tickets yet — escalations will appear here.
                     </div>
                   )}
@@ -861,12 +892,12 @@ export default function Dashboard({ role }: Props) {
                       className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/50"
                     >
 
-                      <div className="w-14 shrink-0 text-[10px] font-semibold text-blue-600">
+                      <div className="w-14 shrink-0 text-2xs font-semibold text-blue-600">
                         {ticket.id}
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[11px] font-medium">
+                        <div className="truncate text-xs font-medium">
                           {ticket.subject}
                         </div>
                       </div>
@@ -896,7 +927,7 @@ export default function Dashboard({ role }: Props) {
                 <div className="flex items-start justify-between gap-3 border-b px-5 py-3.5">
                   <div className="min-w-0">
                     <h2 className="text-sm font-semibold leading-tight">System health</h2>
-                    <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">
+                    <p className="mt-0.5 truncate text-2xs leading-tight text-muted-foreground">
                       {(liveHealth ?? []).length === 0
                         ? "Checking dependencies…"
                         : healthSummary.down.length > 0
@@ -907,7 +938,7 @@ export default function Dashboard({ role }: Props) {
 
                   <div className="flex shrink-0 items-center gap-2">
                     <span className={[
-                      "whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-medium",
+                      "whitespace-nowrap rounded-full px-2.5 py-1 text-2xs font-medium",
                       healthSummary.overall === "Healthy"
                         ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                         : healthSummary.overall === "Down"
@@ -922,7 +953,7 @@ export default function Dashboard({ role }: Props) {
                       target="_blank"
                       rel="noreferrer"
                       title="Open full observability in Grafana"
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-2xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
                     >
                       <ExternalLink className="size-3" />
                       Grafana
@@ -932,7 +963,7 @@ export default function Dashboard({ role }: Props) {
 
                 <div className="divide-y">
                   {(liveHealth ?? []).length === 0 && (
-                    <div className="px-4 py-6 text-center text-[10px] text-muted-foreground">
+                    <div className="px-4 py-6 text-center text-2xs text-muted-foreground">
                       Health data unavailable.
                     </div>
                   )}
@@ -948,11 +979,11 @@ export default function Dashboard({ role }: Props) {
                     <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                       <ShieldAlert className="size-3.5" />
                     </div>
-                    <span className="flex-1 text-[10px] font-medium">
+                    <span className="flex-1 text-2xs font-medium">
                       Guardrail activity
                       <span className="ml-1 font-normal text-muted-foreground">last 7 days</span>
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-2xs text-muted-foreground">
                       {healthSummary.guardrailEvents} event{healthSummary.guardrailEvents === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -961,12 +992,14 @@ export default function Dashboard({ role }: Props) {
               </Card>
 
             </section>
+            </>
+            )}
 
             {/* =================================================
                 FOOTER
             ================================================= */}
 
-            <div className="flex flex-col items-center justify-center gap-2 py-1 text-[10px] text-muted-foreground sm:flex-row">
+            <div className="flex flex-col items-center justify-center gap-2 py-1 text-2xs text-muted-foreground sm:flex-row">
 
               <span
                 title={
@@ -1112,7 +1145,7 @@ function KpiCard({
             {title}
           </div>
 
-          <div className="mt-2 flex items-center gap-1.5 text-[10px]">
+          <div className="mt-2 flex items-center gap-1.5 text-2xs">
 
             {change != null && (
               positive ? (
@@ -1415,7 +1448,7 @@ function DonutChart({ stats }: { stats: Record<string, number> | null }) {
     return (
       <div className="flex size-44 flex-col items-center justify-center gap-1 rounded-full border-2 border-dashed border-slate-200 dark:border-slate-800">
         <span className="text-2xl font-semibold text-muted-foreground">—</span>
-        <span className="text-[10px] text-muted-foreground">No data yet</span>
+        <span className="text-2xs text-muted-foreground">No data yet</span>
       </div>
     );
   }
@@ -1459,7 +1492,7 @@ function DonutChart({ stats }: { stats: Record<string, number> | null }) {
             {percentage}%
           </div>
 
-          <div className="text-[10px] text-muted-foreground">
+          <div className="text-2xs text-muted-foreground">
             Escalation Rate
           </div>
         </div>
@@ -1486,7 +1519,7 @@ function EscalationRow({
   percentage: string;
 }) {
   return (
-    <div className="flex items-center justify-between text-[10px]">
+    <div className="flex items-center justify-between text-2xs">
 
       <div className="flex items-center gap-2">
         <span
@@ -1532,17 +1565,17 @@ function DomainRow({
 
         <div className="mb-1.5 flex items-center justify-between">
 
-          <span className="text-[10px] font-medium">
+          <span className="text-2xs font-medium">
             {domain.name}
           </span>
 
           <div className="flex items-center gap-2">
 
-            <span className="text-[10px] font-medium">
+            <span className="text-2xs font-medium">
               {domain.count}
             </span>
 
-            <span className="w-10 text-right text-[10px] text-muted-foreground">
+            <span className="w-10 text-right text-2xs text-muted-foreground">
               {domain.percentage}%
             </span>
 
@@ -1687,7 +1720,7 @@ function SectionHeader({
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:underline"
+          className="inline-flex items-center gap-1 text-2xs font-medium text-blue-600 hover:underline"
         >
           {action}
           <ArrowUpRight className="size-3" />
@@ -1710,11 +1743,11 @@ function ResultBadge({
   // v1.5.3 — three-way badge colors: Resolved=emerald, Cautioned=amber, Escalated=orange
   const styles: Record<string, string> = {
     Resolved:
-      "rounded-md border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
+      "rounded-md border-emerald-200 bg-emerald-50 text-2xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
     Cautioned:
-      "rounded-md border-amber-200 bg-amber-50 text-[10px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
+      "rounded-md border-amber-200 bg-amber-50 text-2xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
     Escalated:
-      "rounded-md border-orange-200 bg-orange-50 text-[10px] text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300",
+      "rounded-md border-orange-200 bg-orange-50 text-2xs text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300",
   };
   return (
     <Badge
@@ -1747,7 +1780,7 @@ function StatusBadge({
   return (
     <Badge
       variant="outline"
-      className={`rounded-md text-[10px] ${styles[status]}`}
+      className={`rounded-md text-2xs ${styles[status]}`}
     >
       {status}
     </Badge>
@@ -1771,7 +1804,7 @@ function PriorityBadge({
   };
 
   return (
-    <span className="flex w-16 shrink-0 items-center gap-1.5 text-[10px]">
+    <span className="flex w-16 shrink-0 items-center gap-1.5 text-2xs">
 
       <span
         className={`size-1.5 rounded-full ${styles[priority]}`}
@@ -1806,7 +1839,7 @@ function HealthRow({ item }: { item: HealthItem }) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[10px] font-medium leading-tight">{item.name}</div>
+        <div className="truncate text-2xs font-medium leading-tight">{item.name}</div>
         {!healthy && item.detail && (
           <div className="mt-0.5 truncate text-2xs leading-tight text-rose-600/90 dark:text-rose-400/90" title={item.detail}>
             {item.detail}
@@ -1826,7 +1859,7 @@ function HealthRow({ item }: { item: HealthItem }) {
         ) : (
           <XCircle className="size-3.5 text-red-500" />
         )}
-        <span className={healthy ? "text-[10px] text-emerald-600" : "text-[10px] text-red-600"}>
+        <span className={healthy ? "text-2xs text-emerald-600" : "text-2xs text-red-600"}>
           {item.status}
         </span>
       </div>

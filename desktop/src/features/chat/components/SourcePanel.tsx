@@ -120,14 +120,14 @@ export default function SourcePanel({
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4">
         <div className="min-w-0">
           <h2 className="text-xs font-semibold leading-tight">Knowledge sources</h2>
-          <p className="text-[10px] leading-tight text-muted-foreground">
+          <p className="text-2xs leading-tight text-muted-foreground">
             Retrieved for this answer
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {sources.length > 0 && (
             <span
-              className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground"
+              className="rounded-full bg-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-muted-foreground"
               title={`${sources.length} sources retrieved`}
             >
               {sources.length}
@@ -142,13 +142,13 @@ export default function SourcePanel({
         {live ? (
           // A live-infrastructure answer retrieves no documents, so a retrieval strip
           // would be a row of dashes pretending to be telemetry.
-          <p className="text-[10px] leading-relaxed text-muted-foreground">
+          <p className="text-2xs leading-relaxed text-muted-foreground">
             This answer came from live infrastructure tooling. Its evidence — which
             connector ran, how long it took and what came back — is on the answer itself.
           </p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-2xs text-muted-foreground">
               <span className="font-semibold tabular-nums text-foreground">
                 {shown ?? "—"}
               </span>
@@ -172,7 +172,7 @@ export default function SourcePanel({
               type="button"
               onClick={() => setDetails((v) => !v)}
               aria-expanded={details}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-sm text-[10px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              className="mt-1.5 inline-flex items-center gap-1 rounded-sm text-2xs font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             >
               Retrieval details
               <ChevronDown
@@ -180,7 +180,7 @@ export default function SourcePanel({
               />
             </button>
             {details && (
-              <dl className="mt-2 space-y-1.5 border-t border-[var(--border)] pt-2 text-[10px]">
+              <dl className="mt-2 space-y-1.5 border-t border-[var(--border)] pt-2 text-2xs">
                 <DetailRow label="Chunks retrieved" value={chunks != null ? String(chunks) : "—"} />
                 <DetailRow label="Sources cited" value={cited != null ? String(cited) : "—"} />
                 <DetailRow label="Search type" value={searchType ?? "—"} />
@@ -212,7 +212,7 @@ export default function SourcePanel({
               onChange={(e) => setQ(e.target.value)}
               placeholder="Filter sources"
               aria-label="Filter sources by title, provider or excerpt"
-              className="h-7 w-full rounded-lg border border-[var(--border)] bg-background pl-6.5 pr-2 text-[11px] text-foreground outline-none transition focus:border-[var(--primary)]"
+              className="h-7 w-full rounded-lg border border-[var(--border)] bg-background pl-6.5 pr-2 text-xs text-foreground outline-none transition focus:border-[var(--primary)]"
             />
           </div>
         </div>
@@ -230,13 +230,13 @@ export default function SourcePanel({
           />
         ) : filtered.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               No source matches “{q}”.
             </p>
             <button
               type="button"
               onClick={() => setQ("")}
-              className="mt-2 rounded-lg border border-[var(--border)] px-2.5 py-1 text-[10px] font-medium text-foreground transition duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              className="mt-2 rounded-lg border border-[var(--border)] px-2.5 py-1 text-2xs font-medium text-foreground transition duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             >
               Clear filter
             </button>

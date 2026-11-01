@@ -67,7 +67,7 @@ function Select<T extends string>({
         type="button"
         onClick={() => setOpen((v) => !v)}
         title={`${label}: ${current.label}`}
-        className={`inline-flex max-w-[9.5rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition ${
+        className={`inline-flex max-w-[9.5rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition ${
           open
             ? "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             : "border-transparent bg-slate-100/80 text-slate-500 hover:bg-slate-200/80 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:bg-slate-800"
@@ -86,7 +86,7 @@ function Select<T extends string>({
           className="absolute bottom-full left-0 z-30 mb-1.5 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
           role="listbox"
         >
-          <div className="px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+          <div className="px-2.5 py-1.5 text-3xs font-semibold uppercase tracking-wide text-slate-400">
             {label}
           </div>
           {options.map((o) => (
@@ -112,11 +112,11 @@ function Select<T extends string>({
                 }`}
               />
               <span className="min-w-0">
-                <span className="block text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                <span className="block text-xs font-medium text-slate-700 dark:text-slate-200">
                   {o.label}
                 </span>
                 {o.hint && (
-                  <span className="mt-0.5 block text-[10px] leading-snug text-slate-400">
+                  <span className="mt-0.5 block text-2xs leading-snug text-slate-400">
                     {o.hint}
                   </span>
                 )}
@@ -188,7 +188,7 @@ export default function ComposerControls({
         ] as const}
         trailing={
           mode === "infra" ? (
-            <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="text-3xs font-medium text-emerald-600 dark:text-emerald-400">
               ⚡ live
             </span>
           ) : undefined
@@ -205,7 +205,7 @@ export default function ComposerControls({
         ] as const}
         trailing={
           engine === "local" ? (
-            <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400">
+            <span className="text-3xs font-medium text-amber-600 dark:text-amber-400">
               ⚠ slower
             </span>
           ) : undefined

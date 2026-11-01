@@ -37,7 +37,7 @@ const TONE: Record<string, string> = {
 function Tile({ name, category }: { name: string; category: string }) {
   return (
     <div
-      className={`grid size-9 shrink-0 place-items-center rounded-lg text-[15px] font-semibold text-white shadow-sm ${
+      className={`grid size-9 shrink-0 place-items-center rounded-lg text-sm font-semibold text-white shadow-sm ${
         TONE[category] ?? "bg-slate-500"
       }`}
       aria-hidden
@@ -59,27 +59,27 @@ function Card({
       <Tile name={c.name} category={c.category} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
             {c.name}
           </span>
           {c.badge && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-3xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
               {c.badge === "Popular" && <Star className="size-2.5" />}
               {c.badge}
             </span>
           )}
           {c.connected && c.reachable === true && (
-            <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[9px] font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-400">
+            <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-3xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-400">
               {c.tools_exposed} read tools
             </span>
           )}
           {c.connected && c.reachable === false && (
-            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-3xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
               enabled · server not answering
             </span>
           )}
         </div>
-        <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500 dark:text-slate-400">
           {c.description}
         </p>
       </div>
@@ -233,10 +233,10 @@ export default function ConnectorsGallery() {
       {/* header + custom connector menu */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             Connectors
           </h2>
-          <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
             Connect services so the assistant can read and act on your data. Every tool
             is read-only.
           </p>
@@ -245,7 +245,7 @@ export default function ConnectorsGallery() {
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-medium text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
           >
             <Plus className="size-3.5" /> Custom connector
           </button>
@@ -258,11 +258,11 @@ export default function ConnectorsGallery() {
                   const custom = all.find((c) => c.id === "custom");
                   if (custom) setEditing(custom);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <ServerCog className="size-3.5" /> Add MCP connector
               </button>
-              <div className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400 dark:border-slate-800">
+              <div className="border-t border-slate-100 px-3 py-2 text-2xs text-slate-400 dark:border-slate-800">
                 Connect your own API is not available yet.
               </div>
             </div>
@@ -278,7 +278,7 @@ export default function ConnectorsGallery() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search all connectors"
-            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-[12px] outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-900"
+            className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-900"
           />
         </div>
         {(["all", "connected", "available"] as const).map((f) => (
@@ -286,7 +286,7 @@ export default function ConnectorsGallery() {
             key={f}
             type="button"
             onClick={() => setFilter(f)}
-            className={`rounded-full px-3 py-1.5 text-[11px] font-medium capitalize transition ${
+            className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition ${
               filter === f
                 ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
@@ -300,7 +300,7 @@ export default function ConnectorsGallery() {
 
       {msg && (
         <div
-          className={`mb-3 rounded-lg px-3 py-2 text-[11px] ${
+          className={`mb-3 rounded-lg px-3 py-2 text-xs ${
             msg.ok
               ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
               : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
@@ -311,13 +311,13 @@ export default function ConnectorsGallery() {
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 py-6 text-[12px] text-slate-500">
+        <div className="flex items-center gap-2 py-6 text-xs text-slate-500">
           <Loader2 className="size-4 animate-spin" /> Loading connectors…
         </div>
       )}
 
       {!loading && visibleGroups.length === 0 && (
-        <p className="py-6 text-center text-[12px] text-slate-500">
+        <p className="py-6 text-center text-xs text-slate-500">
           No connectors match {q ? `"${q}"` : "this filter"}.
         </p>
       )}
@@ -325,10 +325,10 @@ export default function ConnectorsGallery() {
       {visibleGroups.map((g) => (
         <div key={g.category} className="mb-5">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               {g.category}
             </span>
-            <span className="text-[10px] text-slate-400">{g.connectors.length}</span>
+            <span className="text-2xs text-slate-400">{g.connectors.length}</span>
           </div>
           <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
             {g.connectors.map((c) => (
@@ -378,8 +378,8 @@ function ConnectDialog({
         <div className="flex items-start gap-3 border-b border-slate-100 p-4 dark:border-slate-800">
           <Tile name={c.name} category={c.category} />
           <div className="min-w-0 flex-1">
-            <h3 className="text-[13px] font-semibold">{c.name}</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            <h3 className="text-sm font-semibold">{c.name}</h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
               {c.description}
             </p>
           </div>
@@ -391,7 +391,7 @@ function ConnectDialog({
         <div className="space-y-3 p-4">
           {fields.map((f) => (
             <label key={f.key} className="block">
-              <span className="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
+              <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
                 {f.label}
                 {f.required ? "" : " (optional)"}
               </span>
@@ -400,12 +400,12 @@ function ConnectDialog({
                 value={v[f.key] ?? ""}
                 onChange={(e) => setV((s) => ({ ...s, [f.key]: e.target.value }))}
                 placeholder={f.placeholder || ""}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950"
               />
             </label>
           ))}
           {c.note && (
-            <p className="rounded-lg bg-slate-50 px-3 py-2 text-[10px] leading-relaxed text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-2xs leading-relaxed text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
               {c.note}
             </p>
           )}
@@ -417,7 +417,7 @@ function ConnectDialog({
               type="button"
               onClick={() => onDisconnect(c)}
               disabled={busy}
-              className="rounded-lg px-3 py-2 text-[11px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-950/40"
+              className="rounded-lg px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-950/40"
             >
               Disconnect
             </button>
@@ -426,7 +426,7 @@ function ConnectDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-3 py-2 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -434,7 +434,7 @@ function ConnectDialog({
               type="button"
               disabled={busy}
               onClick={() => onSubmit(c, v)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-[11px] font-medium text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-slate-800 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
             >
               {busy && <Loader2 className="size-3.5 animate-spin" />}
               {c.connected ? "Save & test" : "Connect & test"}

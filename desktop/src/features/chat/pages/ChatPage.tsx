@@ -787,14 +787,14 @@ useEffect(() => {
             <button className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setMobileHistory(true)}>
               <Menu className="size-5" />
             </button>
-            <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-[var(--brand-chip)] text-sky-300 shadow-sm">
+            <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-[var(--brand-chip)] text-[var(--accent-foreground)] shadow-sm">
               <Bot className="size-4" />
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold">IT Knowledge Assistant</h1>
                 {/* The single "Online" dot became four measured chips (StatusChips),
                     so the subtitle carries the mockup's line instead of repeating state. */}
-                <p className="mt-0.5 hidden truncate text-[10px] text-muted-foreground sm:block">
+                <p className="mt-0.5 hidden truncate text-2xs text-muted-foreground sm:block">
                   Get help from enterprise knowledge and IT experts
                 </p>
             </div>
@@ -804,7 +804,7 @@ useEffect(() => {
                 static text here) and the chip is slimmer so the header reads as one
                 line of chrome instead of a second title bar. */}
                           <StatusChips className="hidden lg:flex" />
-              <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-[10px] sm:flex">
+              <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-2xs sm:flex">
               <Shield className="size-3 text-emerald-600" />
               RBAC protected
             </div>
@@ -901,7 +901,7 @@ useEffect(() => {
                   </div>
                 )}
                 {chatNote && (
-                  <div className="mx-auto w-fit rounded-full border bg-white px-3 py-1.5 text-[10px] font-medium shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <div className="mx-auto w-fit rounded-full border bg-white px-3 py-1.5 text-2xs font-medium shadow-sm dark:border-slate-700 dark:bg-slate-900">
                     {chatNote}
                   </div>
                 )}
@@ -923,7 +923,7 @@ useEffect(() => {
               {pendingFiles.length > 0 && (
                 <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
                   {pendingFiles.map((f) => (
-                    <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-[10px]">
+                    <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-2xs">
                       {f.mime.startsWith("image/") ? "🖼️" : "📄"} {f.filename}
                       <button
                         type="button"
@@ -1020,7 +1020,7 @@ useEffect(() => {
 
             {/* S3.11 — 9.5px slate-500 on the page background failed comfortable
                 reading; 11px at slate-500/400 clears the contrast floor. */}
-            <div className="mt-1.5 flex items-center justify-center gap-3 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+            <div className="mt-1.5 flex items-center justify-center gap-3 text-xs leading-snug text-slate-500 dark:text-slate-400">
               <span className="text-center">
                 Answers are AI-generated — verify before acting. Access is RBAC-protected.
               </span>
@@ -1028,7 +1028,7 @@ useEffect(() => {
                   with Shift+Enter for a newline, so the hint states the real binding
                   rather than the mockup's — a hint that lies about the keys is worse
                   than no hint. */}
-              <kbd className="hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] sm:inline-block dark:border-slate-700 dark:bg-slate-800">
+              <kbd className="hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-2xs sm:inline-block dark:border-slate-700 dark:bg-slate-800">
                 Enter to send
               </kbd>
             </div>
@@ -1071,7 +1071,7 @@ useEffect(() => {
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Create support ticket</h2>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       Prefilled from this chat — edit the details before submitting
                     </p>
                   </div>
@@ -1087,7 +1087,7 @@ useEffect(() => {
 
               <div className="space-y-4 p-5">
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Subject
                   </label>
                   <input
@@ -1097,7 +1097,7 @@ useEffect(() => {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Description
                   </label>
                   <textarea
@@ -1109,7 +1109,7 @@ useEffect(() => {
                 </div>
                 {/* v1.6.4 — destination: create in Jira or OpenProject (no local-only) */}
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Create in
                   </label>
                   <div className="flex gap-2">
@@ -1140,7 +1140,7 @@ useEffect(() => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Category
                     </label>
                     <select
@@ -1154,7 +1154,7 @@ useEffect(() => {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Priority
                     </label>
                     <select
@@ -1172,7 +1172,7 @@ useEffect(() => {
                 {/* v0.21.98 — Assignee + Due date (same as Tickets page form) */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Assignee
                     </label>
                     <select
@@ -1189,7 +1189,7 @@ useEffect(() => {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Due date
                     </label>
                     <input
@@ -1205,14 +1205,14 @@ useEffect(() => {
               <div className="flex justify-end gap-2 border-t px-5 py-4 dark:border-slate-800">
                 <button
                   onClick={() => setTicketForm(null)}
-                  className="rounded-xl border px-4 py-2.5 text-[11px] font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                  className="rounded-xl border px-4 py-2.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={submitTicketForm}
                   disabled={ticketBusy || !ticketForm.subject.trim()}
-                  className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:opacity-50"
                 >
                   <TicketIcon className="size-3.5" />
                   {ticketBusy ? "Creating…" : "Create ticket"}
@@ -1297,7 +1297,7 @@ useEffect(() => {
                 placeholder="Search conversations..."
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
-              <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-[10px] text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
+              <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-2xs text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
                 Esc
               </kbd>
             </div>
@@ -1329,7 +1329,7 @@ useEffect(() => {
                 ))
               )}
             </div>
-            <div className="border-t px-4 py-2 text-[10px] text-muted-foreground dark:border-slate-700">
+            <div className="border-t px-4 py-2 text-2xs text-muted-foreground dark:border-slate-700">
               Enter open · Esc close
             </div>
           </div>

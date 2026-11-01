@@ -65,14 +65,14 @@ function CodeBlock({
   return (
     <div className="group/code relative my-2.5 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 bg-slate-100/70 px-2.5 py-1 dark:border-slate-800 dark:bg-slate-800/50">
-        <span className="font-mono text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <span className="font-mono text-3xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {lang || "code"}
         </span>
         <button
           type="button"
           onClick={copy}
           aria-label="Copy code"
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-slate-500 transition hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium text-slate-500 transition hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
         >
           {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
           {copied ? "Copied" : "Copy"}
@@ -80,7 +80,7 @@ function CodeBlock({
       </div>
       <pre
         ref={ref}
-        className={`overflow-x-auto px-3 py-2.5 font-mono ${compact ? "text-[10px]" : "text-[11px]"} leading-relaxed text-slate-800 dark:text-slate-100`}
+        className={`overflow-x-auto px-3 py-2.5 font-mono ${compact ? "text-2xs" : "text-xs"} leading-relaxed text-slate-800 dark:text-slate-100`}
         {...rest}
       >
         {children}
@@ -111,7 +111,7 @@ const BASE = [
   "[&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400",
   "[&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 dark:[&_blockquote]:border-slate-700",
   "[&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-slate-600 dark:[&_blockquote]:text-slate-300",
-  "[&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[11px] dark:[&_code]:bg-slate-800",
+  "[&_code]:rounded [&_code]:bg-[var(--muted)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs dark:[&_code]:bg-slate-800",
   // Tables. `whitespace-nowrap` on the cells is what keeps "15.3 / 16.0 GB" on one line —
   // wrapping there made every row two lines tall and doubled the height of a 29-row list.
   "[&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:text-left",

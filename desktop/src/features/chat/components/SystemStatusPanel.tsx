@@ -61,10 +61,10 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
       <div className="border-t border-[var(--border)] px-3 py-3" data-testid="system-status">
         <div className="mb-2 flex items-center gap-1.5">
           <Activity className="size-3.5 text-muted-foreground" />
-          <h3 className="text-[11px] font-semibold text-foreground">System Status</h3>
+          <h3 className="text-xs font-semibold text-foreground">System Status</h3>
         </div>
         {rows.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {services === null ? "Checking…" : "Health check reported no services."}
           </p>
         ) : (
@@ -72,7 +72,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
             {rows.map((s) => {
               const tone = toneOf(s);
               return (
-                <li key={s.key} className="flex items-center gap-2 text-[10px]">
+                <li key={s.key} className="flex items-center gap-2 text-2xs">
                   <span className={`size-1.5 shrink-0 rounded-full ${TONE[tone]}`} />
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">{s.name}</span>
                   <span className="shrink-0 font-medium text-foreground">{s.status}</span>
@@ -84,7 +84,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
       </div>
 
       <div className="border-t border-[var(--border)] px-3 py-3" data-testid="quick-actions">
-        <h3 className="mb-2 text-[11px] font-semibold text-foreground">Quick Actions</h3>
+        <h3 className="mb-2 text-xs font-semibold text-foreground">Quick Actions</h3>
         <div className="flex flex-col gap-1.5">
           {[
             { label: "Reset Password", icon: KeyRound, prompt: "How do I reset my password?" },
@@ -94,7 +94,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
               key={a.label}
               type="button"
               onClick={() => ask(a.prompt)}
-              className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-[10px] font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             >
               <a.icon className="size-3 shrink-0 text-muted-foreground" />
               {a.label}
@@ -103,7 +103,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
           <button
             type="button"
             onClick={() => onNavigate?.("tickets")}
-            className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-[10px] font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           >
             <Plus className="size-3 shrink-0 text-muted-foreground" />
             Create IT Ticket
@@ -111,7 +111,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
           <button
             type="button"
             onClick={() => onNavigate?.("tickets")}
-            className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-[10px] font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           >
             <Ticket className="size-3 shrink-0 text-muted-foreground" />
             My Tickets

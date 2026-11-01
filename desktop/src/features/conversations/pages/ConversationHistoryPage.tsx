@@ -5,11 +5,10 @@ import {
   MessagesSquare,
   RefreshCw,
   Search,
-  X,
-} from "lucide-react";
+  X, SearchX} from "lucide-react";
 import { adminListConversations, adminConversationMessages, adminDownloadConversation } from "@/features/conversations/admin-api";
 import { listUsers } from "@/features/users/api";
-import { PageShell, PageHeader, SectionCard } from "@/components/ui/page";
+import { EmptyState, ErrorState, PageShell, PageHeader, SectionCard } from "@/components/ui/page";
 
 /**
  * ConversationHistory — v0.21.75/79
@@ -41,7 +40,7 @@ function fmt(ts: string | null): string {
 }
 
 const AVATAR_TONES = [
-  "bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
+  "bg-sky-100 text-[var(--accent-foreground)] dark:bg-sky-950/60 dark:text-sky-300",
   "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300",
   "bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300",
   "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300",
@@ -68,6 +67,7 @@ export default function ConversationHistoryPage() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [openUser, setOpenUser] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Conv | null>(null);
   // v0.21.83 — audit date range + export actions moved into the detail panel
   const [fromDate, setFromDate] = useState("");
@@ -75,9 +75,15 @@ export default function ConversationHistoryPage() {
 
   async function load() {
     setLoading(true);
+    // There was no catch here at all: a failed request produced an unhandled rejection and
+    // an empty table, which reads as "no conversations exist" rather than "the load failed".
+    setError(null);
     try {
       const d = await adminListConversations(filterUser || undefined);
       setConvs(d.conversations ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setConvs([]);
     } finally { setLoading(false); }
   }
 
@@ -137,7 +143,7 @@ export default function ConversationHistoryPage() {
             <button
               onClick={load}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-card px-4 py-2.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-card px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <RefreshCw className={["size-4", loading ? "animate-spin" : ""].join(" ")} />
               Refresh
@@ -148,15 +154,15 @@ export default function ConversationHistoryPage() {
         {/* Stat cards */}
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Conversations</div>
-            <div className="mt-1 text-2xl font-bold text-sky-700 dark:text-sky-300">{convs.length}</div>
+            <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Conversations</div>
+            <div className="mt-1 text-2xl font-bold text-[var(--accent-foreground)] dark:text-sky-300">{convs.length}</div>
           </div>
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total messages</div>
+            <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Total messages</div>
             <div className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-300">{totalMsgs}</div>
           </div>
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Users active</div>
+            <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Users active</div>
             <div className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">{activeUsers}</div>
           </div>
         </div>
@@ -182,10 +188,10 @@ export default function ConversationHistoryPage() {
           </select>
           <div className="flex h-10 items-center gap-1.5 rounded-xl border bg-white px-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="From date"
-              className="bg-transparent text-[11px] outline-none dark:[color-scheme:dark]" />
-            <span className="text-[10px] text-muted-foreground">→</span>
+              className="bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
+            <span className="text-2xs text-muted-foreground">→</span>
             <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="To date"
-              className="bg-transparent text-[11px] outline-none dark:[color-scheme:dark]" />
+              className="bg-transparent text-xs outline-none dark:[color-scheme:dark]" />
             {(fromDate || toDate) && (
               <button type="button" onClick={() => { setFromDate(""); setToDate(""); }}
                 className="rounded p-0.5 text-muted-foreground hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -193,7 +199,7 @@ export default function ConversationHistoryPage() {
               </button>
             )}
           </div>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             Showing {shown.length} of {convs.length}
           </span>
         </div>
@@ -213,7 +219,7 @@ export default function ConversationHistoryPage() {
                   <col className="w-[10%]" /><col className="w-[20%]" />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_#e2e8f0] dark:bg-slate-900 dark:shadow-[0_1px_0_#1e293b]">
-                  <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
                     <th className="px-4 py-3 font-semibold">User</th>
                     <th className="px-4 py-3 font-semibold">Title</th>
                     <th className="px-4 py-3 font-semibold">Msgs</th>
@@ -237,15 +243,15 @@ export default function ConversationHistoryPage() {
                       onClick={() => view(c)}
                       title={c.title}
                       className={[
-                        "cursor-pointer border-t border-slate-100 text-[11px] transition",
+                        "cursor-pointer border-t border-slate-100 text-xs transition",
                         open === c.session_id
-                          ? "bg-sky-50 dark:bg-sky-950/20"
-                          : "hover:bg-sky-50/60 dark:hover:bg-sky-950/20",
+                          ? "bg-[var(--accent-soft)] dark:bg-[var(--accent-soft)]"
+                          : "hover:bg-[var(--accent-soft)]/60 dark:hover:bg-[var(--accent-soft)]",
                       ].join(" ")}
                     >
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
-                          <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${toneFor(c.username)}`}>
+                          <span className={`grid size-6 shrink-0 place-items-center rounded-full text-2xs font-bold ${toneFor(c.username)}`}>
                             {c.username.slice(0, 1).toUpperCase()}
                           </span>
                           <span className="truncate font-semibold">{c.username}</span>
@@ -256,9 +262,35 @@ export default function ConversationHistoryPage() {
                       <td className="px-4 py-2.5">{fmt(c.last_at)}</td>
                     </tr>
                   ))}
-                  {shown.length === 0 && !loading && (
-                    <tr><td colSpan={4} className="px-4 py-10 text-center text-[11px] text-muted-foreground">
-                      No conversations found.
+                  {error && !loading && (
+                    <tr>
+                      <td colSpan={4}>
+                        <ErrorState
+                          compact
+                          title="Could not load conversation history"
+                          detail={error}
+                          onRetry={() => void load()}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                  {shown.length === 0 && !loading && !error && (
+                    <tr><td colSpan={4}>
+                      {convs.length === 0 ? (
+                        <EmptyState
+                          icon={<MessagesSquare className="size-5" />}
+                          title="No conversations yet"
+                          description="Chat sessions appear here once users start asking the assistant questions."
+                        />
+                      ) : (
+                        <EmptyState
+                          icon={<SearchX className="size-5" />}
+                          title="No conversations match these filters"
+                          description={`${convs.length} conversation${convs.length === 1 ? "" : "s"} loaded, but none match the current search or date range.`}
+                          actionLabel="Clear filters"
+                          onAction={() => { setQ(""); setFromDate(""); setToDate(""); setFilterUser(""); }}
+                        />
+                      )}
                     </td></tr>
                   )}
                 </tbody>
@@ -278,7 +310,7 @@ export default function ConversationHistoryPage() {
                           {openUser.slice(0, 1).toUpperCase()}
                         </span>
                         <div className="min-w-0">
-                          <div className="truncate text-[12px] font-semibold">{openUser}</div>
+                          <div className="truncate text-xs font-semibold">{openUser}</div>
                           <div className="truncate text-2xs text-muted-foreground">{detail.title}</div>
                         </div>
                       </div>
@@ -292,13 +324,13 @@ export default function ConversationHistoryPage() {
                     <div className="mt-2.5 flex items-center gap-1.5">
                       <button
                         onClick={() => download(detail, "txt")}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-sky-700 px-2 py-1.5 text-[10px] font-semibold text-white transition hover:bg-sky-600"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-2 py-1.5 text-2xs font-semibold text-[var(--primary-foreground)] transition hover:opacity-90"
                       >
                         <FileText className="size-3" /> Export .txt
                       </button>
                       <button
                         onClick={() => download(detail, "json")}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-2 py-1.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-2 py-1.5 text-2xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                       >
                         <FileJson className="size-3" /> Export .json
                       </button>
@@ -308,14 +340,14 @@ export default function ConversationHistoryPage() {
                     {msgs.map((m, i) => (
                       <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
                         <span className={[
-                          "inline-block max-w-[88%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-left text-[11px] leading-relaxed",
+                          "inline-block max-w-[88%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-left text-xs leading-relaxed",
                           m.role === "user"
-                            ? "rounded-br-md bg-sky-600 text-white"
+                            ? "rounded-br-md bg-[var(--primary)] text-[var(--primary-foreground)]"
                             : "rounded-bl-md bg-slate-100 dark:bg-slate-800",
                         ].join(" ")}>
                           {m.content}
                         </span>
-                        <div className="mt-1 text-[8.5px] text-muted-foreground">
+                        <div className="mt-1 text-3xs text-muted-foreground">
                           {m.role === "user" ? "User" : "Assistant"} · {fmt(m.created_at)}
                         </div>
                       </div>
@@ -327,8 +359,8 @@ export default function ConversationHistoryPage() {
                   <span className="grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
                     <MessagesSquare className="size-6" />
                   </span>
-                  <div className="text-[12px] font-semibold">Select a conversation</div>
-                  <p className="max-w-[240px] text-[10.5px] leading-relaxed text-muted-foreground">
+                  <div className="text-xs font-semibold">Select a conversation</div>
+                  <p className="max-w-[240px] text-2xs leading-relaxed text-muted-foreground">
                     Click any row in the list to read the full transcript here.
                   </p>
                 </div>

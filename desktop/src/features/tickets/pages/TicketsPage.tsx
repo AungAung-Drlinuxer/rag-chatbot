@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { PageShell, PageHeader } from "@/components/ui/page";
+import { EmptyState, ErrorState, PageShell, PageHeader } from "@/components/ui/page";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,7 @@ export default function Tickets({
 
   const [tickets, setTickets] =
     useState<Ticket[] | null>(null);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] =
@@ -204,15 +205,20 @@ export default function Tickets({
   useEffect(() => {
     let mounted = true;
 
+    setTicketsError(null);
     listTickets(50)
       .then((data) => {
         if (mounted) {
           setTickets((data?.tickets ?? []) as Ticket[]);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (mounted) {
-          setTickets([]); // real data only — show empty state on failure
+          // This used to fall through to the EMPTY state, so a failed request told the user
+          // "No tickets found — try changing your search or filter criteria", sending them
+          // to fiddle with filters that were never the problem.
+          setTicketsError(err instanceof Error ? err.message : String(err));
+          setTickets([]);
         }
       });
 
@@ -545,7 +551,7 @@ function SyncMenu({
           className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900"
         >
           <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-slate-400">
               Sync from external tracker
             </p>
           </div>
@@ -567,7 +573,7 @@ function SyncMenu({
                 <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
                   {it.label}
                 </span>
-                <span className="block text-[10px] text-slate-400">{it.desc}</span>
+                <span className="block text-2xs text-slate-400">{it.desc}</span>
               </span>
               <ChevronRight className="size-3.5 shrink-0 text-slate-300" />
             </button>
@@ -787,7 +793,7 @@ function SyncMenu({
                     Support requests
                   </h2>
 
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {filteredTickets.length} matching tickets
                   </p>
                 </div>
@@ -850,29 +856,35 @@ function SyncMenu({
                     />
                   ))}
                 </div>
+              ) : ticketsError ? (
+                <ErrorState
+                  title="Could not load tickets"
+                  detail={ticketsError}
+                  onRetry={() => {
+                    setTickets(null);
+                    listTickets(50)
+                      .then((d) => setTickets((d?.tickets ?? []) as Ticket[]))
+                      .catch((err) => {
+                        setTicketsError(err instanceof Error ? err.message : String(err));
+                        setTickets([]);
+                      });
+                  }}
+                />
               ) : filteredTickets.length === 0 ? (
-                <div className="p-16 text-center">
-                  <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-muted">
-                    <Filter className="size-5 text-muted-foreground" />
-                  </div>
-
-                  <h3 className="text-sm font-semibold">
-                    No tickets found
-                  </h3>
-
-                  <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-                    Try changing your search or filter criteria.
-                  </p>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4 rounded-xl"
-                    onClick={resetFilters}
-                  >
-                    Clear filters
-                  </Button>
-                </div>
+                /* Two situations, two messages: an empty result set the user caused by
+                   filtering is fixable with Clear filters; an empty Jira/OpenProject has
+                   nothing to clear and points at the integration instead. */
+                <EmptyState
+                  icon={<Filter className="size-5" />}
+                  title={tickets.length === 0 ? "No tickets yet" : "No tickets found"}
+                  description={
+                    tickets.length === 0
+                      ? "Nothing has been synced from Jira or OpenProject yet. Use Sync above, or check the integration in Settings → Integrations."
+                      : "Try changing your search or filter criteria."
+                  }
+                  actionLabel={tickets.length === 0 ? undefined : "Clear filters"}
+                  onAction={tickets.length === 0 ? undefined : resetFilters}
+                />
               ) : (
                 <>
                   <div className="max-h-[420px] overflow-auto rounded-xl border border-[var(--border)] pr-1">
@@ -944,7 +956,7 @@ function SyncMenu({
                                       }
                                     </div>
 
-                                    <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                                    <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground">
                                       <span>
                                         {
                                           ticket.category
@@ -973,7 +985,7 @@ function SyncMenu({
                                   <Badge
                                     variant="outline"
                                     className={[
-                                      "rounded-lg text-[10px]",
+                                      "rounded-lg text-2xs",
                                       status.className,
                                     ].join(" ")}
                                   >
@@ -1044,7 +1056,7 @@ function SyncMenu({
 
                   {/* Pagination */}
                   <div className="flex items-center justify-between border-t px-5 py-3">
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-2xs text-muted-foreground">
                       Showing all {filteredTickets.length} ticket{filteredTickets.length === 1 ? "" : "s"} — scroll to review
                     </span>
                   </div>
@@ -1159,7 +1171,7 @@ function SyncMenu({
                               onClick={() => handleUpdateStatus(st)}
                               aria-pressed={active}
                               className={[
-                                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold capitalize transition",
+                                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-2xs font-semibold capitalize transition",
                                 active
                                   ? "bg-white text-foreground shadow-sm ring-1 ring-slate-900/10 dark:bg-slate-900 dark:ring-white/10"
                                   : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-slate-900/60",
@@ -1178,7 +1190,7 @@ function SyncMenu({
                     {editFields ? (
                       <div className="mb-4 space-y-3 rounded-xl border p-4 dark:border-slate-800">
                         <label className="block">
-                          <span className="mb-1 block text-[10px] font-medium">Subject</span>
+                          <span className="mb-1 block text-2xs font-medium">Subject</span>
                           <input
                             value={editFields.subject}
                             onChange={(e) => setEditFields({ ...editFields, subject: e.target.value })}
@@ -1186,7 +1198,7 @@ function SyncMenu({
                           />
                         </label>
                         <label className="block">
-                          <span className="mb-1 block text-[10px] font-medium">Description</span>
+                          <span className="mb-1 block text-2xs font-medium">Description</span>
                           <textarea
                             rows={4}
                             value={editFields.description}
@@ -1196,7 +1208,7 @@ function SyncMenu({
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                           <label className="block">
-                            <span className="mb-1 block text-[10px] font-medium">Assignee</span>
+                            <span className="mb-1 block text-2xs font-medium">Assignee</span>
                             <input
                               value={editFields.assignee}
                               onChange={(e) => setEditFields({ ...editFields, assignee: e.target.value })}
@@ -1205,7 +1217,7 @@ function SyncMenu({
                             />
                           </label>
                           <label className="block">
-                            <span className="mb-1 block text-[10px] font-medium">Due date</span>
+                            <span className="mb-1 block text-2xs font-medium">Due date</span>
                             <input
                               type="date"
                               value={editFields.due_date}
@@ -1238,7 +1250,7 @@ function SyncMenu({
                               href={attachmentUrl(selected.id, att.id)}
                               target="_blank"
                               rel="noreferrer"
-                              className="flex items-center justify-between rounded-lg border px-3 py-2 text-[10px] transition hover:bg-muted"
+                              className="flex items-center justify-between rounded-lg border px-3 py-2 text-2xs transition hover:bg-muted"
                             >
                               <span className="truncate font-medium">📎 {att.filename}</span>
                               <span className="shrink-0 text-muted-foreground">{Math.round(att.size / 1024)} KB</span>
@@ -1300,7 +1312,7 @@ function SyncMenu({
                         className="w-full resize-none bg-transparent px-3 pt-2.5 text-xs outline-none placeholder:text-muted-foreground"
                       />
                       <div className="flex items-center justify-end px-2 pb-2">
-                        <Button size="sm" className="rounded-lg text-[10px]" onClick={handleAddComment} disabled={!commentText.trim()}>
+                        <Button size="sm" className="rounded-lg text-2xs" onClick={handleAddComment} disabled={!commentText.trim()}>
                           <MessageSquare className="mr-1 size-3" />
                           Send
                         </Button>
@@ -1402,7 +1414,7 @@ function SyncMenu({
                       setBusy(false);
                     }
                   }}
-                  className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium text-blue-600 transition hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-950/30"
+                  className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-2xs font-medium text-blue-600 transition hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-950/30"
                 >
                   <Sparkles className="size-3" />
                   AI assist
@@ -1537,7 +1549,7 @@ function SyncMenu({
                 {pendingFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {pendingFiles.map((f) => (
-                      <div key={f.name} className="text-[10px] text-muted-foreground">
+                      <div key={f.name} className="text-2xs text-muted-foreground">
                         📎 {f.name} ({Math.round(f.size / 1024)} KB)
                       </div>
                     ))}

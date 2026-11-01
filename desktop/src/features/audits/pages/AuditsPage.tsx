@@ -6,10 +6,9 @@ import {
   ScrollText,
   Search,
   ShieldCheck,
-  UserCheck,
-} from "lucide-react";
+  UserCheck, SearchX} from "lucide-react";
 import { listAudits } from "@/features/audits/api";
-import { PageShell, PageHeader, SectionCard } from "@/components/ui/page";
+import { EmptyState, ErrorState, PageShell, PageHeader, SectionCard } from "@/components/ui/page";
 
 /**
  * Audits — v0.21.90 (administrator only)
@@ -81,19 +80,24 @@ export default function AuditsPage() {
   const [total, setTotal] = useState(0);
   const [actions, setActions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filterAction, setFilterAction] = useState("");
   const [limit, setLimit] = useState(100);
 
   async function load() {
     setLoading(true);
+    // A swallowed error made a failed request render as "no audit events match", which
+    // tells the user the data is empty when the truth is that it could not be read.
+    setError(null);
     try {
       const d = await listAudits({ limit, action: filterAction || undefined });
       setRows(d.audits ?? []);
       setTotal(d.total ?? 0);
       setActions(d.actions ?? []);
     } catch (err) {
-      console.warn("audits fetch failed:", err);
+      setError(err instanceof Error ? err.message : String(err));
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -142,7 +146,7 @@ export default function AuditsPage() {
               <button
                 onClick={exportCsv}
                 disabled={shown.length === 0}
-                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-xs font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
               >
                 <Download className="size-3.5" />
                 Export CSV
@@ -150,7 +154,7 @@ export default function AuditsPage() {
               <button
                 onClick={load}
                 disabled={loading}
-                className="flex items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+                className="flex items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-xs font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
               >
                 <RefreshCw className={["size-3.5", loading ? "animate-spin" : ""].join(" ")} />
                 Refresh
@@ -162,21 +166,21 @@ export default function AuditsPage() {
         {/* stats */}
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               <Activity className="size-3.5 text-sky-600" /> Events shown
             </div>
             <div className="mt-1 text-2xl font-bold text-sky-700 dark:text-sky-300">{shown.length.toLocaleString()}</div>
             <div className="text-2xs text-muted-foreground">of {total.toLocaleString()} total events in log</div>
           </div>
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               <ShieldCheck className="size-3.5 text-cyan-600" /> Today
             </div>
             <div className="mt-1 text-2xl font-bold text-cyan-700 dark:text-cyan-300">{today}</div>
             <div className="text-2xs text-muted-foreground">events in current page</div>
           </div>
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               <UserCheck className="size-3.5 text-teal-600" /> Distinct users
             </div>
             <div className="mt-1 text-2xl font-bold text-teal-700 dark:text-teal-300">{users}</div>
@@ -220,13 +224,13 @@ export default function AuditsPage() {
           icon={<ScrollText className="size-4" />}
         >
           <div className="max-h-[560px] overflow-auto pr-1">
-            <table className="w-full table-fixed text-[11px]">
+            <table className="w-full table-fixed text-xs">
               <colgroup>
                 <col className="w-[15%]" /><col className="w-[13%]" /><col className="w-[14%]" />
                 <col className="w-[11%]" /><col className="w-[33%]" /><col className="w-[14%]" />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_#e2e8f0] dark:bg-slate-900 dark:shadow-[0_1px_0_#1e293b]">
-                <tr className="text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3 font-semibold">Time</th>
                   <th className="px-4 py-3 font-semibold">Action</th>
                   <th className="px-4 py-3 font-semibold">User</th>
@@ -249,7 +253,7 @@ export default function AuditsPage() {
                   <tr key={r.id} className="border-t border-slate-100 transition hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800/40">
                     <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground" title={relTimeAgo(r.created_at)}>{fmt(r.created_at)}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold ${toneFor(r.action)}`}>
+                      <span className={`inline-flex rounded-md px-2 py-0.5 text-2xs font-semibold ${toneFor(r.action)}`}>
                         {r.action}
                       </span>
                     </td>
@@ -270,24 +274,54 @@ export default function AuditsPage() {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {r.decision ? (
-                        <span className={["text-[10px] font-semibold",
+                        <span className={["text-2xs font-semibold",
                           r.decision === "answer" ? "text-emerald-600" :
                           r.decision === "approved" ? "text-emerald-600" :
                           r.decision === "rejected" ? "text-red-500" : "text-orange-500"].join(" ")}>
                           {r.decision}
                         </span>
                       ) : r.confidence != null ? (
-                        <span className="text-[10px] text-muted-foreground">{Math.round(r.confidence * 100)}%</span>
+                        <span className="text-2xs text-muted-foreground">{Math.round(r.confidence * 100)}%</span>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground">—</span>
+                        <span className="text-2xs text-muted-foreground">—</span>
                       )}
                     </td>
                   </tr>
                 ))}
-                {shown.length === 0 && (
+                {!loading && error && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-[11px] text-muted-foreground">
-                      {loading ? "" : "No audit events match the current filters."}
+                    <td colSpan={6}>
+                      <ErrorState
+                        compact
+                        title="Could not load the audit log"
+                        detail={error}
+                        onRetry={load}
+                      />
+                    </td>
+                  </tr>
+                )}
+                {!loading && !error && shown.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>
+                      {/* Two different situations, two different messages. "No events
+                          yet" is a normal state for a new install; "nothing matches your
+                          filters" is a user action they can undo — so only that one gets
+                          the clear-filters CTA. */}
+                      {rows.length === 0 ? (
+                        <EmptyState
+                          icon={<ScrollText className="size-5" />}
+                          title="No audit events yet"
+                          description="Administrative actions — sign-ins, permission changes, knowledge edits and approvals — are recorded here as they happen."
+                        />
+                      ) : (
+                        <EmptyState
+                          icon={<SearchX className="size-5" />}
+                          title="No events match these filters"
+                          description={`${rows.length} event${rows.length === 1 ? "" : "s"} loaded, but none match the current search or action filter.`}
+                          actionLabel="Clear filters"
+                          onAction={() => { setQ(""); setFilterAction(""); }}
+                        />
+                      )}
                     </td>
                   </tr>
                 )}

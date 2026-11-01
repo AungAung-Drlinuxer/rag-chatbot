@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen, Layers, Route, ShieldAlert, Ticket, Workflow } from "lucide-react";
-import { PageShell, PageHeader } from "@/components/ui/page";
+import { EmptyState, ErrorState, PageShell, PageHeader } from "@/components/ui/page";
 import { Badge } from "@/components/ui/badge";
 import { ClassifierDomainItem, getClassifierDomains } from "@/features/domains/api";
 import { DomainClassifierManager } from "@/features/domains/components/DomainClassifierManager";
@@ -49,7 +49,7 @@ function StatCard({
         </div>
         <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${toneCls}`}>{icon}</div>
       </div>
-      <p className="mt-auto pt-2 text-[10px] leading-tight text-muted-foreground">{description}</p>
+      <p className="mt-auto pt-2 text-2xs leading-tight text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -86,7 +86,7 @@ function ConceptCard({
       <div className="flex items-center gap-2">
         <div className={`grid size-7 shrink-0 place-items-center rounded-lg ${toneCls.tile}`}>{icon}</div>
         <div className="min-w-0">
-          <div className={`text-[10px] font-semibold uppercase tracking-wide ${toneCls.step}`}>{step}</div>
+          <div className={`text-2xs font-semibold uppercase tracking-wide ${toneCls.step}`}>{step}</div>
           <h5 className="text-xs font-semibold leading-tight">{title}</h5>
         </div>
       </div>
@@ -238,16 +238,27 @@ export default function DomainsPage({
         </section>
 
         <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-xs">
-          {error && (
-            <div className="border-b border-rose-200 bg-rose-50 p-3 text-xs text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-              {error}
-            </div>
-          )}
-
+          {/* An error banner ABOVE a rendered manager was the old behaviour, so the user
+              saw "failed to load" and a working-looking table at the same time. Failure
+              now replaces the content, because there is nothing truthful to show under it. */}
           {loading && domains.length === 0 ? (
-            <div className="p-12 text-center text-xs text-muted-foreground">
-              Loading domains configuration…
+            <div className="space-y-2 p-5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-11 animate-pulse rounded-lg bg-muted"
+                  style={{ width: `${88 + ((i * 7) % 12)}%` }}
+                />
+              ))}
             </div>
+          ) : error ? (
+            <ErrorState title="Could not load the domains configuration" detail={error} onRetry={loadData} />
+          ) : domains.length === 0 ? (
+            <EmptyState
+              icon={<Layers className="size-5" />}
+              title="No domains configured yet"
+              description="Domains group your knowledge and route questions to the right collection. Add one to start classifying incoming content."
+            />
           ) : (
             <DomainClassifierManager domains={domains} onRefresh={loadData} canManage={canManage} />
           )}

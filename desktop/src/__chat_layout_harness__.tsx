@@ -70,6 +70,24 @@ window.fetch = async (input: RequestInfo | URL, _init?: RequestInit) => {
   // Anything the harness does not model returns an empty object rather than 404: the page
   // tolerates a missing list, but a thrown fetch would blank the whole surface and make
   // every measurement meaningless.
+
+  // The chat header's four status chips read GET /api/dashboard/health. Without a stub
+  // that call fails and every chip degrades to "—" — honest behaviour, but a useless
+  // screenshot for reviewing the chips. Answered here in the real response shape:
+  // a live dependency probe returning {services, overall, down}.
+  if (/\/api\/dashboard\/health/.test(url)) {
+    return json({
+      overall: "Healthy",
+      down: [],
+      security: { guardrail_events_7d: 0 },
+      services: [
+        { key: "postgres", name: "PostgreSQL", status: "Healthy", latency_ms: 3, detail: "SELECT 1" },
+        { key: "redis", name: "Redis", status: "Healthy", latency_ms: 1, detail: "PING" },
+        { key: "ollama", name: "Embeddings", status: "Healthy", latency_ms: 41, detail: "bge-m3" },
+        { key: "llm", name: "Model provider", status: "Healthy", latency_ms: 210, detail: "claude-sonnet" },
+      ],
+    });
+  }
   if (/\/api\/conversations\/[^/]+\/messages/.test(url)) {
     return json({ session_id: SESSION, messages: CONV_MESSAGES, connector_scope: [] });
   }

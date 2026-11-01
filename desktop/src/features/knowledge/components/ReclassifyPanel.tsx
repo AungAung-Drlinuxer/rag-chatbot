@@ -84,14 +84,14 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
   }
 
   return (
-    <div className="mb-4 w-full rounded-2xl border border-[var(--border)] bg-white p-4 dark:bg-slate-900">
+    <div className="mb-4 w-full rounded-xl border border-[var(--border)] bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-xs font-semibold">
-            <Sparkles className="size-3.5 text-blue-600" />
+            <Sparkles className="size-3.5 text-[var(--accent-foreground)]" />
             Re-classify the knowledge base
           </div>
-          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             The LLM reads each article and proposes the correct domain using the
             domain descriptions. Nothing is written until you apply it, and applying
             only moves the domain metadata — the article text is untouched.
@@ -110,7 +110,7 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
-          className="h-8 gap-2 rounded-lg text-[11px]"
+          className="h-8 gap-2 rounded-lg text-xs"
           disabled={busy || running}
           onClick={() => run(false)}
         >
@@ -118,7 +118,7 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
           Preview changes
         </Button>
         <Button
-          className="h-8 gap-2 rounded-lg text-[11px]"
+          className="h-8 gap-2 rounded-lg text-xs"
           disabled={busy || running || !st || st.changed === 0}
           onClick={() => run(true)}
           title={st && st.changed === 0 ? "Run a preview first — there is nothing to apply" : undefined}
@@ -127,7 +127,7 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
           Apply {st && st.changed > 0 ? `${st.changed} change(s)` : ""}
         </Button>
         {st && st.state !== "idle" && (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {st.state === "running"
               ? `Classifying ${st.done}/${st.total} (${pct}%)…`
               : st.state === "error"
@@ -141,17 +141,17 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
       </div>
 
       {running && (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${pct}%` }} />
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${pct}%` }} />
         </div>
       )}
 
-      {msg && <div className="mt-2 text-[11px] text-muted-foreground">{msg}</div>}
+      {msg && <div className="mt-2 text-xs text-muted-foreground">{msg}</div>}
 
       {st && st.changes.length > 0 && (
         <div className="mt-3 max-h-72 overflow-auto rounded-xl border border-[var(--border)]">
-          <table className="w-full text-[11px]">
-            <thead className="sticky top-0 bg-slate-50 text-left dark:bg-slate-800">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/60 text-left">
               <tr>
                 <th className="px-3 py-2 font-semibold">Article</th>
                 <th className="px-3 py-2 font-semibold">Now</th>
@@ -174,22 +174,22 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
                       {c.title}
                     </td>
                     <td className="px-3 py-2">
-                      <Badge variant="outline" className="text-[10px]">{c.current}</Badge>
+                      <Badge variant="outline" className="text-2xs">{c.current}</Badge>
                     </td>
                     <td className="px-3 py-2">
-                      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-[10px] text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+                      <Badge variant="outline" className="border-[var(--primary)]/30 bg-[var(--accent-soft)] text-2xs text-[var(--accent-foreground)]">
                         {c.suggested}
                       </Badge>
                     </td>
                     <td className="w-24 px-3 py-2">
                       <div className="flex items-center gap-1.5">
-                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
                           <div
                             className={`h-full rounded-full ${low ? "bg-amber-500" : "bg-emerald-500"}`}
                             style={{ width: `${Math.round(c.confidence * 100)}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] font-semibold ${low ? "text-amber-600" : "text-emerald-600"}`}>
+                        <span className={`text-2xs font-semibold ${low ? "text-amber-600" : "text-emerald-600"}`}>
                           {Math.round(c.confidence * 100)}%
                         </span>
                       </div>
@@ -204,7 +204,7 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
       )}
 
       {st?.state === "done" && st.applied && (
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-emerald-600">
+        <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600">
           <Check className="size-3" />
           Applied. Refresh the list to see the new domains.
           {onApplied && (
@@ -216,7 +216,7 @@ export default function ReclassifyPanel({ onApplied }: { onApplied?: () => void 
       )}
 
       {st?.state === "error" && (
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-rose-600">
+        <div className="mt-2 flex items-center gap-2 text-xs text-rose-600">
           <AlertTriangle className="size-3" /> {st.error}
         </div>
       )}

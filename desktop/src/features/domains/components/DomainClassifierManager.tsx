@@ -293,7 +293,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           <button
             type="button"
             onClick={startCreate}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] text-xs font-medium transition shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Domain
@@ -325,7 +325,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Domain Key (Unique Identifier)
                 {!isCreating && domainKey !== (editingDomain?.domain_key || "") && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 text-2xs font-semibold text-amber-700 dark:text-amber-300">
                     <AlertCircle className="size-3" /> Rename — cascades to KB & vectors
                   </span>
                 )}
@@ -339,7 +339,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 required
               />
               {!isCreating && (
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-2xs text-muted-foreground mt-1">
                   Editing the key renames it across the classifier engine, KB pages, and stored vector metadata in one atomic transaction.
                   Confluence space-bound keys cannot be renamed here.
                 </p>
@@ -418,7 +418,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-2xs text-muted-foreground mt-1">
                   Optional. Overrides the built-in icon with your custom logo.
                 </p>
               </div>
@@ -444,7 +444,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
             </div>
 
             <div>
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              <label className="block text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                 Knowledge Card Preview
               </label>
               <div className="p-3 rounded-xl border border-[var(--border)] bg-card shadow-xs">
@@ -458,7 +458,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                   {displayName || "Domain Title"}
                 </div>
-                <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                <p className="text-2xs text-muted-foreground line-clamp-1 mt-0.5">
                   {description || "Domain description preview..."}
                 </p>
               </div>
@@ -477,7 +477,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 placeholder="e.g. ITHD (leave blank if unused)"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">
+              <p className="text-2xs text-muted-foreground mt-1">
                 Target Jira Project code for team escalation when the question cannot be answered from Confluence KB.
               </p>
             </div>
@@ -522,7 +522,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               placeholder="e.g. payroll, leave request, onboarding, tax deduction"
               className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
             />
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-2xs text-muted-foreground mt-1">
               Any user prompt containing these phrases will score towards this domain.
             </p>
           </div>
@@ -567,20 +567,20 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-sm text-slate-900 dark:text-white">{d.display_name}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <span className="px-2 py-0.5 rounded-full text-2xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {d.domain_key}
                     </span>
                     {d.is_active ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+                      <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                      <span className="inline-flex items-center gap-1 text-2xs text-slate-400">
                         <XCircle className="w-3 h-3" /> Inactive
                       </span>
                     )}
                     {d.jira_project && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
+                      <span className="px-1.5 py-0.5 rounded text-2xs bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
                         Jira: {d.jira_project}
                       </span>
                     )}
@@ -595,7 +595,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                     {(expanded.has(d.id) ? d.keywords : d.keywords.slice(0, 8)).map((kw, i) => (
                       <span
                         key={i}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
                       >
                         <Tag className="w-2.5 h-2.5 opacity-40" />
                         {kw}
@@ -605,7 +605,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                       <button
                         type="button"
                         onClick={() => toggleExpanded(d.id)}
-                        className="px-2 py-0.5 rounded-md text-[10px] font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-900/60"
+                        className="px-2 py-0.5 rounded-md text-2xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-900/60"
                       >
                         {expanded.has(d.id) ? "Show less" : `+${d.keywords.length - 8} more`}
                       </button>

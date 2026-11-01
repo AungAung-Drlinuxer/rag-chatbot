@@ -292,22 +292,22 @@ export default function Users() {
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => loadUsers(true)} disabled={refreshing}
-                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-xs font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
                 <RefreshCw className={["size-3.5", refreshing ? "animate-spin" : ""].join(" ")} />
                 Refresh
               </button>
               <button type="button" onClick={exportCsv}
-                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-xs font-semibold shadow-sm transition hover:bg-slate-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
                 <Download className="size-3.5" />
                 Export CSV
               </button>
               <button type="button" onClick={printReport}
-                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-[11px] font-semibold shadow-sm transition hover:bg-slate-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+                className="hidden items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 text-xs font-semibold shadow-sm transition hover:bg-slate-50 sm:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
                 <Printer className="size-3.5" />
                 Report
               </button>
               <button type="button" onClick={() => setShowAddUser(true)}
-                className="flex items-center gap-2 rounded-xl bg-sky-700 px-4 py-2.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-sky-600">
+                className="flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-xs font-semibold text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90">
                 <Plus className="size-4" />
                 Add user
               </button>
@@ -398,7 +398,7 @@ export default function Users() {
 
               {!loading && filteredUsers.length > 0 && (
                 <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     Showing {(page - 1) * perPage + 1} to {Math.min(page * perPage, filteredUsers.length)} of {filteredUsers.length} users
                   </span>
                   <div className="flex items-center gap-1.5">
@@ -407,9 +407,9 @@ export default function Users() {
                       <PaginationButton key={i} label={String(i + 1)} active={page === i + 1}
                         onClick={() => setPage(i + 1)} />
                     ))}
-                    {totalPages > 5 && <span className="px-1 text-[11px] text-muted-foreground">… {totalPages}</span>}
+                    {totalPages > 5 && <span className="px-1 text-xs text-muted-foreground">… {totalPages}</span>}
                     <PaginationButton label="›" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
-                    <select className="ml-2 h-8 rounded-lg border bg-white px-2 text-[10px] dark:border-slate-700 dark:bg-slate-900"
+                    <select className="ml-2 h-8 rounded-lg border bg-white px-2 text-2xs dark:border-slate-700 dark:bg-slate-900"
                       value={perPage} onChange={(e) => setPerPage(Number(e.target.value))} aria-label="Users per page">
                       <option value="10">10 / page</option>
                       <option value="25">25 / page</option>
@@ -453,16 +453,16 @@ function StatCard({ icon, title, value, description, positive, warning }: {
           {icon}
         </div>
         {positive && (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+          <span className="flex items-center gap-1 text-2xs font-semibold text-emerald-600">
             <Activity className="size-3" /> Healthy
           </span>
         )}
-        {warning && <span className="text-[10px] font-semibold text-orange-600">Attention</span>}
+        {warning && <span className="text-2xs font-semibold text-orange-600">Attention</span>}
       </div>
       <div className="mt-4">
         <div className="text-2xl font-semibold tracking-tight">{value}</div>
         <div className="mt-1 text-xs font-semibold">{title}</div>
-        <div className="mt-1 text-[10px] text-muted-foreground">{description}</div>
+        <div className="mt-1 text-2xs text-muted-foreground">{description}</div>
       </div>
     </div>
   );
@@ -474,7 +474,7 @@ function StatCard({ icon, title, value, description, positive, warning }: {
 
 function Th({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <th className={["px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", className].join(" ")}>
+    <th className={["px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-muted-foreground", className].join(" ")}>
       {children}
     </th>
   );
@@ -493,42 +493,42 @@ function UserRow({ user, onSelect, onToggle }: { user: User; onSelect: () => voi
           <div className="min-w-0 flex items-center gap-1.5">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <div className="truncate text-[11px] font-semibold hover:text-sky-600" title={user.name}>{user.name}</div>
+                <div className="truncate text-xs font-semibold hover:text-sky-600" title={user.name}>{user.name}</div>
                 {user.username.endsWith("-svc") && (
                   <span
                     title="Service account — used by system components, not a human user"
-                    className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-px text-[8px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                    className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1 py-px text-3xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
                   >
                     system
                   </span>
                 )}
               </div>
-              <div className="truncate text-[10px] text-muted-foreground">@{user.username}</div>
+              <div className="truncate text-2xs text-muted-foreground">@{user.username}</div>
             </div>
           </div>
         </button>
       </td>
       <td className="px-4 py-3">
         {user.department && user.department !== "—" ? (
-          <span className="text-[10px]" title={user.department}>{user.department}</span>
+          <span className="text-2xs" title={user.department}>{user.department}</span>
         ) : (
-          <span className="text-[10px] italic text-slate-400 dark:text-slate-500" title="No department assigned">No department</span>
+          <span className="text-2xs italic text-slate-400 dark:text-slate-500" title="No department assigned">No department</span>
         )}
       </td>
       <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
       <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
       <td className="px-4 py-3">
         {user.lastLogin && user.lastLogin !== "—" ? (
-          <span className="text-[10px] text-muted-foreground" title={user.lastLogin}>{formatDateTime(user.lastLogin)}</span>
+          <span className="text-2xs text-muted-foreground" title={user.lastLogin}>{formatDateTime(user.lastLogin)}</span>
         ) : (
-          <span className="text-[10px] italic text-slate-400 dark:text-slate-500" title="This user has never signed in">Never logged in</span>
+          <span className="text-2xs italic text-slate-400 dark:text-slate-500" title="This user has never signed in">Never logged in</span>
         )}
       </td>
       <td className="px-4 py-3">
         {user.joined && user.joined !== "—" ? (
-          <span className="text-[10px] text-muted-foreground" title={user.joined}>{formatDate(user.joined)}</span>
+          <span className="text-2xs text-muted-foreground" title={user.joined}>{formatDate(user.joined)}</span>
         ) : (
-          <span className="text-[10px] italic text-slate-400 dark:text-slate-500" title="Provisioned via directory sync">AD sync</span>
+          <span className="text-2xs italic text-slate-400 dark:text-slate-500" title="Provisioned via directory sync">AD sync</span>
         )}
       </td>
       <td className="px-3 py-3">
@@ -559,7 +559,7 @@ function UserRow({ user, onSelect, onToggle }: { user: User; onSelect: () => voi
 function Avatar({ name }: { name: string }) {
   const initials = name.split(" ").map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase();
   return (
-    <div className="grid size-10 shrink-0 place-items-center rounded-full bg-sky-50 text-[11px] font-bold text-sky-600 dark:bg-sky-950/40 dark:text-sky-300">
+    <div className="grid size-10 shrink-0 place-items-center rounded-full bg-sky-50 text-xs font-bold text-sky-600 dark:bg-sky-950/40 dark:text-sky-300">
       {initials}
     </div>
   );
@@ -573,7 +573,7 @@ function RoleBadge({ role }: { role: UserRole }) {
     "Knowledge Manager": "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-300",
     User: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
   };
-  return <span className={["inline-flex items-center rounded-md border px-2.5 py-1 text-[8px] font-semibold", styles[role]].join(" ")}>{role}</span>;
+  return <span className={["inline-flex items-center rounded-md border px-2.5 py-1 text-3xs font-semibold", styles[role]].join(" ")}>{role}</span>;
 }
 
 function StatusBadge({ status }: { status: UserStatus }) {
@@ -586,7 +586,7 @@ function StatusBadge({ status }: { status: UserStatus }) {
   };
   const item = config[status];
   return (
-    <span className={["inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[8px] font-semibold", item.className].join(" ")}>
+    <span className={["inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-3xs font-semibold", item.className].join(" ")}>
       <span className={["size-1.5 rounded-full", item.dot].join(" ")} />
       {status}
     </span>
@@ -603,7 +603,7 @@ function FilterSelect({ value, onChange, options, label }: {
   return (
     <div className="relative">
       <select value={value} onChange={(event) => onChange(event.target.value)} aria-label={label}
-        className="h-10 min-w-[120px] appearance-none rounded-xl border bg-white py-0 pl-3 pr-8 text-[10px] font-medium outline-none transition hover:bg-slate-50 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+        className="h-10 min-w-[120px] appearance-none rounded-xl border bg-white py-0 pl-3 pr-8 text-2xs font-medium outline-none transition hover:bg-slate-50 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
         {options.map((option) => (
           <option key={option} value={option}>{option === "All" ? `All ${label}` : option}</option>
         ))}
@@ -618,8 +618,8 @@ function PaginationButton({ label, active, disabled, onClick }: {
 }) {
   return (
     <button type="button" disabled={disabled} onClick={onClick}
-      className={["grid size-8 place-items-center rounded-lg border text-[10px] font-medium transition",
-        active ? "border-sky-700 bg-sky-700 text-white"
+      className={["grid size-8 place-items-center rounded-lg border text-2xs font-medium transition",
+        active ? "border-sky-700 bg-[var(--primary)] text-[var(--primary-foreground)]"
           : "bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800",
         disabled ? "cursor-not-allowed opacity-40" : ""].join(" ")}>
       {label}
@@ -634,8 +634,8 @@ function EmptyState({ onReset }: { onReset: () => void }) {
         <Search className="size-5 text-muted-foreground" />
       </div>
       <h3 className="mt-4 text-sm font-semibold">No users found</h3>
-      <p className="mt-1 text-[11px] text-muted-foreground">Try changing your search or filters.</p>
-      <button type="button" onClick={onReset} className="mt-4 text-[11px] font-semibold text-sky-600 hover:text-sky-700">
+      <p className="mt-1 text-xs text-muted-foreground">Try changing your search or filters.</p>
+      <button type="button" onClick={onReset} className="mt-4 text-xs font-semibold text-sky-600 hover:text-sky-700">
         Clear filters
       </button>
     </div>
@@ -747,7 +747,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
         <div className="flex items-center justify-between border-b px-5 py-4 dark:border-slate-800">
           <div>
             <div className="text-sm font-semibold">User details</div>
-            <div className="mt-0.5 text-[10px] text-muted-foreground">Account and access information</div>
+            <div className="mt-0.5 text-2xs text-muted-foreground">Account and access information</div>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 transition hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
             <X className="size-4" />
@@ -762,7 +762,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
               </div>
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold">{user.name}</h2>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">@{user.username}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">@{user.username}</p>
                 <div className="mt-2"><StatusBadge status={user.status} /></div>
               </div>
             </div>
@@ -784,11 +784,11 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
             <DrawerSection title="Access" icon={<Shield className="size-4" />}>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-medium text-muted-foreground">Role</label>
+                  <label className="mb-1.5 block text-2xs font-medium text-muted-foreground">Role</label>
                   <div className="relative">
                     <select value={selectedRole}
                       onChange={(event) => { setSelectedRole(event.target.value as UserRole); setRoleSaved(false); }}
-                      className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-9 text-[11px] font-medium outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950">
+                      className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-9 text-xs font-medium outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950">
                       <option value="Administrator">Administrator</option>
                       <option value="IT Support">IT Support</option>
                       <option value="Knowledge Manager">Knowledge Manager</option>
@@ -803,13 +803,13 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-muted-foreground">Permissions</span>
+                    <span className="text-2xs font-medium text-muted-foreground">Permissions</span>
                     {selectedRole !== user.role ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[8.5px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-3xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                         Preview: {selectedRole}
                       </span>
                     ) : (
-                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[8.5px] font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                      <span className="rounded-full bg-sky-50 px-2 py-0.5 text-3xs font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
                         Current: {user.role}
                       </span>
                     )}
@@ -833,11 +833,11 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                                   : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"].join(" ")}>
                                 {enabled ? <Check className="size-3" /> : <X className="size-3" />}
                               </span>
-                              <span className={["text-[10.5px]", enabled ? "font-medium text-slate-800 dark:text-slate-200" : "text-muted-foreground"].join(" ")}>
+                              <span className={["text-2xs", enabled ? "font-medium text-slate-800 dark:text-slate-200" : "text-muted-foreground"].join(" ")}>
                                 {capability.label}
                               </span>
                               {changed && (
-                                <span className={["ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-semibold",
+                                <span className={["ml-auto rounded-full px-1.5 py-0.5 text-3xs font-semibold",
                                   enabled ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
                                     : "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300"].join(" ")}>
                                   {enabled ? "+ new" : "− removed"}
@@ -852,10 +852,10 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                 </div>
 
                 <div className="flex items-center justify-end gap-2">
-                  {roleSaved && <span className="mr-auto text-[10px] font-medium text-emerald-600">Access updated ✓</span>}
-                  {error && <span className="mr-auto max-w-[190px] truncate text-[10px] text-red-600" title={error}>{error}</span>}
+                  {roleSaved && <span className="mr-auto text-2xs font-medium text-emerald-600">Access updated ✓</span>}
+                  {error && <span className="mr-auto max-w-[190px] truncate text-2xs text-red-600" title={error}>{error}</span>}
                   <button type="button" onClick={saveRole} disabled={savingRole || selectedRole === user.role}
-                    className="rounded-xl bg-sky-700 px-5 py-2.5 text-[10px] font-semibold text-white shadow-sm transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40">
+                    className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-2xs font-semibold text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
                     {savingRole ? "Saving..." : "Save access changes"}
                   </button>
                 </div>
@@ -866,17 +866,17 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
             <DrawerSection title="Directory" icon={<UserCog className="size-4" />}>
               <div className="space-y-4">
                 <div>
-                  <div className="mb-2 text-[10px] font-medium">AD / LDAP groups</div>
+                  <div className="mb-2 text-2xs font-medium">AD / LDAP groups</div>
                   {user.groups.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {user.groups.map((group) => (
-                        <span key={group} className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        <span key={group} className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-2xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
                           {group}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed p-4 text-center text-[10px] text-muted-foreground">
+                    <div className="rounded-xl border border-dashed p-4 text-center text-2xs text-muted-foreground">
                       No directory groups assigned.
                     </div>
                   )}
@@ -894,8 +894,8 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                       <KeyRound className="size-4" />
                     </div>
                     <div>
-                      <div className="text-[10px] font-semibold text-amber-900 dark:text-amber-200">Managed by Active Directory</div>
-                      <p className="mt-1 text-[10px] leading-4 text-amber-800 dark:text-amber-300">
+                      <div className="text-2xs font-semibold text-amber-900 dark:text-amber-200">Managed by Active Directory</div>
+                      <p className="mt-1 text-2xs leading-4 text-amber-800 dark:text-amber-300">
                         This password is managed in Active Directory and cannot be changed here.
                       </p>
                     </div>
@@ -907,7 +907,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
             </DrawerSection>
 
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-[10px] leading-4 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-2xs leading-4 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                 {error}
               </div>
             )}
@@ -917,11 +917,11 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
         <div className="border-t bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
           <div className="grid grid-cols-2 gap-2">
             <button type="button" disabled={busy} onClick={handleResetAccess}
-              className="flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-[10px] font-semibold transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-900">
+              className="flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-2xs font-semibold transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-900">
               <RefreshCw className="size-3.5" /> Reset access
             </button>
             <button type="button" disabled={busy} onClick={handleStatusChange}
-              className={["flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[10px] font-semibold transition disabled:opacity-50",
+              className={["flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-2xs font-semibold transition disabled:opacity-50",
                 user.status === "Active"
                   ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
                   : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300"].join(" ")}>
@@ -943,7 +943,7 @@ function DrawerSection({ title, icon, children }: { title: string; icon: ReactNo
     <section>
       <div className="mb-3 flex items-center gap-2">
         <span className="text-sky-600 dark:text-sky-400">{icon}</span>
-        <h3 className="text-[11px] font-bold uppercase tracking-wide">{title}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide">{title}</h3>
       </div>
       {children}
     </section>
@@ -953,8 +953,8 @@ function DrawerSection({ title, icon, children }: { title: string; icon: ReactNo
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-h-[40px] items-center justify-between gap-4 border-b px-3 last:border-b-0 dark:border-slate-800">
-      <span className="shrink-0 text-[10px] text-muted-foreground">{label}</span>
-      <span className="max-w-[245px] truncate text-right text-[10px] font-medium" title={value}>{value}</span>
+      <span className="shrink-0 text-2xs text-muted-foreground">{label}</span>
+      <span className="max-w-[245px] truncate text-right text-2xs font-medium" title={value}>{value}</span>
     </div>
   );
 }
@@ -985,15 +985,15 @@ function LocalPasswordForm({ username }: { username: string }) {
     <div className="space-y-2">
       <input type="password" value={password} onChange={(event) => setPassword(event.target.value)}
         placeholder="New password (min 8 characters)"
-        className="h-10 w-full rounded-xl border bg-white px-3 text-[10px] outline-none transition placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950" />
+        className="h-10 w-full rounded-xl border bg-white px-3 text-2xs outline-none transition placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950" />
       <div className="flex justify-end">
         <button type="button" onClick={savePassword} disabled={busy || password.length < 8}
-          className="rounded-xl bg-sky-700 px-4 py-2 text-[10px] font-semibold text-white hover:bg-sky-600 disabled:opacity-40">
+          className="rounded-xl bg-[var(--primary)] px-4 py-2 text-2xs font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-40">
           {busy ? "Updating..." : "Update password"}
         </button>
       </div>
-      {message && <div className="text-[10px] font-medium text-emerald-600">{message}</div>}
-      {error && <div className="text-[10px] text-red-600">{error}</div>}
+      {message && <div className="text-2xs font-medium text-emerald-600">{message}</div>}
+      {error && <div className="text-2xs text-red-600">{error}</div>}
     </div>
   );
 }
@@ -1034,7 +1034,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between border-b px-5 py-4 dark:border-slate-800">
           <div>
             <h2 className="text-sm font-semibold">Add user</h2>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Create a local account or provision an account for directory access.</p>
+            <p className="mt-0.5 text-2xs text-muted-foreground">Create a local account or provision an account for directory access.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800">
             <X className="size-4" />
@@ -1047,10 +1047,10 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
           <div className="grid gap-4 sm:grid-cols-2">
             <InputField label="Department" value={department} onChange={setDepartment} placeholder="IT Operations" />
             <div>
-              <label className="mb-1.5 block text-[10px] font-semibold">Role</label>
+              <label className="mb-1.5 block text-2xs font-semibold">Role</label>
               <div className="relative">
                 <select value={role} onChange={(event) => setRole(event.target.value as UserRole)}
-                  className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-8 text-[11px] outline-none dark:border-slate-700 dark:bg-slate-950">
+                  className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-8 text-xs outline-none dark:border-slate-700 dark:bg-slate-950">
                   <option value="User">User</option>
                   <option value="IT Support">IT Support</option>
                   <option value="Knowledge Manager">Knowledge Manager</option>
@@ -1061,20 +1061,20 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <InputField label="Password" value={password} onChange={setPassword} placeholder="Minimum 8 characters" type="password" />
-          <div className="rounded-xl bg-sky-50 p-3 text-[10px] leading-4 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+          <div className="rounded-xl bg-sky-50 p-3 text-2xs leading-4 text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
             <div className="flex gap-2">
               <Shield className="mt-0.5 size-3.5 shrink-0" />
               <span>LDAP / AD users should normally be synchronized from Active Directory. Their passwords are managed by AD.</span>
             </div>
           </div>
           {error && (
-            <div className="rounded-xl bg-red-50 p-3 text-[10px] text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</div>
+            <div className="rounded-xl bg-red-50 p-3 text-2xs text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</div>
           )}
         </div>
         <div className="flex justify-end gap-2 border-t p-4 dark:border-slate-800">
-          <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-[10px] font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
+          <button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-2xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
           <button type="button" onClick={createUser} disabled={saving}
-            className="rounded-xl bg-sky-700 px-5 py-2.5 text-[10px] font-semibold text-white hover:bg-sky-600 disabled:opacity-40">
+            className="rounded-xl bg-[var(--primary)] px-5 py-2.5 text-2xs font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-40">
             {saving ? "Creating..." : "Create user"}
           </button>
         </div>
@@ -1092,9 +1092,9 @@ function InputField({ label, value, onChange, placeholder, type = "text" }: {
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[10px] font-semibold">{label}</span>
+      <span className="mb-1.5 block text-2xs font-semibold">{label}</span>
       <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
-        className="h-10 w-full rounded-xl border bg-white px-3 text-[11px] outline-none placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-sky-950" />
+        className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-sky-950" />
     </label>
   );
 }

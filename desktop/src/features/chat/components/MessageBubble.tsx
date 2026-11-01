@@ -128,7 +128,7 @@ function MessageBubble({
                   <button
                     type="button"
                     onClick={() => { setEditing(false); setEditDraft(message.content); }}
-                    className="rounded-lg border border-white/40 px-2.5 py-1 text-[10px] font-medium text-white/80 transition hover:bg-white/10"
+                    className="rounded-lg border border-white/40 px-2.5 py-1 text-2xs font-medium text-white/80 transition hover:bg-white/10"
                   >
                     Cancel
                   </button>
@@ -141,7 +141,7 @@ function MessageBubble({
                       }
                       setEditing(false);
                     }}
-                    className="rounded-lg bg-white px-2.5 py-1 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                    className="rounded-lg bg-white px-2.5 py-1 text-2xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
                   >
                     Save &amp; resend
                   </button>
@@ -158,7 +158,7 @@ function MessageBubble({
                   different claim from one read out of documents, and a FAILED lookup
                   must not look like a knowledge gap. */}
               {message.role === "assistant" && message.toolUsed && (
-                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-2xs">
                   {message.toolNote === "failed" || message.toolNote === "error" ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                       ⚠ infrastructure lookup failed — no live data
@@ -191,7 +191,7 @@ function MessageBubble({
                   <ShieldAlert className="mt-0.5 size-4 shrink-0" />
                   <div className="flex flex-col gap-1">
                     <div className="font-medium">Blocked by content security policy ({(message as any).guardrail}).</div>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       Your message triggered the input guardrail (v1.1.4). No data was sent to the AI
                       provider. Rephrase your question — if you believe this is an error, contact IT.
                     </p>
@@ -200,7 +200,7 @@ function MessageBubble({
               ) : (
                 <div className="flex flex-col gap-2 text-muted-foreground">
                   <div className="font-medium text-rose-600">No answer received from the AI provider.</div>
-                  <p className="text-[10px]">
+                  <p className="text-2xs">
                     The pipeline ran (retrieval + generation) but the upstream model returned no
                     content — this is usually a free-tier rate limit or invalid model name. Try
                     again, or change the model in <strong>Settings → Integrations → Models Provider</strong>.
@@ -223,7 +223,7 @@ function MessageBubble({
                 type="button"
                 onClick={onAskLive}
                 title="Ask the same question against the live Kubernetes / Rancher estate (read-only)"
-                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/60 px-2.5 py-1 text-[10px] font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/60 px-2.5 py-1 text-2xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/50"
               >
                 <Zap className="size-3" />
                 Ask this in Infrastructure mode
@@ -250,12 +250,12 @@ function MessageBubble({
               conversation or a cached payload cannot reintroduce them either. */}
           {showSources && !isUser && message.toolUsed !== "mcp_infra" && (message.sources?.length ?? 0) > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
-              <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="size-3.5 text-blue-600 dark:text-blue-400" />
                   Sources &amp; Referenced Documents
                 </span>
-                <span className="text-[10px] font-normal text-muted-foreground">
+                <span className="text-2xs font-normal text-muted-foreground">
                   {message.sources!.length} reference{message.sources!.length > 1 ? "s" : ""}
                 </span>
               </div>
@@ -263,14 +263,14 @@ function MessageBubble({
                 {message.sources!.map((s, idx) => {
                   const content = (
                     <div className="flex items-start gap-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 transition hover:border-blue-300 hover:bg-blue-50/40 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-blue-900 dark:hover:bg-blue-950/30">
-                      <div className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                      <div className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-100 text-2xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
                         {idx + 1}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-medium text-slate-900 dark:text-slate-100" title={s.title}>
                           {s.title}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <div className="mt-0.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
                           {s.space && <span className="capitalize">{s.space}</span>}
                           {s.relevance != null && (
                             <>
@@ -319,7 +319,7 @@ function MessageBubble({
             isUser ? "justify-end" : "justify-start",
           ].join(" ")}
         >
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1 text-2xs text-muted-foreground">
             <Clock3 className="size-3" />
             {message.timestamp}
           </span>
@@ -351,13 +351,13 @@ function MessageBubble({
             <span className="flex items-center gap-1">
               <button type="button" title="Copy answer" aria-label="Copy answer"
                 onClick={() => copyText(message.content)}
-                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
                 {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
                 {copied ? "Copied" : "Copy"}
               </button>
               <button type="button" title="Share answer" aria-label="Share answer"
                 onClick={() => shareText(message.content)}
-                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
+                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
                 {shared ? <Check className="size-3.5 text-emerald-500" /> : <Share2 className="size-3.5" />}
                 {shared ? "Shared" : "Share"}
               </button>
@@ -373,7 +373,7 @@ function MessageBubble({
           )}
           {showTokenUsage && !isUser && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
             <span
-              className="flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)]"
+              className="flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-2xs font-medium text-[var(--muted-foreground)]"
               title={message.latencyMs ? `Generated in ${(message.latencyMs / 1000).toFixed(1)}s` : undefined}
             >
               <Zap className="size-3 text-amber-500" />
@@ -383,7 +383,7 @@ function MessageBubble({
             </span>
           )}
           {!isUser && caution && (
-            <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+            <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               <AlertTriangle className="size-3" />
               caution — verify before proceeding
             </span>
@@ -399,7 +399,7 @@ function MessageBubble({
              answer that is where the eye already is, and the header copy has scrolled
              away. */
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800/60">
-            <span className="mr-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <span className="mr-1 text-xs font-medium text-slate-500 dark:text-slate-400">
               Was this helpful?
             </span>
             <button
@@ -407,7 +407,7 @@ function MessageBubble({
               disabled={busy}
               title={message.serverId ? "Record feedback" : "Answer not saved yet"}
               className={[
-                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition",
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 message.feedback === 1
                   ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
                   : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
@@ -421,7 +421,7 @@ function MessageBubble({
               disabled={busy}
               title={message.serverId ? "Record feedback" : "Answer not saved yet"}
               className={[
-                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition",
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 message.feedback === -1
                   ? "border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
                   : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
@@ -438,7 +438,7 @@ function MessageBubble({
               title="Copy answer"
               aria-label="Copy answer"
               onClick={() => copyText(message.content)}
-              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
               {copied ? "Copied" : "Copy"}
@@ -449,14 +449,14 @@ function MessageBubble({
               aria-label="Regenerate answer"
               onClick={() => onRetryQuestion?.()}
               disabled={busy || !onRetryQuestion}
-              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <RotateCcw className="size-3.5" />
               Regenerate
             </button>
             <button
               onClick={onOpenTicketForm}
-              className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3.5 py-1.5 text-[11px] font-medium text-orange-700 transition hover:bg-orange-100 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
+              className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3.5 py-1.5 text-xs font-medium text-orange-700 transition hover:bg-orange-100 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
             >
               <Ticket className="size-3.5 text-orange-600 dark:text-orange-400" />
               Create Jira Ticket

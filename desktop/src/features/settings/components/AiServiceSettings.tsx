@@ -250,11 +250,11 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
                 {providerLabel(provider)}
               </h3>
               {tokenSet ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                   <CheckCircle2 className="h-3 w-3" /> Key stored
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                   <AlertCircle className="h-3 w-3" /> No API key
                 </span>
               )}
@@ -262,7 +262,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
             <p className="mt-1.5 truncate font-mono text-xs text-slate-600 dark:text-slate-300" title={storedModel}>
               {storedModel || "no model selected"}
             </p>
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               {models.length > 0
                 ? `${models.length} model${models.length === 1 ? "" : "s"} detected`
                 : tokenSet
@@ -272,7 +272,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
             </p>
           </div>
           <a href={preset.docs} target="_blank" rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-800/60">
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-800/60">
             Provider docs <ExternalLink className="h-3 w-3" />
           </a>
         </div>
@@ -311,7 +311,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
             badge={tokenSet ? "Saved — not retrievable" : undefined}>
             <ValueInput field="api_key" placeholder="your provider API key" secret />
           </Field>
-          <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-slate-400">
+          <p className="mt-1.5 flex items-start gap-1 text-xs leading-4 text-slate-400">
             <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
             Write-only: stored server-side and never returned. Leave blank to keep the current key.
           </p>
@@ -340,13 +340,13 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
               {models.length > 0 && (
                 <div className="max-h-56 overflow-y-auto rounded-lg border border-[var(--border)]">
                   {filteredModels.length === 0 ? (
-                    <p className="px-3 py-3 text-[11px] text-slate-400">No model matches “{modelQuery}”.</p>
+                    <p className="px-3 py-3 text-xs text-slate-400">No model matches “{modelQuery}”.</p>
                   ) : filteredModels.map((m) => {
                     const on = selectedModel === m.id;
                     return (
                       <button key={m.id} type="button" onClick={() => setForm({ ...form, model: m.id })}
                         className={[
-                          "flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-[11px]",
+                          "flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-xs",
                           on ? "bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200"
                              : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60",
                         ].join(" ")}>
@@ -365,13 +365,13 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
                 className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-blue-500" />
 
               {modelsError && (
-                <p className="flex items-start gap-1 text-[11px] text-rose-600">
+                <p className="flex items-start gap-1 text-xs text-rose-600">
                   <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" /> {modelsError}
                   <button type="button" onClick={() => void loadModels()} className="ml-1 underline hover:no-underline">retry</button>
                 </p>
               )}
               {!modelsError && models.length > 0 && (
-                <p className="flex items-center gap-1 text-[11px] text-slate-400">
+                <p className="flex items-center gap-1 text-xs text-slate-400">
                   <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                   {models.length} model{models.length === 1 ? "" : "s"} auto-detected
                   {modelsSource === "clinepass" ? " from the ClinePass catalogue" : " from the provider"}
@@ -409,7 +409,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
             onChange={(e) => setThreshold(String(Number(e.target.value) / 100))}
             aria-label="Confidence threshold"
             className="mt-4 w-full accent-indigo-600" />
-          <div className="mt-1 flex justify-between text-[11px] text-slate-400">
+          <div className="mt-1 flex justify-between text-xs text-slate-400">
             <span>50%</span><span>75%</span><span>100%</span>
           </div>
         </div>
@@ -443,7 +443,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
           </button>
         )}
         {dirty && !msg && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+          <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
             <Info className="h-3 w-3" /> Unsaved changes
           </span>
         )}
@@ -454,7 +454,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
           </span>
         )}
         {updatedAt && !msg && (
-          <span className="ml-auto text-[11px] text-slate-400">
+          <span className="ml-auto text-xs text-slate-400">
             Last saved {new Date(updatedAt).toLocaleString()}
           </span>
         )}
@@ -476,7 +476,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
           <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-slate-50 px-3 dark:bg-slate-900/60">
             <Lock className="h-3 w-3 shrink-0 text-slate-400" />
             <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
-            <span className="ml-auto text-[10px] text-slate-400">write-only</span>
+            <span className="ml-auto text-2xs text-slate-400">write-only</span>
           </div>
           <button type="button" onClick={() => setReplacing({ ...replacing, [field]: true })}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -511,7 +511,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
               setReplacing({ ...replacing, [field]: false });
               const n = { ...form }; delete n[field]; setForm(n);
             }}
-            className="mt-1 text-[11px] text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300">
+            className="mt-1 text-xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300">
             Keep the stored value
           </button>
         )}
@@ -559,13 +559,13 @@ function Field({ label, hint, badge, icon, children }: {
       <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
         {icon}{label}
         {badge && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600">
+          <span className="inline-flex items-center gap-1 text-2xs text-emerald-600">
             <Lock className="h-3 w-3" />{badge}
           </span>
         )}
       </label>
       {children}
-      {hint && <p className="text-[11px] leading-4 text-slate-400">{hint}</p>}
+      {hint && <p className="text-xs leading-4 text-slate-400">{hint}</p>}
     </div>
   );
 }

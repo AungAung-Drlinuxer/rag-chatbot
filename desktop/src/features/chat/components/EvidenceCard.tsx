@@ -71,7 +71,7 @@ export default function EvidenceCard({
 
   return (
     <div className="mt-3 overflow-hidden rounded-xl border border-emerald-200/70 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs">
         <span className="flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-300">
           <span aria-hidden>⚡</span> Live infrastructure
         </span>
@@ -80,14 +80,14 @@ export default function EvidenceCard({
         </span>
         {scope?.length ? (
           <span
-            className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-800 dark:bg-violet-900/50 dark:text-violet-300"
+            className="rounded-full bg-violet-100 px-1.5 py-0.5 text-3xs font-medium text-violet-800 dark:bg-violet-900/50 dark:text-violet-300"
             title="This conversation is limited to the connectors you selected"
           >
             scoped: {scope.map((s) => SERVER_LABEL[s] ?? s).join(" · ")}
           </span>
         ) : undefined}
         {evidence?.read_only && (
-          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-3xs font-medium text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
             read-only
           </span>
         )}
@@ -103,7 +103,7 @@ export default function EvidenceCard({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex w-full items-center justify-between gap-2 text-left text-[10px] font-medium text-emerald-800/90 hover:text-emerald-900 dark:text-emerald-300/90 dark:hover:text-emerald-200"
+            className="flex w-full items-center justify-between gap-2 text-left text-2xs font-medium text-emerald-800/90 hover:text-emerald-900 dark:text-emerald-300/90 dark:hover:text-emerald-200"
             aria-expanded={open}
           >
             <span>
@@ -121,7 +121,7 @@ export default function EvidenceCard({
               {list.map((c, i) => (
                 <li
                   key={`${c.name}-${i}`}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-white/70 px-2 py-1 font-mono text-[10px] text-slate-600 dark:bg-slate-900/50 dark:text-slate-400"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-white/70 px-2 py-1 font-mono text-2xs text-slate-600 dark:bg-slate-900/50 dark:text-slate-400"
                 >
                   <span className="font-semibold text-slate-700 dark:text-slate-200">
                     {c.name}
@@ -139,10 +139,10 @@ export default function EvidenceCard({
 
       {raw && (
         <details className="border-t border-emerald-200/60 px-3 py-2 dark:border-emerald-900/40">
-          <summary className="cursor-pointer text-[10px] font-medium text-emerald-800/90 dark:text-emerald-300/90">
+          <summary className="cursor-pointer text-2xs font-medium text-emerald-800/90 dark:text-emerald-300/90">
             Show full output
           </summary>
-          <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-white/70 p-2 text-[10px] leading-relaxed text-slate-600 dark:bg-slate-900/50 dark:text-slate-400">
+          <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-white/70 p-2 text-2xs leading-relaxed text-slate-600 dark:bg-slate-900/50 dark:text-slate-400">
             {raw}
           </pre>
         </details>

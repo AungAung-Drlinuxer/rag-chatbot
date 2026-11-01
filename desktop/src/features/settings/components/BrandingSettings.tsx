@@ -201,12 +201,12 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
       </div>
 
       {err && (
-        <p className="flex items-center gap-1.5 text-[10px] text-rose-600">
+        <p className="flex items-center gap-1.5 text-2xs text-rose-600">
           <AlertCircle className="size-3.5" /> {err}
         </p>
       )}
       {saved && (
-        <p className="flex items-center gap-1.5 text-[10px] text-emerald-600">
+        <p className="flex items-center gap-1.5 text-2xs text-emerald-600">
           <Check className="size-3.5" /> Branding updated — visible on the login page immediately
         </p>
       )}

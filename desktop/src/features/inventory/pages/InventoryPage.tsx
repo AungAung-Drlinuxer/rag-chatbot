@@ -230,7 +230,7 @@ export default function InventoryPage({ role, onToast }: Props) {
         <Card className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between border-b px-5 py-4 dark:border-slate-800">
             <h2 className="text-sm font-semibold">Asset Inventory Records</h2>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               {items.length} item{items.length === 1 ? "" : "s"} found
             </span>
           </div>
@@ -248,7 +248,7 @@ export default function InventoryPage({ role, onToast }: Props) {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-[10px] uppercase text-muted-foreground dark:bg-slate-900/60 border-b dark:border-slate-800">
+                <thead className="bg-slate-50 text-2xs uppercase text-muted-foreground dark:bg-slate-900/60 border-b dark:border-slate-800">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Asset / Name</th>
                     <th className="px-4 py-3 font-semibold">Category</th>
@@ -275,7 +275,7 @@ export default function InventoryPage({ role, onToast }: Props) {
                               {item.name}
                             </span>
                             {item.serial && (
-                              <div className="text-[10px] font-mono text-muted-foreground">
+                              <div className="text-2xs font-mono text-muted-foreground">
                                 S/N: {item.serial}
                               </div>
                             )}
@@ -283,14 +283,14 @@ export default function InventoryPage({ role, onToast }: Props) {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 capitalize">
-                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-2xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                           {item.category}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                      <td className="px-4 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-400">
                         {item.hostname || "—"}
                       </td>
-                      <td className="px-4 py-3.5 font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                      <td className="px-4 py-3.5 font-mono text-xs text-blue-600 dark:text-blue-400">
                         {item.ip_address || "—"}
                       </td>
                       <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400">
@@ -298,7 +298,7 @@ export default function InventoryPage({ role, onToast }: Props) {
                       </td>
                       <td className="px-4 py-3.5">
                         {item.assigned_to ? (
-                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-2xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                             {item.assigned_to}
                           </span>
                         ) : (
@@ -345,7 +345,7 @@ export default function InventoryPage({ role, onToast }: Props) {
             </h3>
             <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
               <div className="col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-medium text-muted-foreground">Asset Name *</label>
+                <label className="text-2xs font-medium text-muted-foreground">Asset Name *</label>
                 <input
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
@@ -355,7 +355,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div className="col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-medium text-muted-foreground">Category *</label>
+                <label className="text-2xs font-medium text-muted-foreground">Category *</label>
                 <select
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
@@ -370,7 +370,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Hostname</label>
+                <label className="text-2xs font-medium text-muted-foreground">Hostname</label>
                 <input
                   value={formHostname}
                   onChange={(e) => setFormHostname(e.target.value)}
@@ -380,7 +380,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">IP Address</label>
+                <label className="text-2xs font-medium text-muted-foreground">IP Address</label>
                 <input
                   value={formIp}
                   onChange={(e) => setFormIp(e.target.value)}
@@ -390,7 +390,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Location</label>
+                <label className="text-2xs font-medium text-muted-foreground">Location</label>
                 <input
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
@@ -400,7 +400,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground">Assigned To (User/Team)</label>
+                <label className="text-2xs font-medium text-muted-foreground">Assigned To (User/Team)</label>
                 <input
                   value={formAssignedTo}
                   onChange={(e) => setFormAssignedTo(e.target.value)}
@@ -410,7 +410,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div className="col-span-2">
-                <label className="text-[10px] font-medium text-muted-foreground">Serial / Asset Tag</label>
+                <label className="text-2xs font-medium text-muted-foreground">Serial / Asset Tag</label>
                 <input
                   value={formSerial}
                   onChange={(e) => setFormSerial(e.target.value)}
@@ -420,7 +420,7 @@ export default function InventoryPage({ role, onToast }: Props) {
               </div>
 
               <div className="col-span-2">
-                <label className="text-[10px] font-medium text-muted-foreground">Notes / Specifications</label>
+                <label className="text-2xs font-medium text-muted-foreground">Notes / Specifications</label>
                 <textarea
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}

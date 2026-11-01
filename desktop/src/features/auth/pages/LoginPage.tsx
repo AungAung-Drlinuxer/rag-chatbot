@@ -99,7 +99,7 @@ export default function Login({
                   className="size-11 shrink-0 rounded-2xl object-contain shadow-[0_4px_12px_rgba(37,99,235,0.35)]" />
               ) : (
                 <div
-                  className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-[13px] font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
+                  className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-sm font-extrabold tracking-tight text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
                   iTH
                 </div>
               )}
@@ -108,7 +108,7 @@ export default function Login({
                 <div className="text-sm font-bold tracking-tight">
                   {branding.appName || "IT Help Chatbot"}
                 </div>
-                <div className="text-[10px] font-medium text-muted-foreground">
+                <div className="text-2xs font-medium text-muted-foreground">
                   AI-powered IT support
                 </div>
               </div>
@@ -185,7 +185,7 @@ export default function Login({
           <div className="w-full max-w-[400px]">
             {/* Mobile brand */}
             <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-[13px] font-extrabold text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
+              <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-sm font-extrabold text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
                 i
               </div>
 
@@ -381,8 +381,8 @@ function FeatureCard({
         {icon}
       </div>
       <div className="min-w-0">
-        <span className="text-[12px] font-semibold leading-4">{title}</span>
-        <p className="mt-0.5 text-[10.5px] leading-4 text-muted-foreground">{description}</p>
+        <span className="text-xs font-semibold leading-4">{title}</span>
+        <p className="mt-0.5 text-2xs leading-4 text-muted-foreground">{description}</p>
       </div>
     </div>
   );

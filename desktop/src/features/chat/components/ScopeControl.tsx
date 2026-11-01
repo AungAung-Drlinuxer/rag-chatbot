@@ -130,7 +130,7 @@ export default function ScopeControl({
         title={`Connectors: ${label}`}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`inline-flex max-w-[11rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition ${
+        className={`inline-flex max-w-[11rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition ${
           open
             ? "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             : "border-transparent bg-slate-100/80 text-slate-500 hover:bg-slate-200/80 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:bg-slate-800"
@@ -154,7 +154,7 @@ export default function ScopeControl({
           role="listbox"
           aria-multiselectable="true"
         >
-          <div className="px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+          <div className="px-2.5 py-1.5 text-3xs font-semibold uppercase tracking-wide text-slate-400">
             Connectors this chat may use
           </div>
 
@@ -170,8 +170,8 @@ export default function ScopeControl({
             <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
               value.length === 0 ? "bg-violet-500" : "bg-slate-300 dark:bg-slate-600"}`} />
             <span className="min-w-0">
-              <span className="block text-[11px] font-medium text-slate-700 dark:text-slate-200">All connectors</span>
-              <span className="mt-0.5 block text-[10px] leading-snug text-slate-400">
+              <span className="block text-xs font-medium text-slate-700 dark:text-slate-200">All connectors</span>
+              <span className="mt-0.5 block text-2xs leading-snug text-slate-400">
                 Any enabled server — the default
               </span>
             </span>
@@ -192,21 +192,21 @@ export default function ScopeControl({
               >
                 {/* A tick, not a radio: this list is multi-select and a dot would read as one. */}
                 <span className={`grid size-3 shrink-0 place-items-center rounded-[4px] border ${
-                  on ? "border-violet-500 bg-violet-500 text-white" : "border-slate-300 dark:border-slate-600"}`}>
+                  on ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]" : "border-slate-300 dark:border-slate-600"}`}>
                   {on && (
                     <svg viewBox="0 0 20 20" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="3">
                       <path d="M4 10.5 8 14.5 16 6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
                 </span>
-                <span className="truncate text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                <span className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">
                   {PRETTY[s.name] ?? s.name}
                 </span>
               </button>
             );
           })}
 
-          <p className="px-2.5 pb-1 pt-1.5 text-[9px] leading-snug text-slate-400">
+          <p className="px-2.5 pb-1 pt-1.5 text-3xs leading-snug text-slate-400">
             Restricting the scope removes the connectors a question would otherwise touch by
             accident. It never grants access a connector does not already have.
           </p>
