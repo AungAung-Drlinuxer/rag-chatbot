@@ -11,17 +11,14 @@ import {
   ShieldCheck,
   Lock,
   Pencil,
-  ServerCog,
   Plug,
   BookOpen,
-  LayoutGrid,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
 
 import { dashHealth } from "@/features/dashboard/api";
 import { IntegrationsConfig } from "../components/IntegrationsConfig";
-import ConnectorsGallery from "../components/ConnectorsGallery";
 import { BrandingSettings } from "../components/BrandingSettings";
 import { AiServiceSettings } from "../components/AiServiceSettings";
 import { Image as ImageIcon } from "lucide-react";
@@ -96,7 +93,6 @@ const SETTINGS_NAV: { group: string; items: { id: string; label: string; icon: R
     group: "Customize",
     items: [
       { id: "skills", label: "AI service", icon: <BookOpen className="size-4" /> },
-      { id: "connectors", label: "Connectors", icon: <LayoutGrid className="size-4" /> },
       { id: "notifications", label: "Email server", icon: <Bell className="size-4" /> },
     ],
   },
@@ -352,15 +348,6 @@ export default function Settings({ role }: { role?: string }) {
             )}
 
             {/* ==================== INTEGRATIONS ==================== */}
-            {active === "connectors" && (
-            <SectionCard
-              icon={<ServerCog className="size-4" />}
-              iconTone="bg-sky-50 dark:bg-sky-950/40"
-              title="Connectors"
-              description="Connect services so the assistant can read and act on your data.">
-              <ConnectorsGallery />
-            </SectionCard>
-            )}
 
             {active === "integrations" && (
             <SectionCard icon={<Link2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />}

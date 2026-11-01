@@ -1,10 +1,10 @@
 /**
- * Settings (Integrations + Connectors) render harness.
+ * Settings (Integrations) render harness.
  *
  * WHY: both surfaces live behind auth, so the only way to check them without signing in is
  * to render the REAL components with `fetch` stubbed. Nothing is mocked or duplicated —
- * `IntegrationsConfig` and `ConnectorsGallery` are the shipping components, and the
- * connector list comes from `public/anytype_connectors_fixture.json`, which is generated
+ * `IntegrationsConfig` is the shipping component, and the connector list comes from
+ * `public/anytype_connectors_fixture.json`, which is generated
  * from the real `backend/app/mcp/catalog.py` so the two cannot drift.
  *
  * Exposes `window.__SETTINGS_HARNESS__` for the shot script to drive and measure, and
@@ -19,23 +19,17 @@ import "./styles.css";
 
 import { createRoot } from "react-dom/client";
 import { IntegrationsConfig } from "@/features/settings/components/IntegrationsConfig";
-import ConnectorsGallery from "@/features/settings/components/ConnectorsGallery";
 
 const reqs: string[] = [];
 (window as any).__SETTINGS_REQS__ = reqs;
 
-const origFetch = window.fetch.bind(window);
 window.fetch = (async (input: any, init?: any) => {
   const url = typeof input === "string" ? input : (input?.url ?? String(input));
   const method = init?.method ?? "GET";
   reqs.push(`${method} ${url}`);
 
   let body: any = {};
-  if (/\/api\/connectors$/.test(url)) {
-    // Served from public/ through the real fetch, so the fixture cannot be bypassed.
-    const r = await origFetch("/anytype_connectors_fixture.json");
-    body = await r.json();
-  } else if (/\/api\/settings\/integrations\/llm\/models/.test(url)) {
+  if (/\/api\/settings\/integrations\/llm\/models/.test(url)) {
     // The real endpoint reads the SAVED key. Detection is only expected to fire when a key
     // is stored, so the stub records the call and answers with a plausible catalogue.
     body = {
@@ -76,10 +70,6 @@ function App() {
         <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
           <IntegrationsConfig />
         </div>
-      </section>
-      <section id="connectors">
-        <h2 className="mb-3 text-sm font-semibold text-slate-500">Settings → Connectors</h2>
-        <ConnectorsGallery />
       </section>
     </div>
   );
@@ -137,36 +127,7 @@ createRoot(host).render(<App />);
     return ps.sort((a, b) => b.length - a.length)[0] ?? "";
   },
 
-  connectors(): Record<string, unknown> {
-    const root = document.querySelector("#connectors")!;
-    const text = (root.textContent ?? "").replace(/\s+/g, " ").trim();
-    return {
-      headings: [...root.querySelectorAll("h1,h2,h3,h4")].map((h) => (h.textContent ?? "").trim()),
-      cardCount: root.querySelectorAll("button, [role=button]").length,
-      hasAnytype: /Anytype/.test(text),
-      hasKnowledgeGroup: /Knowledge/.test(text),
-      hasStdioNote: /stdio only/.test(text),
-      hasVersionNote: /Anytype-Version/.test(text),
-      hasPortNote: /31009/.test(text),
-      text: text.slice(0, 1200),
-    };
-  },
 
-  /** Open a connector's setup form. The catalogue `note` only renders inside the
-   *  ConnectDialog, so the note assertions have to look after this is called.
-   *  The card's action is an icon-only button, so it is matched by aria-label
-   *  ("Connect Anytype") — matching on textContent finds nothing. */
-  openConnector(name: string): boolean {
-    const root = document.querySelector("#connectors")!;
-    const el = [...root.querySelectorAll("button")].find(
-      (e) =>
-        (e.getAttribute("aria-label") ?? "").includes(name) ||
-        (e.textContent ?? "").includes(name),
-    ) as HTMLElement | undefined;
-    if (!el) return false;
-    el.click();
-    return true;
-  },
 
   /** Whole-page text — the dialog's own wrapper is an implementation detail. */
   bodyText(): string {

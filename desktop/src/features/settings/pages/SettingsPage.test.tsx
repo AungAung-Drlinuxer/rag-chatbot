@@ -11,8 +11,8 @@
  * value. The role gate is the other one — a non-admin must never see the Integrations or
  * Mail panels.
  *
- * The four heavy child panels (IntegrationsConfig, ConnectorsGallery, BrandingSettings,
- * AiServiceSettings) are stubbed: they own their own network state and are not this page's
+ * The three heavy child panels (IntegrationsConfig, BrandingSettings, AiServiceSettings)
+ * are stubbed: they own their own network state and are not this page's
  * subject. Everything the page itself does is exercised for real.
  *
  * Harness: no @testing-library by choice, so react-dom/client inside act() + direct DOM
@@ -45,9 +45,6 @@ vi.mock("@/features/dashboard/api", () => ({
 
 vi.mock("../components/IntegrationsConfig", () => ({
   IntegrationsConfig: () => <div data-stub="integrations">IntegrationsConfig panel</div>,
-}));
-vi.mock("../components/ConnectorsGallery", () => ({
-  default: () => <div data-stub="connectors">ConnectorsGallery panel</div>,
 }));
 vi.mock("../components/BrandingSettings", () => ({
   BrandingSettings: () => <div data-stub="branding">BrandingSettings panel</div>,
@@ -130,11 +127,10 @@ describe("SettingsPage — role gating and the grouped nav", () => {
   it("shows an admin all five nav entries and the Administrator badge", async () => {
     const el = await mount("admin");
     const nav = el.querySelector('nav[aria-label="Settings sections"]')!;
-    expect(nav.querySelectorAll("button")).toHaveLength(5);
+    expect(nav.querySelectorAll("button")).toHaveLength(4);
     expect(nav.textContent).toContain("Preferences");
     expect(nav.textContent).toContain("Integrations");
     expect(nav.textContent).toContain("AI service");
-    expect(nav.textContent).toContain("Connectors");
     expect(nav.textContent).toContain("Email server");
     expect(el.textContent).toContain("Administrator");
   });
@@ -157,12 +153,10 @@ describe("SettingsPage — role gating and the grouped nav", () => {
     expect(m.getIntegrationSettings).toHaveBeenCalled();
   });
 
-  it("opens the AI service and Connectors panels from the nav", async () => {
+  it("opens the AI service panel from the nav", async () => {
     const el = await mount("admin");
     await click(navBtn(el, "AI service"));
     expect(el.querySelector('[data-stub="ai"]')).toBeTruthy();
-    await click(navBtn(el, "Connectors"));
-    expect(el.querySelector('[data-stub="connectors"]')).toBeTruthy();
   });
 
   it("shows the Branding panel to an admin on the general panel", async () => {

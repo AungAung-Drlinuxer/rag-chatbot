@@ -26,16 +26,12 @@ const EMPTY = {
   counts: { total: 0, connected: 0, reachable: 0 },
 };
 
-const origFetch = window.fetch.bind(window);
 window.fetch = (async (input: any, init?: any) => {
   const url = typeof input === "string" ? input : (input?.url ?? String(input));
   reqs.push(`${init?.method ?? "GET"} ${url}`);
 
   let body: any = { ...EMPTY };
-  if (/\/api\/connectors$/.test(url)) {
-    const r = await origFetch("/anytype_connectors_fixture.json");
-    body = await r.json();
-  } else if (/\/api\/settings\/integrations\/llm\/models/.test(url)) {
+  if (/\/api\/settings\/integrations\/llm\/models/.test(url)) {
     body = {
       models: [
         { id: "cline-pass/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash" },

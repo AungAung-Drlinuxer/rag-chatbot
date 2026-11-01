@@ -2,12 +2,12 @@ import { useState } from "react";
 import {
   BookOpen, CheckCircle2, ChevronRight, ClipboardList, Rss,
   Eye, EyeOff, ExternalLink, FileText, Info, KeyRound, ListChecks, Loader2,
-  Loader as LoaderIcon, Lock, NotebookPen, Pencil, RefreshCw, Save, ServerCog,
+  Loader as LoaderIcon, Lock, NotebookPen, Pencil, RefreshCw, Save,
   Shapes, ShieldCheck, Ticket, Trash2, Users, XCircle,
 } from "lucide-react";
 import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, syncOpenProjectTickets } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "openproject" | "xwiki" | "notion" | "clickup" | "anytype" | "hashnode" | "mcp";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "openproject" | "xwiki" | "notion" | "clickup" | "anytype" | "hashnode";
 
 /** Per-integration icon. A text-only tab bar of 11 items is slow to scan; the icon is
  *  what makes the row navigable at a glance. */
@@ -20,7 +20,6 @@ const ICON: Record<IntegrationKey, typeof BookOpen> = {
   clickup: ListChecks,
   anytype: Shapes,
   hashnode: Rss,
-  mcp: ServerCog,
   ldap: Users,
   keycloak: KeyRound,
 };
@@ -29,7 +28,7 @@ const ICON: Record<IntegrationKey, typeof BookOpen> = {
  *  infrastructure ones, then the model provider. */
 const NAV_ORDER: IntegrationKey[] = [
   "confluence", "jira", "openproject", "xwiki", "notion", "clickup", "anytype", "hashnode",
-  "mcp", "ldap", "keycloak",
+  "ldap", "keycloak",
 ];
 
 /**
@@ -212,39 +211,6 @@ const META: Record<IntegrationKey, {
       { key: "object_types", label: "Object types (comma separated, empty = all)", placeholder: "page, note" },
       { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
       { key: "max_objects", label: "Max objects per sync", placeholder: "300" },
-    ],
-  },
-  mcp: {
-    label: "MCP (Live Infrastructure)",
-    desc:
-      "Read-only access to your Kubernetes / Rancher estate via Model Context Protocol servers. " +
-      "Two servers run in-cluster: one reads THIS cluster through a read-only ServiceAccount " +
-      "(no credential needed), and a second reaches Rancher-managed downstream clusters through " +
-      "the management API. Leave the Rancher Token empty to stay on the ServiceAccount path; " +
-      "paste a token to switch to the Rancher API and see your downstream clusters. " +
-      "Bind that token to a READ-ONLY Rancher role — anything the token can do, the assistant " +
-      "can do. The URL is optional: leave it empty to let the app pick the right server. " +
-      "Every tool is read-only (read_only=true, disable_destructive=true) and the assistant " +
-      "only sees a curated subset of the tool catalogue. Proxmox VE is separate and OFF by " +
-      "default: it can destroy virtual machines, and this cluster is itself hosted there. " +
-      "Enable it only after putting a read-only (PVEAuditor) API token in the " +
-      "'proxmox-mcp-credentials' Secret and scaling the proxmox-mcp deployment to 1 — the " +
-      "hypervisor credential deliberately does NOT live in this form, because the Proxmox " +
-      "server reads it from its environment and a token that powerful belongs with the " +
-      "platform team. Its destructive tier is unreachable: the process-level opt-in is " +
-      "never set, so those tools fail closed in code.",
-    docs: "https://modelcontextprotocol.io/",
-    fields: [
-      { key: "enabled", label: "Enabled (true/false)", placeholder: "true" },
-      { key: "rancher_url", label: "Rancher Server URL", placeholder: "https://rke2-cluster.drlinuxer.com" },
-      { key: "rancher_token", label: "Rancher API Token (READ-ONLY role — needed for downstream clusters)",
-        placeholder: "token-xxxxx:xxxxxxxxxxxx", isSecret: true },
-      { key: "url", label: "MCP Server URL (optional — blank = auto-select)",
-        placeholder: "http://rancher-mcp:8080" },
-      { key: "timeout_s", label: "Per-call timeout (seconds)", placeholder: "20" },
-      { key: "proxmox_enabled", label: "Proxmox VE enabled (true/false)", placeholder: "false" },
-      { key: "proxmox_url", label: "Proxmox MCP Server URL",
-        placeholder: "http://proxmox-mcp:8000" },
     ],
   },
 };
