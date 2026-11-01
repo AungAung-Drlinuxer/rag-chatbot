@@ -414,7 +414,8 @@ function MessageBubble({
               ].join(" ")}
             >
               <CheckCircle2 className="size-3.5 text-emerald-500" />
-              Helpful{message.feedback === 1 ? " \u2713" : ""}
+              Helpful
+              {message.feedback === 1 && <Check aria-hidden className="size-3" />}
             </button>
             <button
               onClick={() => onNotHelpful()}
@@ -428,7 +429,8 @@ function MessageBubble({
               ].join(" ")}
             >
               <AlertTriangle className="size-3.5 text-amber-500" />
-              Not helpful{message.feedback === -1 ? " \u2713" : ""}
+              Not helpful
+              {message.feedback === -1 && <Check aria-hidden className="size-3" />}
             </button>
 
             <span aria-hidden className="mx-1 hidden h-4 w-px bg-slate-200 sm:block dark:bg-slate-700" />

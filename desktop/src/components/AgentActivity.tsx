@@ -106,13 +106,18 @@ export default function AgentActivity({
         />
       </span>
 
-      {/* stage icon — keyed on the stage so the swap replays the pop animation */}
+      {/*
+        Stage icon — keyed on the stage so the swap replays the pop animation.
+        A WHITE glyph on a SOLID disc, the same language the RAG pipeline strip uses
+        for its steps: both describe one pipeline, so they read the same way. A pale
+        square with a blue-tinted glyph made the two indicators look unrelated.
+      */}
       <span
         key={def.key}
-        className="agent-icon-pop relative grid size-6 shrink-0 place-items-center rounded-lg bg-blue-50 ring-1 ring-blue-200/70 dark:bg-blue-950/50 dark:ring-blue-800/70"
+        className="agent-icon-pop relative grid size-6 shrink-0 place-items-center rounded-full bg-blue-600 text-white shadow-sm"
         title={def.label}
       >
-        <Icon className="size-3.5 text-blue-700 dark:text-blue-300" strokeWidth={2.2} />
+        <Icon className="size-3.5" strokeWidth={2.2} />
       </span>
 
       {/* shimmering label */}

@@ -16,6 +16,21 @@
  *   (used by the demo button in the EmptyChat and by unit tests).
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Brain,
+  WandSparkles,
+  Search,
+  Library,
+  PenLine,
+  Network,
+  Check,
+  Circle,
+  Loader2,
+  Timer,
+  ChevronDown,
+  ChevronUp,
+  type LucideIcon,
+} from "lucide-react";
 
 
 /* ------------------------------------------------------------------ */
@@ -35,7 +50,15 @@ export type StageKey =
 type StepDef = {
   key: StageKey;
   label: string;
-  icon: string;          // emoji keeps the bundle small (no icon deps)
+  /**
+   * The stage glyph, drawn white inside the step disc.
+   *
+   * These are the SAME icons AgentActivity uses for its stages, on purpose: the
+   * pipeline strip and the in-bubble activity indicator describe one pipeline, so
+   * they must not spell it two ways. An emoji here also rendered at the mercy of
+   * the platform font — on Linux it was a colour glyph in a monochrome disc.
+   */
+  icon: LucideIcon;
   description: string;   // what this stage really does (hover tooltip)
 };
 
@@ -43,7 +66,7 @@ const STEPS: StepDef[] = [
   {
     key: "understanding",
     label: "Understanding",
-    icon: "🛡️",
+    icon: Brain,
     description:
       "Input guardrails screen the message (injection / toxicity / overflow), " +
       "the user turn is persisted, and a LangGraph run starts.",
@@ -51,7 +74,7 @@ const STEPS: StepDef[] = [
   {
     key: "rewrite",
     label: "Query rewrite",
-    icon: "✏️",
+    icon: WandSparkles,
     description:
       "Filler words are stripped and follow-up context is merged so the " +
       "search query is self-contained.",
@@ -59,7 +82,7 @@ const STEPS: StepDef[] = [
   {
     key: "retrieve",
     label: "Retrieval",
-    icon: "🔎",
+    icon: Search,
     description:
       "Hybrid search: pgvector HNSW (semantic) + BM25 keyword arm, fused " +
       "with Reciprocal Rank Fusion (k=60).",
@@ -67,7 +90,7 @@ const STEPS: StepDef[] = [
   {
     key: "rerank",
     label: "Rerank",
-    icon: "🎯",
+    icon: Library,
     description:
       "bge-reranker-base cross-encoder re-scores the fused candidates; " +
       "confidence ≥ 0.75 must pass the gate before an answer is generated.",
@@ -75,7 +98,7 @@ const STEPS: StepDef[] = [
   {
     key: "generate",
     label: "Generating",
-    icon: "✨",
+    icon: PenLine,
     description:
       "Context chunks + system prompt go to the primary LLM (OpenRouter) " +
       "with automatic fallback to on-prem Llama 3.2 1B.",
@@ -94,7 +117,7 @@ const STEPS_LIVE: StepDef[] = [
   {
     key: "understanding",
     label: "Understanding",
-    icon: "🛡️",
+    icon: Brain,
     description:
       "Input guardrails screen the message, and the role is checked — live tools " +
       "require the admin or agent role.",
@@ -102,7 +125,7 @@ const STEPS_LIVE: StepDef[] = [
   {
     key: "tools",
     label: "Cluster query",
-    icon: "⚡",
+    icon: Network,
     description:
       "A read-only MCP tool queries the live estate. Nothing is written, and only the " +
       "curated read tools are reachable.",
@@ -110,7 +133,7 @@ const STEPS_LIVE: StepDef[] = [
   {
     key: "generate",
     label: "Answer",
-    icon: "🧩",
+    icon: PenLine,
     description:
       "The result is presented from the cluster's own output, with the calls it came " +
       "from shown as evidence.",
@@ -287,13 +310,15 @@ export default function RagPipelineStatus({
       <div className="flex items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className={`grid size-6 shrink-0 place-items-center rounded-lg text-xs ${
-              active
-                ? "animate-pulse bg-blue-100 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400"
-                : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+            className={`grid size-6 shrink-0 place-items-center rounded-full text-white shadow-sm ${
+              active ? "animate-pulse bg-blue-600" : "bg-emerald-500"
             }`}
           >
-            {active ? "\u26A1" : "\u2713"}
+            {active ? (
+              <Loader2 aria-hidden className="size-3.5 animate-spin" />
+            ) : (
+              <Check aria-hidden className="size-3.5" />
+            )}
           </span>
           <span className="truncate text-xs font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             {/* Name the pipeline that is actually running: calling a cluster lookup
@@ -315,7 +340,7 @@ export default function RagPipelineStatus({
             data-testid="rag-pipeline-elapsed"
             className="flex shrink-0 items-center gap-1 font-mono text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300"
           >
-            <span aria-hidden>\u23F1</span>
+            <Timer aria-hidden className="size-3.5" />
             {(elapsedMs / 1000).toFixed(1)}s
           </span>
         )}
@@ -347,15 +372,15 @@ export default function RagPipelineStatus({
                 }`}
               >
                 <span
-                  className={`grid size-4 shrink-0 place-items-center rounded-full text-3xs font-bold text-white ${
+                  className={`grid size-4 shrink-0 place-items-center rounded-full ${
                     isActive
-                      ? "animate-pulse bg-blue-600"
+                      ? "animate-pulse bg-blue-600 text-white"
                       : isDone
-                        ? "bg-emerald-500"
-                        : "bg-slate-300 dark:bg-slate-700"
+                        ? "bg-emerald-500 text-white"
+                        : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
                   }`}
                 >
-                  {idx + 1}
+                  <step.icon aria-hidden className="size-2.5" />
                 </span>
                 <span
                   className={`text-xs font-medium ${
@@ -376,8 +401,9 @@ export default function RagPipelineStatus({
                   {ms != null ? `${ms}ms` : "\u2014"}
                 </span>
                 <span
+                  role="img"
                   aria-label={isActive ? "running" : isDone ? "done" : "pending"}
-                  className={`text-2xs ${
+                  className={`grid place-items-center ${
                     isActive
                       ? "text-blue-600 dark:text-blue-400"
                       : isDone
@@ -385,7 +411,13 @@ export default function RagPipelineStatus({
                         : "text-slate-300 dark:text-slate-600"
                   }`}
                 >
-                  {isActive ? "\u25D0" : isDone ? "\u2713" : "\u25CB"}
+                  {isActive ? (
+                    <Loader2 aria-hidden className="size-3 animate-spin" />
+                  ) : isDone ? (
+                    <Check aria-hidden className="size-3" />
+                  ) : (
+                    <Circle aria-hidden className="size-2.5" />
+                  )}
                 </span>
               </span>
             </Fragment>
@@ -406,7 +438,11 @@ export default function RagPipelineStatus({
         </span>
         <span className="flex items-center gap-2 text-2xs text-slate-400 dark:text-slate-500">
           {doneCount}/{steps.length} completed
-          <span aria-hidden>{open ? "\u25B2" : "\u25BC"}</span>
+          {open ? (
+            <ChevronUp aria-hidden className="size-3.5" />
+          ) : (
+            <ChevronDown aria-hidden className="size-3.5" />
+          )}
         </span>
       </button>
 
@@ -420,15 +456,15 @@ export default function RagPipelineStatus({
               return (
                 <li key={step.key} className="flex items-center gap-2.5 py-2 text-xs">
                   <span
-                    className={`grid size-5 shrink-0 place-items-center rounded-full text-3xs font-bold text-white ${
+                    className={`grid size-5 shrink-0 place-items-center rounded-full ${
                       isActive
-                        ? "bg-blue-600"
+                        ? "bg-blue-600 text-white"
                         : isDone
-                          ? "bg-emerald-500"
-                          : "bg-slate-300 dark:bg-slate-700"
+                          ? "bg-emerald-500 text-white"
+                          : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
                     }`}
                   >
-                    {idx + 1}
+                    <step.icon aria-hidden className="size-3" />
                   </span>
                   <span className="w-24 shrink-0 font-medium text-slate-800 dark:text-slate-200">
                     {step.label}
@@ -440,7 +476,7 @@ export default function RagPipelineStatus({
                     {ms != null ? `${ms}ms` : "\u2014"}
                   </span>
                   <span
-                    className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-3xs font-medium ${
+                    className={`inline-flex w-20 shrink-0 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-3xs font-medium ${
                       isActive
                         ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
                         : isDone
@@ -448,7 +484,14 @@ export default function RagPipelineStatus({
                           : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
                     }`}
                   >
-                    {isActive ? "\u25D0 Running" : isDone ? "\u2713 Done" : "\u25CB Pending"}
+                    {isActive ? (
+                      <Loader2 aria-hidden className="size-3 animate-spin" />
+                    ) : isDone ? (
+                      <Check aria-hidden className="size-3" />
+                    ) : (
+                      <Circle aria-hidden className="size-2.5" />
+                    )}
+                    {isActive ? "Running" : isDone ? "Done" : "Pending"}
                   </span>
                 </li>
               );

@@ -2,7 +2,9 @@
  *  LDAP-pending accounts) and shows an unread dot + dropdown list. Shell-level
  *  (PageSidebar head), capability-filtered to manage_users/admin visibility. */
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
+import { Bell,
+  Check,
+} from "lucide-react";
 import { listApprovals } from "@/features/chat/api";
 import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
 
@@ -101,7 +103,10 @@ export function NotificationBell({
       {open && (
         <div className="absolute left-0 top-full z-[60] mt-1 w-72 rounded-xl border bg-[var(--card)] p-2 shadow-xl dark:border-slate-700">
           {notices.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">You're all caught up ✓</div>
+            <div className="flex items-center justify-center gap-1.5 px-3 py-6 text-center text-xs text-muted-foreground">
+                          <Check aria-hidden className="size-3.5 text-emerald-500" />
+                          You&apos;re all caught up
+                        </div>
           ) : (
             <NoticeList notices={notices} onOpen={onOpen} onClose={() => setOpen(false)} />
           )}
