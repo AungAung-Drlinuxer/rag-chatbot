@@ -4,8 +4,12 @@ import { type ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+/**
+ * One figure per card — label top-left, a small coloured dot top-right (the mockup's
+ * treatment), the big number, then a muted caption. `accent` only drives the dot colour;
+ * the figure itself always comes from the caller's counted value.
+ */
 export function StatCard({
-  icon,
   label,
   value,
   description,
@@ -13,7 +17,6 @@ export function StatCard({
   onClick,
   title,
 }: {
-  icon: ReactNode;
   label: string;
   value: number;
   description: string;
@@ -23,11 +26,11 @@ export function StatCard({
   /** v1.5.5 — tooltip */
   title?: string;
 }) {
-  const colors = {
-    slate: "bg-slate-100 text-slate-600 dark:bg-slate-900",
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-950/30",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/30",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30",
+  const dots = {
+    slate: "bg-slate-400",
+    blue: "bg-blue-500",
+    amber: "bg-amber-500",
+    emerald: "bg-emerald-500",
   };
 
   return (
@@ -35,34 +38,28 @@ export function StatCard({
       onClick={onClick}
       title={title}
       className={[
-        "rounded-2xl p-4",
-        onClick ? "cursor-pointer transition hover:border-blue-300 hover:shadow-sm" : "",
+        "gap-0 rounded-xl border-[var(--border)] px-5 py-4 shadow-xs",
+        onClick ? "cursor-pointer transition hover:border-[var(--primary)]/40" : "",
       ].join(" ")}
       role={onClick ? "button" : undefined}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-xs font-medium text-muted-foreground">
-            {label}
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
 
-          <div className="mt-2 text-2xl font-semibold tracking-tight">
-            {value}
-          </div>
+        <span
+          aria-hidden
+          className={["size-2 rounded-full", dots[accent]].join(" ")}
+        />
+      </div>
 
-          <div className="mt-1 text-2xs text-muted-foreground">
-            {description}
-          </div>
-        </div>
+      <div className="mt-2.5 text-3xl font-semibold tracking-tight">
+        {value}
+      </div>
 
-        <div
-          className={[
-            "grid size-9 place-items-center rounded-xl",
-            colors[accent],
-          ].join(" ")}
-        >
-          {icon}
-        </div>
+      <div className="mt-1 text-2xs text-muted-foreground">
+        {description}
       </div>
     </Card>
   );

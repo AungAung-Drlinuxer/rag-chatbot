@@ -22,7 +22,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageShell, PageHeader } from "@/components/ui/page";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,11 +69,26 @@ import {
   RefreshIcon,
 } from "@/features/tickets/components/presentational";
 
+/**
+ * Tickets — the support-request queue, restyled to the workspace mockup.
+ *
+ * Layout follows the mockup: a Workspace / Support breadcrumb header whose actions are a
+ * secondary Sync and the page's one primary button, a row of four equal KPI cards, then ONE
+ * panel that owns its own heading, toolbar, table and range footer — with the selected
+ * ticket's detail in a persistent right-hand panel.
+ *
+ * Colours are the app's design tokens (--primary, --border, --muted-foreground) rather than
+ * the mockup's literal hexes: the mockup is dark-only, this page must work in both themes.
+ */
+
 type Props = {
   role: string;
   userName?: string;
   onToast: (msg: string, kind?: "ok" | "err") => void;
 };
+
+/** Rows shown per page — the mockup's pager needs a page size to page over. */
+const PAGE_SIZE = 10;
 
 export default function Tickets({
   role,
@@ -315,7 +329,17 @@ export default function Tickets({
     });
   }, [filteredTickets, sortKey, sortDir]);
 
-  const SortTh = ({ k, label, className = "px-3 py-3" }: { k: NonNullable<typeof sortKey>; label: string; className?: string }) => (
+  // The mockup's pager pages over the sorted result set. The page index is CLAMPED rather
+  // than reset, so narrowing a filter can never leave the view past the last page.
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(sortedTickets.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(
+    () => sortedTickets.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [sortedTickets, safePage],
+  );
+
+  const SortTh = ({ k, label, className = "px-4 py-3" }: { k: NonNullable<typeof sortKey>; label: string; className?: string }) => (
     <th className={className + " font-semibold text-muted-foreground"}>
       <button
         type="button"
@@ -431,7 +455,10 @@ export default function Tickets({
     setQuery("");
     setStatusFilter("all");
     setPriorityFilter("all");
+    setPage(1);
   }
+
+  const hasFilters = query.trim() !== "" || statusFilter !== "all" || priorityFilter !== "all";
 
   async function createTicket() {
     if (!newTicket.subject.trim()) {
@@ -529,7 +556,7 @@ function SyncMenu({
       <Button
         size="sm"
         variant="outline"
-        className="rounded-xl"
+        className="rounded-lg"
         disabled={busy !== ""}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -548,10 +575,10 @@ function SyncMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900"
+          className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-lg"
         >
-          <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="border-b border-[var(--border)] px-4 py-2.5">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
               Sync from external tracker
             </p>
           </div>
@@ -564,18 +591,18 @@ function SyncMenu({
                 setOpen(false);
                 onSync(it.key);
               }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800/60"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/60 disabled:opacity-50"
             >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
                 <CloudDownload className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <span className="block text-xs font-semibold text-foreground">
                   {it.label}
                 </span>
-                <span className="block text-2xs text-slate-400">{it.desc}</span>
+                <span className="block text-2xs text-muted-foreground">{it.desc}</span>
               </span>
-              <ChevronRight className="size-3.5 shrink-0 text-slate-300" />
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
             </button>
           ))}
         </div>
@@ -612,745 +639,701 @@ function SyncMenu({
     return (
     <PageShell>
       <PageHeader
-        badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : "User"}
-        icon={<TicketIcon className="size-5" />}
-      title="Tickets"
-      description="Track and manage IT support requests"
-      actions={
-        <div className="flex items-center gap-2">
-          {/* v1.6.20 — consolidated sync menu: one button instead of two separate ones */}
-          {(role === "admin" || role === "agent") && (
-            <SyncMenu
-              busy={syncBusy}
-              onSync={syncTickets}
+        breadcrumbs={["Workspace", "Support"]}
+        title="Tickets"
+        description="Track, prioritize, and resolve IT support requests."
+        actions={
+          <div className="flex items-center gap-2">
+            {/* v1.6.20 — consolidated sync menu: one button instead of two separate ones */}
+            {canManage && (
+              <SyncMenu
+                busy={syncBusy}
+                onSync={syncTickets}
+              />
+            )}
+            <Button size="sm" className="rounded-lg" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1.5 size-4" />
+              Create ticket
+            </Button>
+          </div>
+        }
+      />
+
+      <main className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-5">
+
+          {/* =================================================
+              KPI CARDS — one figure each, counted from the loaded list.
+              Every card is a one-click filter, as the mockup's preview is.
+          ================================================= */}
+          <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <StatCard
+              label="All tickets"
+              value={stats.total}
+              description="Total tickets in this preview"
+              accent="blue"
+              title="Show every ticket"
+              onClick={() => { setStatusFilter("all"); setPage(1); }}
             />
-          )}
-          <Button size="sm" className="rounded-xl" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 size-4" />
-            Create ticket
-          </Button>
-        </div>
-      }
-    />
 
-          <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-6">
+            <StatCard
+              label="Open"
+              value={stats.open}
+              description="Require attention"
+              accent="blue"
+              title="Show open tickets only"
+              onClick={() => { setStatusFilter("open"); setPage(1); }}
+            />
 
-            {/* =================================================
-                KPI CARDS
-            ================================================= */}
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Pending"
+              value={stats.pending}
+              description="Awaiting a response"
+              accent="amber"
+              title="Show tickets awaiting the requester to reply or confirm a fix"
+              onClick={() => { setStatusFilter("pending"); setPage(1); }}
+            />
 
-              <StatCard
-                icon={
-                  <TicketIcon className="size-4" />
-                }
-                label="Total tickets"
-                value={stats.total}
-                description="All support requests"
-              />
+            <StatCard
+              label="Resolved"
+              value={stats.resolved}
+              description="Successfully completed"
+              accent="emerald"
+              title="Show resolved tickets only"
+              onClick={() => { setStatusFilter("resolved"); setPage(1); }}
+            />
+          </section>
 
-              <StatCard
-                icon={
-                  <AlertCircle className="size-4" />
-                }
-                label="Open"
-                value={stats.open}
-                description="Require attention"
-                accent="blue"
-                title="Show open tickets only"
-                onClick={() => setStatusFilter("open")}
-              />
-
-              <StatCard
-                icon={
-                  <Clock3 className="size-4" />
-                }
-                label="Pending"
-                value={stats.pending}
-                description="Waiting for requester action"
-                accent="amber"
-                title="Tickets awaiting the requester to reply or confirm a fix"
-              />
-
-              <StatCard
-                icon={
-                  <CheckCircle2 className="size-4" />
-                }
-                label="Resolved"
-                value={stats.resolved}
-                description="Successfully completed"
-                accent="emerald"
-              />
-            </section>
-
-            {/* =================================================
-                FILTER TOOLBAR
-            ================================================= */}
-            <Card className="rounded-xl p-4">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-
-                <div className="relative flex-1 xl:max-w-xl">
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
-                  <input
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                    }}
-                    placeholder="Search ticket ID, subject, requester..."
-                    className="h-10 w-full rounded-xl border bg-background pl-10 pr-4 text-xs outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                   aria-label="Search tickets"/>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-
-                  <div className="relative">
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => {
-                        setStatusFilter(
-                          e.target.value
-                        );
-                      }}
-                      className="h-10 min-w-[130px] appearance-none rounded-xl border bg-background px-3 pr-9 text-xs outline-none focus:border-blue-500" aria-label="Filter by status">
-                      <option value="all">
-                        All statuses
-                      </option>
-                      <option value="open">
-                        Open
-                      </option>
-                      <option value="pending">
-                        Pending
-                      </option>
-                      <option value="resolved">
-                        Resolved
-                      </option>
-                      <option value="closed">
-                        Closed
-                      </option>
-                    </select>
-
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-
-                  <div className="relative">
-                    <select
-                      value={priorityFilter}
-                      onChange={(e) => {
-                        setPriorityFilter(
-                          e.target.value
-                        );
-                      }}
-                      className="h-10 min-w-[130px] appearance-none rounded-xl border bg-background px-3 pr-9 text-xs outline-none focus:border-blue-500" aria-label="Filter by priority">
-                      <option value="all">
-                        All priorities
-                      </option>
-                      <option value="critical">
-                        Critical
-                      </option>
-                      <option value="high">
-                        High
-                      </option>
-                      <option value="medium">
-                        Medium
-                      </option>
-                      <option value="low">
-                        Low
-                      </option>
-                    </select>
-
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-
-                  {(query ||
-                    statusFilter !== "all" ||
-                    priorityFilter !== "all") && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={resetFilters}
-                      className="h-10 rounded-xl text-xs"
-                    >
-                      <X className="mr-1.5 size-3.5" />
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* =================================================
-                TABLE
-            ================================================= */}
-            <Card className="overflow-hidden rounded-xl">
-
-              <div className="flex items-center justify-between border-b px-5 py-4">
-                <div>
-                  <h2 className="text-sm font-semibold">
-                    Support requests
-                  </h2>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {filteredTickets.length} matching tickets
-                  </p>
-                </div>
-
-                {/* v1.6.20 — compact icon toolbar (was 3 heavy labelled buttons) */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={exportCsv}
-                    disabled={!filteredTickets.length}
-                    className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                    title="Export CSV"
-                  >
-                    <Download className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={printReport}
-                    disabled={!filteredTickets.length}
-                    className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                    title="Print report"
-                  >
-                    <Printer className="size-4" />
-                  </button>
-                  <span aria-hidden className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setQuery("");
-                      setListBusy(true);
-                      try {
-                        const d = await listTickets(50);
-                        setTickets((d?.tickets ?? []) as Ticket[]);
-                        // re-sync open detail panel with fresh statuses
-                        setSelected((cur) => (cur ? (d?.tickets ?? []).find((x: Ticket) => x.id === cur.id) ?? cur : cur));
-                        onToast("Ticket list refreshed");
-                      } catch {
-                        onToast("Refresh failed — try again", "err");
-                      } finally {
-                        setListBusy(false);
-                      }
-                    }}
-                    disabled={listBusy}
-                    className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                    title="Refresh list"
-                  >
-                    <RefreshIcon className={`size-4 ${listBusy ? "animate-spin" : ""}`} />
-                  </button>
-                </div>
+          {/* =================================================
+              SUPPORT REQUESTS PANEL
+          ================================================= */}
+          <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Support requests
+                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-2xs font-normal text-muted-foreground">
+                    {filteredTickets.length}
+                  </span>
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">Your team's ticket queue</p>
               </div>
 
-              {!tickets ? (
-                <div className="space-y-2 p-4">
-                  {Array.from({
-                    length: 6,
-                  }).map((_, i) => (
-                    <Skeleton
-                      key={i}
-                      className="h-12 rounded-xl"
-                    />
-                  ))}
-                </div>
-              ) : ticketsError ? (
-                <ErrorState
-                  title="Could not load tickets"
-                  detail={ticketsError}
-                  onRetry={() => {
-                    setTickets(null);
-                    listTickets(50)
-                      .then((d) => setTickets((d?.tickets ?? []) as Ticket[]))
-                      .catch((err) => {
-                        setTicketsError(err instanceof Error ? err.message : String(err));
-                        setTickets([]);
-                      });
+              {/* v1.6.20 — compact action group; Export is the labelled one the mockup shows */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={printReport}
+                  disabled={!filteredTickets.length}
+                  className="grid size-9 place-items-center rounded-lg border border-[var(--border)] text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-40"
+                  title="Print report"
+                >
+                  <Printer className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setQuery("");
+                    setPage(1);
+                    setListBusy(true);
+                    try {
+                      const d = await listTickets(50);
+                      setTickets((d?.tickets ?? []) as Ticket[]);
+                      // re-sync open detail panel with fresh statuses
+                      setSelected((cur) => (cur ? (d?.tickets ?? []).find((x: Ticket) => x.id === cur.id) ?? cur : cur));
+                      onToast("Ticket list refreshed");
+                    } catch {
+                      onToast("Refresh failed — try again", "err");
+                    } finally {
+                      setListBusy(false);
+                    }
                   }}
+                  disabled={listBusy}
+                  className="grid size-9 place-items-center rounded-lg border border-[var(--border)] text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-40"
+                  title="Refresh list"
+                >
+                  <RefreshIcon className={`size-4 ${listBusy ? "animate-spin" : ""}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  disabled={!filteredTickets.length}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-40"
+                  title="Export CSV"
+                >
+                  <Download className="size-3.5" />
+                  Export
+                </button>
+              </div>
+            </div>
+
+            {/* Result count is a live region so a filter change is announced, not silent. */}
+            <p role="status" aria-live="polite" className="px-5 pb-3 pt-1 text-xs text-muted-foreground">
+              {tickets === null
+                ? "Loading tickets…"
+                : ticketsError
+                  ? "Could not load tickets"
+                  : `${filteredTickets.length} matching tickets`}
+            </p>
+
+            {/* Toolbar: search (flex 1) + status + priority + Reset */}
+            <div className="flex flex-wrap items-center gap-2.5 border-y border-[var(--border)] px-5 py-4">
+              <div className="relative min-w-[200px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                  placeholder="Search ID, subject, or requester..."
+                  className="h-9 w-full rounded-lg border border-[var(--border)] bg-background pl-9 pr-3 text-xs outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
+                  aria-label="Search tickets"
                 />
-              ) : filteredTickets.length === 0 ? (
-                /* Two situations, two messages: an empty result set the user caused by
-                   filtering is fixable with Clear filters; an empty Jira/OpenProject has
-                   nothing to clear and points at the integration instead. */
-                <EmptyState
-                  icon={<Filter className="size-5" />}
-                  title={tickets.length === 0 ? "No tickets yet" : "No tickets found"}
-                  description={
-                    tickets.length === 0
-                      ? "Nothing has been synced from Jira or OpenProject yet. Use Sync above, or check the integration in Settings → Integrations."
-                      : "Try changing your search or filter criteria."
-                  }
-                  actionLabel={tickets.length === 0 ? undefined : "Clear filters"}
-                  onAction={tickets.length === 0 ? undefined : resetFilters}
-                />
-              ) : (
-                <>
-                  <div className="max-h-[420px] overflow-auto rounded-xl border border-[var(--border)] pr-1">
-                    <table className="w-full table-fixed text-xs">
-                      <colgroup>
-                        <col className="w-[11%]" />
-                        <col className="w-[27%]" />
-                        <col className="w-[11%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[15%]" />
-                        <col className="w-[14%]" />
-                        <col className="w-[10%]" />
-                      </colgroup>
-                      <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
-                        <tr className="text-left">
-                          <SortTh k="id" label="Ticket" className="px-4 py-3 first:pl-5" />
-                          <SortTh k="subject" label="Subject" className="px-4 py-3" />
-                          <SortTh k="status" label="Status" />
-                          <SortTh k="priority" label="Priority" />
-                          <SortTh k="requester" label="Requester" />
-                          <SortTh k="updated" label="Updated" />
-                          <th className="px-3 py-3 text-right font-semibold text-muted-foreground">
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
+              </div>
 
-                      <tbody>
-                        {sortedTickets.map(
-                          (ticket) => {
-                            const status =
-                              statusMeta(ticket.status);
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+                className="h-9 min-w-[130px] rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
+                aria-label="Filter by status"
+              >
+                <option value="all">All statuses</option>
+                <option value="open">Open</option>
+                <option value="pending">Pending</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
 
-                            const priority =
-                              priorityMeta(ticket.priority);
+              <select
+                value={priorityFilter}
+                onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}
+                className="h-9 min-w-[130px] rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
+                aria-label="Filter by priority"
+              >
+                <option value="all">All priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
 
-                            return (
-                              <tr
-                                key={ticket.id}
-                                className="border-t transition hover:bg-slate-50 dark:hover:bg-slate-900/60"
-                              >
-                                <td className="truncate px-4 py-4 sm:px-5">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setSelected(
-                                        ticket
-                                      )
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="h-9 rounded-lg border border-[var(--border)] bg-card px-3.5 text-xs font-semibold transition hover:bg-muted"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {tickets === null ? (
+              <div className="space-y-2 p-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 rounded-xl" />
+                ))}
+              </div>
+            ) : ticketsError ? (
+              <ErrorState
+                title="Could not load tickets"
+                detail={ticketsError}
+                onRetry={() => {
+                  setTickets(null);
+                  listTickets(50)
+                    .then((d) => setTickets((d?.tickets ?? []) as Ticket[]))
+                    .catch((err) => {
+                      setTicketsError(err instanceof Error ? err.message : String(err));
+                      setTickets([]);
+                    });
+                }}
+              />
+            ) : filteredTickets.length === 0 ? (
+              /* Two situations, two messages: an empty result set the user caused by
+                 filtering is fixable with Clear filters; an empty Jira/OpenProject has
+                 nothing to clear and points at the integration instead. */
+              <EmptyState
+                icon={<Filter className="size-5" />}
+                title={tickets.length === 0 ? "No tickets yet" : "No tickets found"}
+                description={
+                  tickets.length === 0
+                    ? "Nothing has been synced from Jira or OpenProject yet. Use Sync above, or check the integration in Settings → Integrations."
+                    : "Try changing your search or filter criteria."
+                }
+                actionLabel={tickets.length === 0 ? undefined : "Clear filters"}
+                onAction={tickets.length === 0 ? undefined : resetFilters}
+              />
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[820px] table-fixed text-xs">
+                    <colgroup>
+                      <col className="w-[11%]" />
+                      <col className="w-[33%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[12%]" />
+                    </colgroup>
+                    <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-muted/60">
+                      <tr className="text-left text-2xs uppercase tracking-wide">
+                        <SortTh k="id" label="Ticket" className="px-5 py-3" />
+                        <SortTh k="subject" label="Subject" />
+                        <SortTh k="status" label="Status" />
+                        <SortTh k="priority" label="Priority" />
+                        <SortTh k="requester" label="Requester" />
+                        <SortTh k="updated" label="Updated" />
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {pageRows.map(
+                        (ticket) => {
+                          const status =
+                            statusMeta(ticket.status);
+
+                          const priority =
+                            priorityMeta(ticket.priority);
+
+                          return (
+                            <tr
+                              key={ticket.id}
+                              className="border-t border-[var(--border)]/60 transition hover:bg-muted/40"
+                            >
+                              <td className="truncate px-5 py-3.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelected(
+                                      ticket
+                                    )
+                                  }
+                                  className="font-semibold text-[var(--accent-foreground)] hover:underline"
+                                >
+                                  {ticket.id}
+                                </button>
+                              </td>
+
+                              <td className="px-4 py-3.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelected(
+                                      ticket
+                                    )
+                                  }
+                                  className="block w-full text-left"
+                                >
+                                  <div className="truncate font-medium text-foreground">
+                                    {
+                                      ticket.subject
                                     }
-                                    className="font-semibold text-blue-600 hover:underline dark:text-blue-400"
-                                  >
-                                    {ticket.id}
-                                  </button>
-                                </td>
+                                  </div>
 
-                                <td className="px-4 py-4">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setSelected(
-                                        ticket
-                                      )
-                                    }
-                                    className="block w-full text-left"
-                                  >
-                                    <div className="truncate font-medium">
+                                  <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground">
+                                    <span>
                                       {
-                                        ticket.subject
+                                        ticket.category
                                       }
-                                    </div>
+                                    </span>
 
-                                    <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground">
-                                      <span>
-                                        {
-                                          ticket.category
-                                        }
-                                      </span>
+                                    <span>
+                                      •
+                                    </span>
 
-                                      <span>
-                                        •
-                                      </span>
+                                    <span
+                                      className={
+                                        ticket.assignee
+                                          ? ""
+                                          : "italic text-muted-foreground/70"
+                                      }
+                                    >
+                                      {ticket.assignee ??
+                                        "Unassigned"}
+                                    </span>
+                                  </div>
+                                </button>
+                              </td>
 
-                                      <span
-                                        className={
-                                          ticket.assignee
-                                            ? ""
-                                            : "italic text-slate-400 dark:text-slate-500 border-b border-dashed border-slate-300 dark:border-slate-600"
-                                        }
-                                      >
-                                        {ticket.assignee ??
-                                          "Unassigned"}
-                                      </span>
-                                    </div>
-                                  </button>
-                                </td>
+                              <td className="px-4 py-3.5">
+                                <Badge
+                                  variant="outline"
+                                  className={[
+                                    "rounded-lg text-2xs",
+                                    status.className,
+                                  ].join(" ")}
+                                >
+                                  {status.label}
+                                </Badge>
+                              </td>
 
-                                <td className="px-4 py-4">
-                                  <Badge
-                                    variant="outline"
-                                    className={[
-                                      "rounded-lg text-2xs",
-                                      status.className,
-                                    ].join(" ")}
-                                  >
-                                    {status.label}
-                                  </Badge>
-                                </td>
-
-                                <td className="px-4 py-4">
+                              <td className="px-4 py-3.5">
+                                <span
+                                  className={[
+                                    "inline-flex items-center gap-1.5 font-medium",
+                                    priority.className,
+                                  ].join(" ")}
+                                >
                                   <span
                                     className={[
-                                      "inline-flex items-center gap-1.5 font-medium",
-                                      priority.className,
+                                      "size-1.5 rounded-full",
+                                      priority.dot,
                                     ].join(" ")}
-                                  >
-                                    <span
-                                      className={[
-                                        "size-1.5 rounded-full",
-                                        priority.dot,
-                                      ].join(" ")}
-                                    />
+                                  />
 
-                                    {
-                                      priority.label
-                                    }
-                                  </span>
-                                </td>
-
-                                <td className="truncate px-3 py-4 text-muted-foreground" title={ticket.requester}>
                                   {
-                                    ticket.requester
+                                    priority.label
                                   }
-                                </td>
+                                </span>
+                              </td>
 
-                                <td className={[
-                                  "truncate px-3 py-4",
-                                  (Date.now() - new Date(ticket.updated_at.endsWith("Z") ? ticket.updated_at : ticket.updated_at + "Z").getTime()) > 7 * 864e5
-                                    ? "font-medium text-amber-600 dark:text-amber-400"
-                                    : "text-muted-foreground",
-                                ].join(" ")}>
-                                  {relTime(
-                                    ticket.updated_at
-                                  )}
-                                </td>
+                              <td className="truncate px-4 py-3.5 text-muted-foreground" title={ticket.requester}>
+                                {
+                                  ticket.requester
+                                }
+                              </td>
 
-                                <td className="px-4 py-4">
-                                  <div className="flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setSelected(
-                                          ticket
-                                        )
-                                      }
-                                      className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                      title="View ticket details"
-                                    >
-                                      <ChevronRight className="size-4" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          }
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between border-t px-5 py-3">
-                    <span className="text-2xs text-muted-foreground">
-                      Showing all {filteredTickets.length} ticket{filteredTickets.length === 1 ? "" : "s"} — scroll to review
-                    </span>
-                  </div>
-                </>
-              )}
-            </Card>
-
-            
-              </div>{/* end left column */}
-
-              {/* ==========================================================
-                  TICKET DETAIL — persistent right panel (split-pane)
-              ========================================================== */}
-              <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-sm xl:block">
-                {!selected ? (
-                  <div className="flex h-64 flex-col items-center justify-center gap-3 p-8 text-center">
-                    <div className="grid size-12 place-items-center rounded-2xl bg-muted">
-                      <TicketIcon className="size-5 text-muted-foreground" />
-                    </div>
-
-                    <h3 className="text-sm font-semibold">
-                      No ticket selected
-                    </h3>
-
-                    <p className="max-w-[240px] text-xs text-muted-foreground">
-                      Click a ticket ID or subject row to view details,
-                      activity, and assignment here.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-5">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <span className="text-xs font-semibold text-blue-600">
-                        {selected.id}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelected(null)}
-                        className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
-
-                    <h2 className="text-lg font-semibold leading-6 tracking-tight">
-                      {selected.subject}
-                    </h2>
-
-                    <div className="mt-3 flex items-center gap-2">
-                      <StatusBadge status={statusMeta(selected.status)} />
-
-                      <PriorityBadge priority={priorityMeta(selected.priority)} />
-                    </div>
-
-                    {/* Detail tabs (visual) */}
-                    <div className="mt-4 flex gap-4 border-b text-xs font-medium">
-                      <span className="-mb-px border-b-2 border-blue-600 pb-2 text-blue-600">
-                        Details
-                      </span>
-
-                      <span className="pb-2 text-muted-foreground">
-                        Activity
-                      </span>
-
-                      <span className="pb-2 text-muted-foreground">
-                        Attachments
-                      </span>
-                    </div>
-
-                    {/* Description */}
-                    <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Description
-                    </h3>
-
-                    <div className="rounded-xl border bg-muted/30 p-3.5 text-sm leading-6">
-                      {selected.description ||
-                        "No description provided."}
-                    </div>
-
-                    {/* Metadata grid */}
-                    <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-xs">
-                      <MetaRow icon={<TicketIcon className="size-3.5" />} label="Category" value={selected.category} />
-                      <MetaRow icon={<AlertCircle className="size-3.5" />} label="Priority" value={priorityMeta(selected.priority).label} />
-                      <MetaRow icon={<UserRound className="size-3.5" />} label="Requester" value={selected.requester} />
-                      <MetaRow icon={<CheckCircle2 className="size-3.5" />} label="Status" value={statusMeta(selected.status).label} />
-                      <MetaRow icon={<Users className="size-3.5" />} label="Assignee" value={selected.assignee ?? "Unassigned"} />
-                      <MetaRow icon={<Clock3 className="size-3.5" />} label="Created" value={new Date(selected.created_at).toLocaleString()} />
-                    </div>
-
-                    {/* Activity */}
-                    <h3 className="mb-3 mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Activity
-                    </h3>
-
-                    {/* v0.21.99 — status = always-visible segmented control.
-                        Clicking a segment SAVES IMMEDIATELY (optimistic PUT);
-                        no Save button by design. Edit form keeps its own Save. */}
-                    <div className="mb-4">
-                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Status — click to change (saves instantly)
-                      </h3>
-                      <div className="flex flex-wrap gap-1.5 rounded-xl bg-slate-50 p-1.5 dark:bg-slate-800/50">
-                        {(["open", "pending", "resolved", "closed"] as const).map((st) => {
-                          const m = statusMeta(st);
-                          const active = selected.status === st;
-                          const saving = statusSaving === st;
-                          return (
-                            <button
-                              key={st}
-                              disabled={!!statusSaving}
-                              onClick={() => handleUpdateStatus(st)}
-                              aria-pressed={active}
-                              className={[
-                                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-2xs font-semibold capitalize transition",
-                                active
-                                  ? "bg-white text-foreground shadow-sm ring-1 ring-slate-900/10 dark:bg-slate-900 dark:ring-white/10"
-                                  : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-slate-900/60",
-                                saving ? "opacity-60" : "",
-                              ].join(" ")}
-                            >
-                              <span className={"size-1.5 rounded-full " + m.dot} />
-                              {saving ? "saving…" : m.label}
-                            </button>
+                              <td className={[
+                                "truncate px-4 py-3.5",
+                                (Date.now() - new Date(ticket.updated_at.endsWith("Z") ? ticket.updated_at : ticket.updated_at + "Z").getTime()) > 7 * 864e5
+                                  ? "font-medium text-amber-600 dark:text-amber-400"
+                                  : "text-muted-foreground",
+                              ].join(" ")}>
+                                {relTime(ticket.updated_at)}
+                              </td>
+                            </tr>
                           );
-                        })}
-                      </div>
-                    </div>
+                        }
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-                    {/* v0.20.0 — edit form */}
-                    {editFields ? (
-                      <div className="mb-4 space-y-3 rounded-xl border p-4 dark:border-slate-800">
-                        <label className="block">
-                          <span className="mb-1 block text-2xs font-medium">Subject</span>
-                          <input
-                            value={editFields.subject}
-                            onChange={(e) => setEditFields({ ...editFields, subject: e.target.value })}
-                            className="h-9 w-full rounded-lg border bg-transparent px-3 text-xs outline-none focus:border-blue-500 dark:border-slate-700"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-2xs font-medium">Description</span>
-                          <textarea
-                            rows={4}
-                            value={editFields.description}
-                            onChange={(e) => setEditFields({ ...editFields, description: e.target.value })}
-                            className="w-full rounded-lg border bg-transparent px-3 py-2 text-xs outline-none focus:border-blue-500 dark:border-slate-700"
-                          />
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className="block">
-                            <span className="mb-1 block text-2xs font-medium">Assignee</span>
-                            <input
-                              value={editFields.assignee}
-                              onChange={(e) => setEditFields({ ...editFields, assignee: e.target.value })}
-                              placeholder="Unassigned"
-                              className="h-9 w-full rounded-lg border bg-transparent px-3 text-xs outline-none focus:border-blue-500 dark:border-slate-700"
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="mb-1 block text-2xs font-medium">Due date</span>
-                            <input
-                              type="date"
-                              value={editFields.due_date}
-                              onChange={(e) => setEditFields({ ...editFields, due_date: e.target.value })}
-                              className="h-9 w-full rounded-lg border bg-transparent px-3 text-xs outline-none focus:border-blue-500 dark:border-slate-700"
-                            />
-                          </label>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setEditFields(null)}>
-                            Cancel
-                          </Button>
-                          <Button size="sm" className="rounded-xl text-xs" onClick={handleSaveEdit}>
-                            Save changes
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* Attachments (v0.20.2) */}
-                    {attachments.length > 0 && (
-                      <div className="mb-4">
-                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Attachments
-                        </h3>
-                        <div className="space-y-1.5">
-                          {attachments.map((att) => (
-                            <a
-                              key={att.id}
-                              href={attachmentUrl(selected.id, att.id)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center justify-between rounded-lg border px-3 py-2 text-2xs transition hover:bg-muted"
-                            >
-                              <span className="truncate font-medium">📎 {att.filename}</span>
-                              <span className="shrink-0 text-muted-foreground">{Math.round(att.size / 1024)} KB</span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-3">
-                      <ActivityItem
-                        title="Ticket created"
-                        text={`Opened by ${selected.requester}`}
-                        time={relTime(selected.created_at)}
-                      />
-
-                      {comments.map((c) => (
-                        <ActivityItem
-                          key={c.id}
-                          title={c.kind === "comment" ? `${c.author ?? "user"} commented` : `Updated by ${c.author ?? "user"}`}
-                          text={c.body}
-                          time={relTime(c.created_at ?? "")}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Add attachment (drawer) */}
-                    <div className="mt-4">
-                      <input
-                        type="file"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f || !selected) return;
-                          try {
-                            await ticketAttachmentAdd(selected.id, f);
-                            ticketAttachments(selected.id)
-                              .then((d) => setAttachments(d?.attachments ?? []))
-                              .catch(() => {});
-                            onToast("Attachment added");
-                          } catch {
-                            onToast("Upload failed", "err");
-                          }
-                          e.target.value = "";
-                        }}
-                        className="w-full rounded-xl border bg-background px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-blue-600"
-                      />
-                    </div>
-
-                    {/* v0.21.84 — bounded comment box: single input + send (Enter works too) */}
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900">
-                      <textarea
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddComment();
-                        }}
-                        placeholder="Write a comment… (Ctrl+Enter to send)"
-                        rows={2}
-                        className="w-full resize-none bg-transparent px-3 pt-2.5 text-xs outline-none placeholder:text-muted-foreground"
-                       aria-label="Add a comment"/>
-                      <div className="flex items-center justify-end px-2 pb-2">
-                        <Button size="sm" className="rounded-lg text-2xs" onClick={handleAddComment} disabled={!commentText.trim()}>
-                          <MessageSquare className="mr-1 size-3" />
-                          Send
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* v1.6.20 — Actions: professional compact icon+label row */}
-                    <div className="mt-6 border-t pt-4">
-                      {canManage ? (
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button variant="outline" size="sm" className="rounded-xl text-xs"
-                            onClick={() => setEditFields({
-                              subject: selected.subject,
-                              description: selected.description ?? "",
-                              assignee: selected.assignee ?? "",
-                              due_date: selected.due_date ? selected.due_date.slice(0, 10) : "",
-                            })}
-                          >
-                            <Pencil className="mr-1.5 size-3.5" />
-                            Edit
-                          </Button>
-
-                          <Button
-                            variant={statusOpen ? "default" : "outline"}
-                            size="sm"
-                            className="rounded-xl text-xs"
-                            onClick={() => setStatusOpen((v) => !v)}
-                            aria-expanded={statusOpen}
-                          >
-                            <ChevronDown className={"mr-1.5 size-3.5 transition-transform " + (statusOpen ? "rotate-180" : "")} />
-                            {statusOpen ? "Close status" : "Update status"}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
+                {/* Range footer + pager, as the mockup shows. */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3.5">
+                  <span className="text-xs text-muted-foreground">
+                    {pageCount <= 1
+                      ? `Showing all ${filteredTickets.length} ticket${filteredTickets.length === 1 ? "" : "s"}`
+                      : `Showing ${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredTickets.length)} of ${filteredTickets.length} tickets`}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      aria-label="Previous page"
+                      disabled={safePage <= 1}
+                      onClick={() => setPage(Math.max(1, safePage - 1))}
+                      className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
+                    >
+                      ‹
+                    </button>
+                    <span className="px-1 text-xs text-muted-foreground">{safePage} / {pageCount}</span>
+                    <button
+                      type="button"
+                      aria-label="Next page"
+                      disabled={safePage >= pageCount}
+                      onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+                      className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
+                    >
+                      ›
+                    </button>
                   </div>
-                )}
-              </aside>
+                </div>
+              </>
+            )}
+          </section>
+        </div>{/* end left column */}
+
+        {/* ==========================================================
+            TICKET DETAIL — persistent right panel (split-pane)
+        ========================================================== */}
+        <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-xs xl:block">
+          {!selected ? (
+            <div className="flex h-64 flex-col items-center justify-center gap-3 p-8 text-center">
+              <div className="grid size-12 place-items-center rounded-2xl bg-muted">
+                <TicketIcon className="size-5 text-muted-foreground" />
+              </div>
+
+              <h3 className="text-sm font-semibold">
+                No ticket selected
+              </h3>
+
+              <p className="max-w-[240px] text-xs text-muted-foreground">
+                Click a ticket ID or subject row to view details,
+                activity, and assignment here.
+              </p>
             </div>
-              {/* ==========================================================
+          ) : (
+            <div className="p-5">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <span className="text-xs font-semibold text-[var(--accent-foreground)]">
+                  {selected.id}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <h2 className="text-lg font-semibold leading-6 tracking-tight">
+                {selected.subject}
+              </h2>
+
+              <div className="mt-3 flex items-center gap-2">
+                <StatusBadge status={statusMeta(selected.status)} />
+
+                <PriorityBadge priority={priorityMeta(selected.priority)} />
+              </div>
+
+              {/* Detail tabs (visual) */}
+              <div className="mt-4 flex gap-4 border-b border-[var(--border)] text-xs font-medium">
+                <span className="-mb-px border-b-2 border-[var(--primary)] pb-2 text-[var(--accent-foreground)]">
+                  Details
+                </span>
+
+                <span className="pb-2 text-muted-foreground">
+                  Activity
+                </span>
+
+                <span className="pb-2 text-muted-foreground">
+                  Attachments
+                </span>
+              </div>
+
+              {/* Description */}
+              <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Description
+              </h3>
+
+              <div className="rounded-xl border border-[var(--border)] bg-muted/30 p-3.5 text-sm leading-6">
+                {selected.description ||
+                  "No description provided."}
+              </div>
+
+              {/* Metadata grid */}
+              <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-xs">
+                <MetaRow icon={<TicketIcon className="size-3.5" />} label="Category" value={selected.category} />
+                <MetaRow icon={<AlertCircle className="size-3.5" />} label="Priority" value={priorityMeta(selected.priority).label} />
+                <MetaRow icon={<UserRound className="size-3.5" />} label="Requester" value={selected.requester} />
+                <MetaRow icon={<CheckCircle2 className="size-3.5" />} label="Status" value={statusMeta(selected.status).label} />
+                <MetaRow icon={<Users className="size-3.5" />} label="Assignee" value={selected.assignee ?? "Unassigned"} />
+                <MetaRow icon={<Clock3 className="size-3.5" />} label="Created" value={new Date(selected.created_at).toLocaleString()} />
+              </div>
+
+              {/* Activity */}
+              <h3 className="mb-3 mt-6 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Latest activity
+              </h3>
+
+              {/* v0.21.99 — status = always-visible segmented control.
+                  Clicking a segment SAVES IMMEDIATELY (optimistic PUT);
+                  no Save button by design. Edit form keeps its own Save. */}
+              <div className="mb-4">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Status — click to change (saves instantly)
+                </h3>
+                <div className="flex flex-wrap gap-1.5 rounded-xl bg-muted/50 p-1.5">
+                  {(["open", "pending", "resolved", "closed"] as const).map((st) => {
+                    const m = statusMeta(st);
+                    const active = selected.status === st;
+                    const saving = statusSaving === st;
+                    return (
+                      <button
+                        key={st}
+                        disabled={!!statusSaving}
+                        onClick={() => handleUpdateStatus(st)}
+                        aria-pressed={active}
+                        className={[
+                          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-2xs font-semibold capitalize transition",
+                          active
+                            ? "bg-card text-foreground shadow-sm ring-1 ring-[var(--border)]"
+                            : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
+                          saving ? "opacity-60" : "",
+                        ].join(" ")}
+                      >
+                        <span className={"size-1.5 rounded-full " + m.dot} />
+                        {saving ? "saving…" : m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* v0.20.0 — edit form */}
+              {editFields ? (
+                <div className="mb-4 space-y-3 rounded-xl border border-[var(--border)] p-4">
+                  <label className="block">
+                    <span className="mb-1 block text-2xs font-medium">Subject</span>
+                    <input
+                      value={editFields.subject}
+                      onChange={(e) => setEditFields({ ...editFields, subject: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 text-xs outline-none focus:border-[var(--primary)]"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-2xs font-medium">Description</span>
+                    <textarea
+                      rows={4}
+                      value={editFields.description}
+                      onChange={(e) => setEditFields({ ...editFields, description: e.target.value })}
+                      className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-xs outline-none focus:border-[var(--primary)]"
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="mb-1 block text-2xs font-medium">Assignee</span>
+                      <input
+                        value={editFields.assignee}
+                        onChange={(e) => setEditFields({ ...editFields, assignee: e.target.value })}
+                        placeholder="Unassigned"
+                        className="h-9 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 text-xs outline-none focus:border-[var(--primary)]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-2xs font-medium">Due date</span>
+                      <input
+                        type="date"
+                        value={editFields.due_date}
+                        onChange={(e) => setEditFields({ ...editFields, due_date: e.target.value })}
+                        className="h-9 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 text-xs outline-none focus:border-[var(--primary)]"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={() => setEditFields(null)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="rounded-lg text-xs" onClick={handleSaveEdit}>
+                      Save changes
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Attachments (v0.20.2) */}
+              {attachments.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Attachments
+                  </h3>
+                  <div className="space-y-1.5">
+                    {attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={attachmentUrl(selected.id, att.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-2 text-2xs transition hover:bg-muted"
+                      >
+                        <span className="truncate font-medium">📎 {att.filename}</span>
+                        <span className="shrink-0 text-muted-foreground">{Math.round(att.size / 1024)} KB</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <ActivityItem
+                  title="Ticket created"
+                  text={`Opened by ${selected.requester}`}
+                  time={relTime(selected.created_at)}
+                />
+
+                {comments.map((c) => (
+                  <ActivityItem
+                    key={c.id}
+                    title={c.kind === "comment" ? `${c.author ?? "user"} commented` : `Updated by ${c.author ?? "user"}`}
+                    text={c.body}
+                    time={relTime(c.created_at ?? "")}
+                  />
+                ))}
+              </div>
+
+              {/* Add attachment (drawer) */}
+              <div className="mt-4">
+                <input
+                  type="file"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f || !selected) return;
+                    try {
+                      await ticketAttachmentAdd(selected.id, f);
+                      ticketAttachments(selected.id)
+                        .then((d) => setAttachments(d?.attachments ?? []))
+                        .catch(() => {});
+                      onToast("Attachment added");
+                    } catch {
+                      onToast("Upload failed", "err");
+                    }
+                    e.target.value = "";
+                  }}
+                  className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[var(--accent-foreground)]"
+                />
+              </div>
+
+              {/* v0.21.84 — bounded comment box: single input + send (Enter works too) */}
+              <div className="mt-4">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Add a comment
+                </h3>
+                <div className="rounded-xl border border-[var(--border)] bg-background focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[var(--primary)]/10">
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddComment();
+                    }}
+                    placeholder="Write an update for your team..."
+                    rows={2}
+                    className="w-full resize-none bg-transparent px-3 pt-2.5 text-xs outline-none placeholder:text-muted-foreground"
+                    aria-label="Add a comment"
+                  />
+                  <div className="flex items-center justify-end px-2 pb-2">
+                    <Button size="sm" className="rounded-lg text-2xs" onClick={handleAddComment} disabled={!commentText.trim()}>
+                      <MessageSquare className="mr-1 size-3" />
+                      Send comment
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* v1.6.20 — Actions: professional compact icon+label row */}
+              <div className="mt-6 border-t border-[var(--border)] pt-4">
+                {canManage ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" size="sm" className="rounded-lg text-xs"
+                      onClick={() => setEditFields({
+                        subject: selected.subject,
+                        description: selected.description ?? "",
+                        assignee: selected.assignee ?? "",
+                        due_date: selected.due_date ? selected.due_date.slice(0, 10) : "",
+                      })}
+                    >
+                      <Pencil className="mr-1.5 size-3.5" />
+                      Edit
+                    </Button>
+
+                    <Button
+                      variant={statusOpen ? "default" : "outline"}
+                      size="sm"
+                      className="rounded-lg text-xs"
+                      onClick={() => setStatusOpen((v) => !v)}
+                      aria-expanded={statusOpen}
+                    >
+                      <ChevronDown className={"mr-1.5 size-3.5 transition-transform " + (statusOpen ? "rotate-180" : "")} />
+                      {statusOpen ? "Close status" : "Update status"}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </aside>
+      </main>
+
+      {/* ==========================================================
           CREATE TICKET
       ========================================================== */}
       <Dialog
@@ -1381,8 +1364,8 @@ function SyncMenu({
                   })
                 }
                 placeholder="Briefly describe the issue"
-                className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-               aria-label="Subject"/>
+                className="h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-sm outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                aria-label="Subject" />
             </div>
 
             <div>
@@ -1412,7 +1395,7 @@ function SyncMenu({
                       setBusy(false);
                     }
                   }}
-                  className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-2xs font-medium text-blue-600 transition hover:bg-blue-50 disabled:opacity-40 dark:hover:bg-blue-950/30"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2 py-1 text-2xs font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-soft)] disabled:opacity-40"
                 >
                   <Sparkles className="size-3" />
                   AI assist
@@ -1432,8 +1415,8 @@ function SyncMenu({
                   })
                 }
                 placeholder="Describe what happened, error messages, affected system, and what you have already tried..."
-                className="w-full resize-none rounded-xl border bg-background px-3 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-               aria-label="Ticket description"/>
+                className="w-full resize-none rounded-xl border border-[var(--border)] bg-background px-3 py-3 text-sm outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/10"
+                aria-label="Ticket description" />
             </div>
 
             {/* v1.6.4 — ticket destination: Jira or OpenProject (no local-only) */}
@@ -1455,10 +1438,10 @@ function SyncMenu({
                       onClick={() => setNewTicket({ ...newTicket, destination: d.key })}
                       className={`h-11 flex-1 rounded-xl border px-3 text-sm font-medium transition ${
                         active
-                          ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          ? "border-[var(--primary)] bg-[var(--accent-soft)] text-[var(--accent-foreground)]"
                           : d.configured
-                            ? "border hover:border-blue-400"
-                            : "cursor-not-allowed border opacity-40 italic"
+                            ? "border-[var(--border)] hover:border-[var(--primary)]/50"
+                            : "cursor-not-allowed border-[var(--border)] opacity-40 italic"
                       }`}
                     >
                       {d.label}{!d.configured ? " (not configured)" : ""}
@@ -1486,7 +1469,8 @@ function SyncMenu({
                         e.target.value,
                     })
                   }
-                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none" aria-label="Category">
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-sm outline-none"
+                  aria-label="Category">
                   {/* v1.6.3 — live classifier domains (a new domain appears here immediately) */}
                   {categories.map((c) => (
                     <option key={c.key} value={c.label}>
@@ -1506,7 +1490,8 @@ function SyncMenu({
                     onChange={(e) =>
                       setNewTicket({ ...newTicket, assignee: e.target.value })
                     }
-                    className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none" aria-label="Assignee">
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-sm outline-none"
+                    aria-label="Assignee">
                     <option value="">Unassigned</option>
                     {assignable.map((u) => (
                       <option key={u.username} value={u.username}>
@@ -1525,8 +1510,8 @@ function SyncMenu({
                     onChange={(e) =>
                       setNewTicket({ ...newTicket, due_date: e.target.value })
                     }
-                    className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
-                   aria-label="Due date"/>
+                    className="h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-sm outline-none"
+                    aria-label="Due date" />
                 </div>
               </div>
 
@@ -1540,7 +1525,7 @@ function SyncMenu({
                   onChange={(e) =>
                     setPendingFiles(Array.from(e.target.files ?? []))
                   }
-                  className="w-full rounded-xl border bg-background px-3 py-2.5 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-blue-600"
+                  className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2.5 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[var(--accent-foreground)]"
                 />
                 {pendingFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
@@ -1570,7 +1555,8 @@ function SyncMenu({
                         e.target.value,
                     })
                   }
-                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none" aria-label="Priority">
+                  className="h-11 w-full rounded-xl border border-[var(--border)] bg-background px-3 text-sm outline-none"
+                  aria-label="Priority">
                   <option value="critical">
                     Critical
                   </option>
@@ -1608,12 +1594,3 @@ function SyncMenu({
     </PageShell>
   );
 }
-
-/* ==============================================================
-   SIDEBAR
-============================================================== */
-
-/* ==============================================================
-   STATS
-============================================================== */
-
