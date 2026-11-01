@@ -1,0 +1,200 @@
+/**
+ * DashboardBits.tsx — extracted from DashboardPage.
+ *
+ * Small presentational pieces: section headers, status badges, report buttons.
+ */
+
+import {
+  ArrowUpRight,
+  Download,
+  Printer,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import type { Conversation, RecentTicket } from "@/features/dashboard/lib/dashboardTypes";
+import { dashboardCsv } from "@/features/dashboard/lib/dashboardUtils";
+
+export function SectionHeader({
+  title,
+  action,
+  href,
+}: {
+  title: string;
+  action?: string;
+  href?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b px-5 py-4">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      {action && href && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-2xs font-medium text-blue-600 hover:underline"
+        >
+          {action}
+          <ArrowUpRight className="size-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+
+/* ============================================================
+   RESULT BADGE
+============================================================ */
+
+export function ResultBadge({
+  result,
+}: {
+  result: Conversation["result"];
+}) {
+  // v1.5.3 — three-way badge colors: Resolved=emerald, Cautioned=amber, Escalated=orange
+  const styles: Record<string, string> = {
+    Resolved:
+      "rounded-md border-emerald-200 bg-emerald-50 text-2xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300",
+    Cautioned:
+      "rounded-md border-amber-200 bg-amber-50 text-2xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300",
+    Escalated:
+      "rounded-md border-orange-200 bg-orange-50 text-2xs text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300",
+  };
+  return (
+    <Badge
+      variant="outline"
+      className={styles[result] ?? styles.Escalated}
+    >
+      {result}
+    </Badge>
+  );
+}
+
+/* ============================================================
+   STATUS BADGE
+============================================================ */
+
+export function StatusBadge({
+  status,
+}: {
+  status: RecentTicket["status"];
+}) {
+  const styles = {
+    Open:
+      "border-blue-200 bg-blue-50 text-blue-700",
+    Pending:
+      "border-amber-200 bg-amber-50 text-amber-700",
+    Resolved:
+      "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+
+  return (
+    <Badge
+      variant="outline"
+      className={`rounded-md text-2xs ${styles[status]}`}
+    >
+      {status}
+    </Badge>
+  );
+}
+
+/* ============================================================
+   PRIORITY
+============================================================ */
+
+export function PriorityBadge({
+  priority,
+}: {
+  priority: RecentTicket["priority"];
+}) {
+  const styles = {
+    Critical: "bg-red-500",
+    High: "bg-orange-500",
+    Medium: "bg-amber-500",
+    Low: "bg-emerald-500",
+  };
+
+  return (
+    <span className="flex w-16 shrink-0 items-center gap-1.5 text-2xs">
+
+      <span
+        className={`size-1.5 rounded-full ${styles[priority]}`}
+      />
+
+      {priority}
+
+    </span>
+  );
+}
+
+/* ============================================================
+   HEALTH ROW
+============================================================ */
+
+export function DashboardReportButtons({ stats, conversations, tickets, domains }: {
+  stats: any; conversations: any[]; tickets: any[]; domains: any[];
+}) {
+  function exportCsv() {
+    const body = dashboardCsv(stats, conversations, tickets, domains);
+    const blob = new Blob(["\ufeff" + body], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dashboard-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function printReport() {
+    const w = window.open("", "_blank", "width=900,height=700");
+    if (!w) return;
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = (tickets ?? []).map((t) =>
+      `<tr><td>${esc(t.id)}</td><td>${esc(t.subject)}</td><td>${esc(t.status)}</td><td>${esc(t.priority)}</td></tr>`).join("");
+    const convRows = (conversations ?? []).map((c) =>
+      `<tr><td>${esc(c.time)}</td><td>${esc(c.user)}</td><td>${esc(c.question)}</td><td>${esc(c.result)}</td></tr>`).join("");
+    const domRows = (domains ?? []).map((d) =>
+      `<tr><td>${esc(d.name)}</td><td>${esc(d.count)}</td><td>${esc(d.percentage)}%</td></tr>`).join("");
+    w.document.write(`<!doctype html><html><head><title>Dashboard Report</title><style>
+      body{font-family:Arial,sans-serif;margin:32px;color:#0f172a}
+      h1{font-size:18px;margin:0 0 4px}.meta{font-size:12px;color:#64748b;margin-bottom:16px}
+      h2{font-size:14px;margin:20px 0 6px}
+      table{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:12px}
+      th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left}
+      th{background:#f1f5f9}tr:nth-child(even) td{background:#f8fafc}
+      .kpis{display:flex;gap:16px;font-size:13px}
+      .kpi{border:1px solid #cbd5e1;border-radius:8px;padding:8px 14px}
+      @media print{button{display:none}}
+    </style></head><body>
+      <h1>IT Help Chatbot — Dashboard Report</h1>
+      <div class="meta">Generated ${new Date().toLocaleString()}</div>
+      ${stats ? `<div class="kpis">
+        <div class="kpi"><b>${esc(stats.total ?? "—")}</b><br>Total questions</div>
+        <div class="kpi"><b>${esc(stats.answered ?? "—")}</b><br>Answered from KB</div>
+        <div class="kpi"><b>${esc(stats.escalated_to_tickets ?? "—")}</b><br>Escalated</div>
+        <div class="kpi"><b>${esc(stats.avg_confidence ?? "—")}</b><br>Avg confidence</div>
+      </div>` : ""}
+      <h2>Domain Breakdown</h2>
+      <table><thead><tr><th>Domain</th><th>Count</th><th>Share</th></tr></thead><tbody>${domRows}</tbody></table>
+      <h2>Recent Tickets</h2>
+      <table><thead><tr><th>Ticket</th><th>Subject</th><th>Status</th><th>Priority</th></tr></thead><tbody>${rows}</tbody></table>
+      <h2>Recent Conversations</h2>
+      <table><thead><tr><th>Time</th><th>User</th><th>Question</th><th>Result</th></tr></thead><tbody>${convRows}</tbody></table>
+      <script>window.onload=function(){window.print()}<\/script>
+    </body></html>`);
+    w.document.close();
+  }
+
+  return (
+    <>
+      <Button variant="outline" size="sm" className="rounded-xl" onClick={exportCsv} title="Download all dashboard data as CSV">
+        <Download className="mr-1.5 size-3.5" />
+        Export CSV
+      </Button>
+      <Button variant="outline" size="sm" className="rounded-xl" onClick={printReport} title="Open a printable report in a new tab">
+        <Printer className="mr-1.5 size-3.5" />
+        Report
+      </Button>
+    </>
+  );
+}
