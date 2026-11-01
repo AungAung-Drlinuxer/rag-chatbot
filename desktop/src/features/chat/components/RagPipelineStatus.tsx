@@ -15,7 +15,7 @@
  * - "Simulation" mode lets you demo the full flow without a backend call
  *   (used by the demo button in the EmptyChat and by unit tests).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 
 /* ------------------------------------------------------------------ */
@@ -192,7 +192,10 @@ export default function RagPipelineStatus({
   const [demoStage, setDemoStage] = useState<StageKey | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // v1.6.19 — collapsed by default once completed, or configurable via defaultOpen
-  const [open, setOpen] = useState(active ? true : defaultOpen);
+  // v1.0.1 — `active` used to force this open, so the largest element on the screen
+  // during a long answer was the telemetry panel, not the answer. The collapsed strip
+  // already carries stage + elapsed time; the detail is one click away.
+  const [open, setOpen] = useState(defaultOpen);
   // v1.6.65 — which pipeline is actually running. A live-infrastructure answer does
   // not retrieve or rerank documents, so rendering those steps described a pipeline
   // that never ran. Detected from the backend stage (the "tools" key or a detail
@@ -206,7 +209,6 @@ export default function RagPipelineStatus({
     [live, telemetry, stage],
   );
   const steps = isLive ? STEPS_LIVE : STEPS;
-  const [tableOpen, setTableOpen] = useState(false);
 
   /* ---- simulation mode: walk the steps every 900ms ------------------ */
   useEffect(() => {
@@ -258,235 +260,204 @@ export default function RagPipelineStatus({
     return null;
   }
 
-  /* ---- compact pill once the answer streams ------------------------- */
-  if (streaming && !simulate) {
-    return (
-      <div
-        data-testid="rag-pipeline-pill"
-        className="flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-      >
-        <span className="relative flex size-1.5">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-          <span className="relative inline-flex size-1.5 rounded-full bg-emerald-600" />
-        </span>
-        Streaming answer
+  /* ---- the tracker ------------------------------------------------------
+     v1.0.1 — restructured to the reference design. Three fixed bands:
+
+       header   RAG Pipeline · Tracing live · ⏱ 20.6s
+       stages   (1)Understanding 127ms ✓ -> (2)Rewrite 76ms ✓ -> ... (always visible)
+       details  Execution Details · 4/5 completed   (expand for telemetry)
+
+     Two changes of substance from the previous version. The stage row used to live
+     INSIDE the expanded body, so the collapsed state showed only a title and a
+     stopwatch — the pipeline was invisible exactly while it was running. And the
+     streaming state collapsed the whole thing to a pill, which hid the stage that was
+     actually running. Both now keep the stage row on screen, which is what makes the
+     progress readable at a glance instead of one click away.
+  ----------------------------------------------------------------------- */
+  const doneCount = steps.filter((s, idx) =>
+    active ? activeIdx > idx : telemetry?.[s.key] != null || idx <= lastMeasured,
+  ).length;
+
+  return (
+    <div
+      data-testid="rag-pipeline-tracker"
+      className="overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 text-slate-800 dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100"
+    >
+      {/* ---- header ---- */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`grid size-6 shrink-0 place-items-center rounded-lg text-[11px] ${
+              active
+                ? "animate-pulse bg-blue-100 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400"
+                : "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+            }`}
+          >
+            {active ? "\u26A1" : "\u2713"}
+          </span>
+          <span className="truncate text-[12px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            {/* Name the pipeline that is actually running: calling a cluster lookup
+                "RAG Pipeline" described retrieval that never happened. */}
+            {isLive ? "Infrastructure query" : "RAG Pipeline"}
+          </span>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium ${
+              active
+                ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+            }`}
+          >
+            {active ? "Tracing live" : "Completed"}
+          </span>
+        </div>
         {elapsedMs > 0 && (
-          <span className="text-emerald-600/70 dark:text-emerald-400/60">
+          <span
+            data-testid="rag-pipeline-elapsed"
+            className="flex shrink-0 items-center gap-1 font-mono text-[11px] font-semibold tabular-nums text-slate-600 dark:text-slate-300"
+          >
+            <span aria-hidden>\u23F1</span>
             {(elapsedMs / 1000).toFixed(1)}s
           </span>
         )}
       </div>
-    );
-  }
 
-  /* ---- full step tracker ------------------------------------------------ */
-  return (
-    <div
-      data-testid="rag-pipeline-tracker"
-      className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 text-slate-800 shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100"
-    >
-      {/* ---- header: title + compact telemetry chips + toggle ---- */}
+      {/* ---- stage strip: always on screen ---- */}
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setOpen((v) => !v);
-          }
-        }}
-        className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 select-none hover:bg-slate-50/80 dark:hover:bg-slate-800/50"
+        data-testid="rag-pipeline-stages"
+        className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-slate-100 px-4 py-2.5 dark:border-slate-800/70"
       >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className={`grid size-7 shrink-0 place-items-center rounded-xl text-xs ${
-              active
-                ? "animate-pulse bg-blue-100 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400"
-                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-            }`}
-          >
-            {active ? "⚡" : "✨"}
-          </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                {/* v1.6.68 — name the pipeline that is actually running. Calling a
-                    cluster lookup "RAG Pipeline" described retrieval that never
-                    happened. */}
-                {isLive ? "Infrastructure query" : "RAG Pipeline"}
-              </span>
+        {steps.map((step, idx) => {
+          const isActive = active && idx === activeIdx;
+          const isDone = active ? activeIdx > idx : telemetry?.[step.key] != null || idx <= lastMeasured;
+          const ms = telemetry?.[step.key];
+          return (
+            <Fragment key={step.key}>
+              {idx > 0 && (
+                <span
+                  aria-hidden
+                  className={`h-px w-3 shrink-0 ${
+                    isDone || isActive ? "bg-blue-500/60" : "bg-slate-200 dark:bg-slate-700"
+                  }`}
+                />
+              )}
               <span
-                className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${
-                  active
-                    ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
-                    : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                title={step.description}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-1.5 py-1 ${
+                  isActive ? "bg-blue-50 dark:bg-blue-950/50" : ""
                 }`}
               >
-                {active ? (streaming ? "Generating" : "Tracing") : "Completed"}
+                <span
+                  className={`grid size-4 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${
+                    isActive
+                      ? "animate-pulse bg-blue-600"
+                      : isDone
+                        ? "bg-emerald-500"
+                        : "bg-slate-300 dark:bg-slate-700"
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+                <span
+                  className={`text-[11px] font-medium ${
+                    isActive
+                      ? "text-blue-700 dark:text-blue-300"
+                      : isDone
+                        ? "text-slate-700 dark:text-slate-200"
+                        : "text-slate-400 dark:text-slate-500"
+                  }`}
+                >
+                  {step.label}
+                </span>
+                <span
+                  className={`font-mono text-[10px] tabular-nums ${
+                    ms != null ? "text-slate-500 dark:text-slate-400" : "text-slate-300 dark:text-slate-600"
+                  }`}
+                >
+                  {ms != null ? `${ms}ms` : "\u2014"}
+                </span>
+                <span
+                  aria-label={isActive ? "running" : isDone ? "done" : "pending"}
+                  className={`text-[10px] ${
+                    isActive
+                      ? "text-blue-600 dark:text-blue-400"
+                      : isDone
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-slate-300 dark:text-slate-600"
+                  }`}
+                >
+                  {isActive ? "\u25D0" : isDone ? "\u2713" : "\u25CB"}
+                </span>
               </span>
-            </div>
-            {!open && (
-              <p className="mt-0.5 truncate text-[10px] text-slate-500 dark:text-slate-400">
-                {active
-                  ? stage || "Processing query pipeline..."
-                  : "Click to inspect step-by-step execution metrics"}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {elapsedMs > 0 && (
-            <span
-              data-testid="rag-pipeline-elapsed"
-              className="flex items-center gap-1 rounded-lg border border-slate-200/80 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-700 tabular-nums dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200"
-            >
-              <span className="text-[9px] font-normal uppercase text-slate-400">Time</span>
-              {(elapsedMs / 1000).toFixed(1)}s
-            </span>
-          )}
-          <span className="grid size-6 place-items-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            {open ? "▲" : "▼"}
-          </span>
-        </div>
+            </Fragment>
+          );
+        })}
       </div>
 
+      {/* ---- execution details: telemetry one click away ---- */}
+      <button
+        type="button"
+        data-testid="rag-pipeline-details-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between border-t border-slate-100 px-4 py-2 text-left transition hover:bg-slate-50/80 dark:border-slate-800/70 dark:hover:bg-slate-800/40"
+      >
+        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+          Execution Details
+        </span>
+        <span className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-slate-500">
+          {doneCount}/{steps.length} completed
+          <span aria-hidden>{open ? "\u25B2" : "\u25BC"}</span>
+        </span>
+      </button>
+
       {open && (
-        <div className="border-t border-slate-100 p-4 dark:border-slate-800/80">
-          {/* ---- horizontal bubbles with status & duration ---- */}
-          <div className="flex items-start overflow-x-auto pb-3 pt-1">
+        <div className="border-t border-slate-100 px-3 py-1 dark:border-slate-800/70">
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800/60">
             {steps.map((step, idx) => {
               const isActive = active && idx === activeIdx;
-              const isDone = active ? activeIdx > idx : (telemetry?.[step.key] != null || idx <= lastMeasured);
+              const isDone = active ? activeIdx > idx : telemetry?.[step.key] != null || idx <= lastMeasured;
               const ms = telemetry?.[step.key];
               return (
-                <div key={step.key} className="flex min-w-[90px] flex-1 items-start">
-                  {idx > 0 && (
-                    <span
-                      aria-hidden
-                      className={`mx-1 mt-4 h-0.5 flex-1 shrink-0 ${
-                        isDone || isActive
-                          ? "bg-blue-500/80 dark:bg-blue-500/70"
-                          : "bg-slate-200 dark:bg-slate-700"
-                      }`}
-                    />
-                  )}
-                  <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
-                    <span
-                      className={`grid size-9 place-items-center rounded-full text-sm text-white shadow-xs transition-all ${
-                        isActive
-                          ? "animate-pulse bg-blue-600 shadow-blue-500/30"
-                          : isDone
-                            ? "bg-emerald-500"
-                            : "bg-slate-300 dark:bg-slate-700"
-                      }`}
-                    >
-                      {step.icon}
-                    </span>
-                    <span
-                      className={`max-w-[85px] truncate text-[11px] font-medium ${
-                        isActive
-                          ? "font-semibold text-blue-600 dark:text-blue-400"
-                          : isDone
-                            ? "text-slate-700 dark:text-slate-200"
-                            : "text-slate-400 dark:text-slate-500"
-                      }`}
-                    >
-                      {step.label}
-                    </span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.2 font-mono text-[9px] tabular-nums ${
-                        ms != null
-                          ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                          : "bg-slate-50 text-slate-300 dark:bg-slate-800/50 dark:text-slate-600"
-                      }`}
-                    >
-                      {ms != null ? `${ms}ms` : "—"}
-                    </span>
-                    <span
-                      className={`text-[9px] font-medium ${
-                        isActive
-                          ? "text-blue-600 dark:text-blue-400"
-                          : isDone
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-slate-400 dark:text-slate-500"
-                      }`}
-                    >
-                      {isActive ? "◐ Running" : isDone ? "✓ Done" : "○ Pending"}
-                    </span>
-                  </div>
-                </div>
+                <li key={step.key} className="flex items-center gap-2.5 py-2 text-xs">
+                  <span
+                    className={`grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${
+                      isActive
+                        ? "bg-blue-600"
+                        : isDone
+                          ? "bg-emerald-500"
+                          : "bg-slate-300 dark:bg-slate-700"
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span className="w-24 shrink-0 font-medium text-slate-800 dark:text-slate-200">
+                    {step.label}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] text-slate-400 dark:text-slate-500">
+                    {step.description}
+                  </span>
+                  <span className="w-14 shrink-0 text-right font-mono text-[10px] tabular-nums text-slate-600 dark:text-slate-300">
+                    {ms != null ? `${ms}ms` : "\u2014"}
+                  </span>
+                  <span
+                    className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-[9px] font-medium ${
+                      isActive
+                        ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                        : isDone
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                          : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+                    }`}
+                  >
+                    {isActive ? "\u25D0 Running" : isDone ? "\u2713 Done" : "\u25CB Pending"}
+                  </span>
+                </li>
               );
             })}
-          </div>
+          </ul>
 
-          {/* ---- collapsible detail table ---- */}
-          <div className="mt-2 rounded-xl border border-slate-200/80 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/40">
-            <button
-              type="button"
-              onClick={() => setTableOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-3.5 py-2 text-left"
-            >
-              <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                Detailed Telemetry Breakdown
-              </span>
-              <span className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                {tableOpen ? "Hide Breakdown ▲" : "Show Breakdown ▼"}
-              </span>
-            </button>
-            {tableOpen && (
-              <ul className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800/60 dark:border-slate-800/60">
-                {steps.map((step, idx) => {
-                  const isActive = active && idx === activeIdx;
-                  const isDone = active ? activeIdx > idx : (telemetry?.[step.key] != null || idx <= lastMeasured);
-                  const ms = telemetry?.[step.key];
-                  return (
-                    <li
-                      key={step.key}
-                      className="flex items-center gap-2.5 px-3.5 py-2 text-xs"
-                    >
-                      <span
-                        className={`grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white ${
-                          isActive
-                            ? "bg-blue-600"
-                            : isDone
-                              ? "bg-emerald-500"
-                              : "bg-slate-300 dark:bg-slate-700"
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
-                      <span className="w-24 shrink-0 font-medium text-slate-800 dark:text-slate-200">
-                        {step.label}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[10px] text-slate-400 dark:text-slate-500">
-                        {step.description}
-                      </span>
-                      <span className="w-14 shrink-0 text-right font-mono text-[10px] tabular-nums text-slate-600 dark:text-slate-300">
-                        {ms != null ? `${ms}ms` : "—"}
-                      </span>
-                      <span
-                        className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-[9px] font-medium ${
-                          isActive
-                            ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
-                            : isDone
-                              ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
-                              : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
-                        }`}
-                      >
-                        {isActive ? "◐ Running" : isDone ? "✓ Done" : "○ Pending"}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* ---- live stage detail line ---- */}
+          {/* live stage detail line */}
           {stage && !simulate && active && (
-            <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-blue-50/60 px-3 py-1.5 text-[10px] text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+            <div className="my-2 flex items-center gap-2 rounded-lg bg-blue-50/60 px-3 py-1.5 text-[10px] text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
               <span className="size-1.5 animate-ping rounded-full bg-blue-600" />
               <span className="truncate">{stage}</span>
             </div>

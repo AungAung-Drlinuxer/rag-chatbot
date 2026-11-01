@@ -15,7 +15,6 @@ import {
   ExternalLink,
   Eye,
   MessageSquare,
-  Plus,
   RefreshCw,
   ShieldAlert,
   Ticket,
@@ -34,6 +33,7 @@ import {
   dashRecentTickets,
   dashHealth,
   dashGateTrend,
+  type ReportWindow,
 } from "@/features/dashboard/api";
 
 import { Card } from "@/components/ui/card";
@@ -47,7 +47,8 @@ import { Button } from "@/components/ui/button";
 type Props = {
   userName?: string;
   role?: string;
-  onNavigate?: (page: string) => void;
+  // `onNavigate` went with the Quick actions row: it was that row's only reader, and
+  // App.tsx never passed it (the sidebar is the navigation path).
 };
 
 type Conversation = {
@@ -92,12 +93,22 @@ type HealthItem = {
    MAIN DASHBOARD
 ============================================================ */
 
-export default function Dashboard({ role, onNavigate }: Props) {
+export default function Dashboard({ role }: Props) {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] =
     useState(new Date());
-  const [range, setRange] = useState<"7d" | "30d" | "90d">("7d");
+  // The COMMITTED reporting window is the state. The picker's controls are only ways to
+  // set it, so opening the picker — or typing half a range into the date boxes — cannot
+  // change what is being reported. (An earlier version kept `range` and the dates in
+  // separate state and refetched the same 7 days the moment the picker was opened.)
+  const [win, setWin] = useState<ReportWindow>({ kind: "preset", days: 7 });
+  // The date boxes hold a DRAFT; "Apply range" commits it into `win`.
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [rangeOpen, setRangeOpen] = useState(false);
+  // What the backend actually reported, so the footer names the real window rather than
+  // repeating the request (the backend clamps a span it considers too long).
+  const [windowEcho, setWindowEcho] = useState<{ start: string; end: string } | null>(null);
 
   // Real API data (v0.12.0)
   const [stats, setStats] = useState<any>(null);
@@ -132,6 +143,30 @@ export default function Dashboard({ role, onNavigate }: Props) {
     return () => window.clearInterval(id);
   }, []);
 
+  // --- reporting window -------------------------------------------------------------
+  const shortDate = (iso: string) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+  const rangeLabel =
+    win.kind === "custom"
+      ? `${shortDate(win.start)} → ${shortDate(win.end)}`
+      : `Last ${win.days} days`;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const customInvalid =
+    !!customFrom && !!customTo && (customFrom > customTo || customFrom > todayIso);
+
+  // KPI row: 5 cards for a user (4 metrics + KB Articles), 6 for an admin (+ Attacks
+  // Blocked). A 4-column grid left a 1- or 2-card orphan row — that ragged tail is what
+  // made the row look uneven. Pick a column count that divides the cards exactly, and
+  // when the count is odd let the last card span two columns to close the row.
+  const kpiCount = role === "admin" ? 6 : 5;
+  const kpiFillLast = kpiCount % 2 === 1;
+
   useEffect(() => {
     let mounted = true;
 
@@ -139,17 +174,18 @@ export default function Dashboard({ role, onNavigate }: Props) {
       try {
         const [s, c, d, rc, rt, h, g] = await Promise.all([
           dashStats(),
-          dashConversations(7),
+          dashConversations(win),
           dashDomains(),
           dashRecentConversations(6),
           dashRecentTickets(5),
           dashHealth(),
-          dashGateTrend(7),
+          dashGateTrend(win),
         ]);
         if (!mounted) return;
         setStats(s ?? null);
         if (g?.series?.length) setGateTrend(g.series);
         if (c?.series?.length) setSeries(c.series);
+        if (c?.start && c?.end) setWindowEcho({ start: c.start, end: c.end });
         if (d?.domains?.length) {
           setDomainsLive(d.domains.map((x: { name: string; count: number; percentage: number }) => ({
             name: x.name, count: x.count, percentage: x.percentage,
@@ -205,7 +241,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
     return () => {
       mounted = false;
     };
-  }, [refreshTick]);
+  }, [refreshTick, win]);
 
   function refreshDashboard() {
     setLoading(true);
@@ -277,27 +313,90 @@ export default function Dashboard({ role, onNavigate }: Props) {
                   type="button"
                   onClick={() => setRangeOpen((v) => !v)}
                   title="Reporting window"
-                  className="flex h-8 items-center gap-2 rounded-lg border bg-white px-2.5 text-[10px] font-medium transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"
+                  className={[
+                    "flex h-8 items-center gap-2 rounded-lg border bg-white px-2.5 text-[10px] font-medium transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800",
+                    win.kind === "custom" ? "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-300" : "",
+                  ].join(" ")}
                 >
                   <CalendarDays className="size-3.5" />
-                  {range === "7d" ? "Last 7 days" : range === "30d" ? "Last 30 days" : "Last 90 days"}
+                  {rangeLabel}
                   <ChevronDown className={`size-3 text-muted-foreground transition ${rangeOpen ? "rotate-180" : ""}`} />
                 </button>
                 {rangeOpen && (
-                  <div className="absolute right-0 top-11 z-20 w-44 rounded-xl border bg-white p-1 shadow-lg dark:bg-slate-900">
-                    {(["7d", "30d", "90d"] as const).map((r) => (
+                  <div className="absolute right-0 top-11 z-20 w-64 rounded-xl border bg-white p-1.5 shadow-lg dark:bg-slate-900">
+                    {([7, 30, 90] as const).map((r) => (
                       <button
                         key={r}
                         type="button"
-                        onClick={() => { setRange(r); setRangeOpen(false); }}
+                        onClick={() => {
+                          // Re-picking the active preset returns the SAME object, so the
+                          // load effect does not re-run for a no-op.
+                          setWin((w) => (w.kind === "preset" && w.days === r ? w : { kind: "preset", days: r }));
+                          setRangeOpen(false);
+                        }}
                         className={[
                           "block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800",
-                          r === range ? "font-semibold text-blue-600" : "text-slate-700 dark:text-slate-200",
+                          win.kind === "preset" && win.days === r ? "font-semibold text-blue-600" : "text-slate-700 dark:text-slate-200",
                         ].join(" ")}
                       >
-                        {r === "7d" ? "Last 7 days" : r === "30d" ? "Last 30 days" : "Last 90 days"}
+                        Last {r} days
                       </button>
                     ))}
+
+                    {/* Custom range — a real start/end window, not a day count. */}
+                    <div className="mt-1 border-t pt-1.5">
+                      <p
+                        className={[
+                          "px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide",
+                          win.kind === "custom" ? "text-blue-600" : "text-muted-foreground",
+                        ].join(" ")}
+                      >
+                        Custom range
+                      </p>
+
+                      <div className="space-y-2 px-3 pb-1 pt-1">
+                        <label className="block">
+                          <span className="text-[10px] font-medium text-muted-foreground">From</span>
+                          <input
+                            type="date"
+                            value={customFrom}
+                            max={todayIso}
+                            onChange={(e) => setCustomFrom(e.target.value)}
+                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-[11px] dark:bg-slate-950"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-medium text-muted-foreground">To</span>
+                          <input
+                            type="date"
+                            value={customTo}
+                            max={todayIso}
+                            onChange={(e) => setCustomTo(e.target.value)}
+                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-[11px] dark:bg-slate-950"
+                          />
+                        </label>
+
+                        {customInvalid && (
+                          <p className="text-[10px] leading-tight text-rose-600">
+                            {customFrom > todayIso
+                              ? "Start date is in the future."
+                              : "Start date must be on or before the end date."}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={!customFrom || !customTo || customInvalid}
+                          onClick={() => {
+                            setWin({ kind: "custom", start: customFrom, end: customTo });
+                            setRangeOpen(false);
+                          }}
+                          className="h-7 w-full rounded-md bg-blue-600 text-[11px] font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Apply range
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
         </div>
@@ -327,7 +426,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
             {/* KPI */}
 
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <section className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-3">
 
               <KpiCard
                 icon={
@@ -376,6 +475,8 @@ export default function Dashboard({ role, onNavigate }: Props) {
                 title="KB Articles"
                 description="knowledge base size"
                 loading={loading}
+                /* closes the row when the card count is odd (5) */
+                className={kpiFillLast ? "md:col-span-2 xl:col-span-2" : undefined}
               />
 
               {role === "admin" && (
@@ -392,35 +493,10 @@ export default function Dashboard({ role, onNavigate }: Props) {
             </section>
 
             {/* =================================================
-                QUICK ACTIONS (v1.1.6 — RBAC-filtered shortcuts)
-            ================================================= */}
-
-            <section className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-medium text-muted-foreground">Quick actions:</span>
-              <QuickAction label="Ask a question" icon={<MessageSquare className="size-3.5" />} onClick={() => onNavigate?.("chat")} />
-              <QuickAction label="Browse knowledge" icon={<BookOpen className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
-              {(role === "admin" || role === "knowledge") && (
-                <>
-                  <QuickAction label="Sync KB now" icon={<RefreshCw className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
-                  <QuickAction label="Create article" icon={<Plus className="size-3.5" />} onClick={() => onNavigate?.("articles")} />
-                </>
-              )}
-              {/* #16 — Users / Audit log / Integrations were duplicates of left-nav
-                  items; the row is now restricted to actions that START work from
-                  the dashboard (the rest is one click away in the sidebar). A link to
-                  the printable report replaces the longest nav duplicate. */}
-              <QuickAction
-                label="Printable report"
-                icon={<Printer className="size-3.5" />}
-                onClick={() => window.print()}
-              />
-            </section>
-
-            {/* =================================================
                 CHART ROW
             ================================================= */}
 
-            <section className="grid gap-4 xl:grid-cols-[1.7fr_1fr_1.25fr]">
+            <section className="grid items-stretch gap-4 xl:grid-cols-3">
 
               {/* Conversations */}
 
@@ -577,17 +653,17 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
             {/* #7 — items-start stops the grid from stretching short panels to the
                 tallest sibling, which left ~400px of dead space under both tables. */}
-            <section className="grid items-start gap-4 xl:grid-cols-[1.2fr_1.1fr_1fr]">
+            <section className="grid items-stretch gap-4 xl:grid-cols-3">
 
               {/* Recent conversations */}
 
-              <Card className="overflow-hidden rounded-xl">
+              <Card className="flex flex-col overflow-hidden rounded-xl">
 
                 <SectionHeader
                   title="Recent conversations"
                                   />
 
-                <div className="max-h-[360px] overflow-y-auto">
+                <div className="max-h-[360px] min-h-0 flex-1 overflow-y-auto xl:max-h-none">
 
                   {/* Mobile: stacked cards (md:hidden) */}
                   <div className="divide-y md:hidden">
@@ -714,7 +790,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
                                   <span className="flex flex-col">
                                     <span>{d.toLocaleDateString(undefined, { day: "2-digit", month: "short" })}</span>
                                     <span className="tabular-nums">
-                                      {d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok" })}
+                                      {d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })}
                                     </span>
                                   </span>
                                 );
@@ -765,13 +841,13 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* Recent tickets */}
 
-              <Card className="overflow-hidden rounded-xl">
+              <Card className="flex flex-col overflow-hidden rounded-xl">
 
                 <SectionHeader
                   title="Recent tickets"
                                   />
 
-                <div className="max-h-[360px] divide-y overflow-y-auto">
+                <div className="max-h-[360px] min-h-0 flex-1 divide-y overflow-y-auto xl:max-h-none">
 
                   {(liveTickets ?? []).length === 0 && (
                     <div className="px-4 py-8 text-center text-[10px] text-muted-foreground">
@@ -812,7 +888,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
               {/* System health */}
 
-              <Card className="overflow-hidden rounded-xl">
+              <Card className="flex flex-col overflow-hidden rounded-xl">
 
                 {/* #3 — three items packed into one flex row squeezed the title and
                     wrapped the badge onto two lines. Title + status line stack on the
@@ -868,7 +944,7 @@ export default function Dashboard({ role, onNavigate }: Props) {
                   {/* #11 — guardrail activity is a SECURITY metric, not a dependency,
                       so it gets its own labelled block instead of sitting in the
                       service list pretending to be "Healthy". */}
-                  <div className="flex items-center gap-3 bg-slate-50/60 px-5 py-2.5 dark:bg-slate-900/40">
+                  <div className="mt-auto flex items-center gap-3 bg-slate-50/60 px-5 py-2.5 dark:bg-slate-900/40">
                     <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                       <ShieldAlert className="size-3.5" />
                     </div>
@@ -892,13 +968,19 @@ export default function Dashboard({ role, onNavigate }: Props) {
 
             <div className="flex flex-col items-center justify-center gap-2 py-1 text-[10px] text-muted-foreground sm:flex-row">
 
-              <span>
-                All times are shown in Asia/Bangkok (GMT+7)
+              <span
+                title={
+                  windowEcho
+                    ? `${shortDate(windowEcho.start)} → ${shortDate(windowEcho.end)}`
+                    : rangeLabel
+                }
+              >
+                {windowEcho
+                  ? `${shortDate(windowEcho.start)} → ${shortDate(windowEcho.end)}`
+                  : rangeLabel}
               </span>
 
-              <span className="hidden sm:block">
-                |
-              </span>
+              <span className="hidden sm:block">|</span>
 
               <span title={lastUpdated.toLocaleString()}>
                 Last updated:{" "}
@@ -990,6 +1072,7 @@ function KpiCard({
   positive,
   loading,
   tone = "sky",
+  className,
 }: {
   icon: ReactNode;
   value: string;
@@ -1000,6 +1083,8 @@ function KpiCard({
   loading: boolean;
   /** v1.5.3 — semantic color for the icon tile */
   tone?: "sky" | "emerald" | "orange" | "violet" | "rose";
+  /** grid placement — used to close an odd KPI row */
+  className?: string;
 }) {
   const toneCls: Record<string, string> = {
     sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400",
@@ -1009,7 +1094,7 @@ function KpiCard({
     violet: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400",
   };
   return (
-    <Card className="relative overflow-hidden rounded-xl p-4">
+    <Card className={["relative overflow-hidden rounded-xl p-4", className ?? ""].join(" ")}>
 
       <div className="flex items-start justify-between">
 
@@ -1829,27 +1914,3 @@ function GateTrendChart({
   );
 }
 
-/* ============================================================
-   QUICK ACTION (v1.1.6)
-============================================================ */
-
-function QuickAction({
-  label,
-  icon,
-  onClick,
-}: {
-  label: string;
-  icon: ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-950/30 dark:hover:text-blue-300"
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}

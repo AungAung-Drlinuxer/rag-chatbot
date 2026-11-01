@@ -1,13 +1,32 @@
 /** Dashboard feature API (mirrors /api/dashboard*). */
 import { BASE, apiFetch, authHeaders } from "@/shared/api/client";
 
+/**
+ * Reporting window, resolved once and shared by every series endpoint.
+ *
+ * `preset` and `custom` are mutually exclusive ways to express the SAME thing, so the
+ * query string is built in one place: a custom window sends `start`+`end` (a real date
+ * range — "March" cannot be expressed as a day count), a preset sends `days`.
+ */
+export type ReportWindow =
+  | { kind: "preset"; days: number }
+  | { kind: "custom"; start: string; end: string };
+
+export function windowQuery(w: ReportWindow): string {
+  return w.kind === "custom"
+    ? `start=${encodeURIComponent(w.start)}&end=${encodeURIComponent(w.end)}`
+    : `days=${w.days}`;
+}
+
 export async function dashStats() {
   const r = await apiFetch(`${BASE}/api/dashboard/stats`, { headers: authHeaders() });
   return r.json();
 }
 
-export async function dashConversations(days = 7) {
-  const r = await apiFetch(`${BASE}/api/dashboard/conversations?days=${days}`, { headers: authHeaders() });
+export async function dashConversations(w: ReportWindow = { kind: "preset", days: 7 }) {
+  const r = await apiFetch(`${BASE}/api/dashboard/conversations?${windowQuery(w)}`, {
+    headers: authHeaders(),
+  });
   return r.json();
 }
 
@@ -26,8 +45,10 @@ export async function dashRecentTickets(limit = 5) {
   return r.json();
 }
 
-export async function dashGateTrend(days = 7) {
-  const r = await apiFetch(`${BASE}/api/dashboard/gate-trend?days=${days}`, { headers: authHeaders() });
+export async function dashGateTrend(w: ReportWindow = { kind: "preset", days: 7 }) {
+  const r = await apiFetch(`${BASE}/api/dashboard/gate-trend?${windowQuery(w)}`, {
+    headers: authHeaders(),
+  });
   return r.json();
 }
 

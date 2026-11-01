@@ -1,6 +1,6 @@
 import {
-  Trash2, ArrowUp, Bot, History,
-  Link2, Menu, Paperclip, Search,
+  Trash2, ArrowUp, Bot,
+  Menu, Paperclip, Search, Square,
   Shield, Info, MessageSquareText,
   Check, Pencil,
   Ticket as TicketIcon,
@@ -34,12 +34,10 @@ import {
   latestSources,
   latestRetrieval,
 } from "@/features/chat/model";
-import {
-  EmptyChat,
-  Row,
-} from "@/features/chat/components/chat-parts";
+import { EmptyChat } from "@/features/chat/components/chat-parts";
 import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
-import { SourceCard } from "@/features/chat/components/MessageParts";
+import StatusChips from "@/features/chat/components/StatusChips";
+import SourcePanel from "@/features/chat/components/SourcePanel";
 import { alertTicket } from "@/lib/notify";
 import {
   listConversations,
@@ -61,7 +59,7 @@ export default function Chat({
   role: _role,
   displayRole: _displayRole,
   perms: _perms,
-  onNavigate: _onNavigate,
+  onNavigate,
   onLogout: _onLogout,
 }: {
   userName?: string;
@@ -152,13 +150,24 @@ useEffect(() => {
     const handleNew = () => {
       newChat();
     };
+    /* v1.0.1 — right-panel Quick Actions drop their question in the composer. It is
+       deliberately a PREFILL and not a send: the user sees the exact prompt before it
+       goes out, so a quick action can never fire a request they did not read. */
+    const handleAsk = (e: any) => {
+      const q = e?.detail;
+      if (typeof q !== "string" || !q) return;
+      setInput(q);
+      window.setTimeout(() => composerRef.current?.focus(), 0);
+    };
     window.addEventListener("ith:open-conversation", handleOpen);
     window.addEventListener("ith:new-chat", handleNew);
+    window.addEventListener("ith:ask", handleAsk);
 
     // If navigated with hash #/chat and was already on chat, treat as new chat trigger if event requested
     return () => {
       window.removeEventListener("ith:open-conversation", handleOpen);
       window.removeEventListener("ith:new-chat", handleNew);
+      window.removeEventListener("ith:ask", handleAsk);
     };
   }, []);
 
@@ -167,6 +176,12 @@ useEffect(() => {
   ---------------------------------------------------------- */
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // The right panel's empty-state CTA ("Ask a question") needs somewhere to put the
+  // caret. Without it the button would be a control that does nothing visible.
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  /** Stop-generation: the stream already accepts an AbortSignal, but nothing ever
+   *  created one — a long or wrong answer could only be waited out. */
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -303,6 +318,8 @@ useEffect(() => {
       { id: assistantId, role: "assistant", content: "", timestamp: currentTime() },
     ]);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const streamed = await runChatStream(
         question,
@@ -407,6 +424,9 @@ useEffect(() => {
         llmProvider,
         sendMode,
         sendServers,
+        // 8th positional arg — `servers` sits between mode and signal, so passing the
+        // signal any earlier silently sends it as the connector scope.
+        controller.signal,
       );
       historyRef.current = [
         ...historyRef.current,
@@ -425,7 +445,17 @@ useEffect(() => {
     } finally {
       setIsTyping(false);
       setStage("");
+      abortRef.current = null;
     }
+  }
+
+  /** Abort the in-flight answer, keeping whatever has already streamed. */
+  function stopGeneration() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsTyping(false);
+    setStage("");
+    chatAlert("Generation stopped.");
   }
 
   /* ----------------------------------------------------------
@@ -762,21 +792,19 @@ useEffect(() => {
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold">IT Knowledge Assistant</h1>
-              <div className="mt-0.5 flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] text-muted-foreground">Online</span>
-                <span className="text-[10px] text-muted-foreground">·</span>
-                <span className="hidden text-[10px] text-muted-foreground sm:block">
-                  Hybrid RAG
-                </span>
-              </div>
+                {/* The single "Online" dot became four measured chips (StatusChips),
+                    so the subtitle carries the mockup's line instead of repeating state. */}
+                <p className="mt-0.5 hidden truncate text-[10px] text-muted-foreground sm:block">
+                  Get help from enterprise knowledge and IT experts
+                </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {/* S2.8 — "Hybrid RAG + rerank" moved to the retrieval panel (it was
                 static text here) and the chip is slimmer so the header reads as one
                 line of chrome instead of a second title bar. */}
-            <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-[10px] sm:flex">
+                          <StatusChips className="hidden lg:flex" />
+              <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-[10px] sm:flex">
               <Shield className="size-3 text-emerald-600" />
               RBAC protected
             </div>
@@ -831,7 +859,7 @@ useEffect(() => {
           {/* S2.4 — the scroll container must be a flex column for `justify-center`
               to have any height to centre within; previously the empty state sat
               top-heavy with ~200px of dead space above the composer. */}
-          <div className="mx-auto flex min-h-full max-w-[1000px] flex-col px-4 py-6 lg:px-8">
+          <div className="mx-auto flex min-h-full max-w-[900px] flex-col px-4 py-6 lg:px-6">
             {messages.length === 0 ? (
               <div className="flex flex-1 flex-col justify-center">
                 <EmptyChat userName={userName} onSuggestion={(q) => { setInput(q); window.setTimeout(() => { const form = document.querySelector<HTMLFormElement>("form"); form?.requestSubmit(); }, 60); }} />
@@ -861,14 +889,14 @@ useEffect(() => {
                   // S2.7 — align with the answer column (bubbles are max-w-[88%] of
                   // the 1000px column) instead of a narrower 768px panel that read
                   // like a floating modal parked under the bubble.
-                  <div className="mx-auto w-full max-w-[88%] px-1 pb-2">
+                  <div className="w-full pb-2">
                     <RagPipelineStatus
                       active={true}
                       stage={stage}
                       streaming={pipeline.streaming}
                       telemetry={pipeline.telemetry}
                       elapsedMs={pipeline.elapsed}
-                      defaultOpen={true}
+                      defaultOpen={false}
                     />
                   </div>
                 )}
@@ -890,7 +918,7 @@ useEffect(() => {
 
         {/* Composer — compact single-row */}
         <div className="shrink-0 border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">
-          <div className="mx-auto max-w-[860px] px-4 py-2 sm:px-6 sm:py-2.5">
+          <div className="mx-auto max-w-[900px] px-4 py-2 sm:px-6 sm:py-2.5">
             <form onSubmit={sendMessage} className="relative">
               {pendingFiles.length > 0 && (
                 <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
@@ -952,6 +980,7 @@ useEffect(() => {
                   }}
                 />
                 <textarea
+                  ref={composerRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -962,121 +991,66 @@ useEffect(() => {
                   }}
                   rows={1}
                   placeholder="Ask an IT question..."
-                  className="max-h-32 min-h-[30px] flex-1 resize-none bg-transparent px-2 py-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="max-h-40 min-h-[30px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] leading-6 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isTyping}
-                  aria-label="Send message"
-                  title="Send (Enter)"
-                  className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
-                >
-                  <ArrowUp className="size-4" />
-                </button>
+                {isTyping ? (
+                  /* Stop-generation: same footprint as Send so the row never shifts. */
+                  <button
+                    type="button"
+                    onClick={stopGeneration}
+                    aria-label="Stop generating"
+                    title="Stop generating (Esc)"
+                    className="grid size-8 shrink-0 place-items-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 active:scale-95 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!input.trim()}
+                    aria-label="Send message"
+                    title="Send (Enter)"
+                    className="grid size-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 hover:shadow-sm active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
+                  >
+                    <ArrowUp className="size-4" />
+                  </button>
+                )}
               </div>
             </form>
 
             {/* S3.11 — 9.5px slate-500 on the page background failed comfortable
                 reading; 11px at slate-500/400 clears the contrast floor. */}
-            <p className="mt-1.5 text-center text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-              Answers are AI-generated — verify before acting. Access is RBAC-protected.
-            </p>
+            <div className="mt-1.5 flex items-center justify-center gap-3 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+              <span className="text-center">
+                Answers are AI-generated — verify before acting. Access is RBAC-protected.
+              </span>
+              {/* The mockup shows "Ctrl + Enter". The composer actually sends on Enter
+                  with Shift+Enter for a newline, so the hint states the real binding
+                  rather than the mockup's — a hint that lies about the keys is worse
+                  than no hint. */}
+              <kbd className="hidden shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] sm:inline-block dark:border-slate-700 dark:bg-slate-800">
+                Enter to send
+              </kbd>
+            </div>
           </div>
         </div>
       </main>
 
       {/* ================= RIGHT SOURCE PANEL ================= */}
       {/* S2.6 — always mounted on xl (was gated on messages.length > 0, which made
-          the message column jump 300px narrower the moment the first answer landed). */}
+          the message column jump 300px narrower the moment the first answer landed).
+          The panel itself (header, retrieval meta, filter, grouped list, empty state)
+          now lives in its own component so it can be rendered and measured without
+          signing in — see scripts/sources_harness_shot.mjs. */}
       {preferences.show_rag_sources && showSources && (
-        <aside className="hidden w-[300px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--card)] xl:flex">
-          <div className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--border)] px-4">
-            <div>
-              <h2 className="text-[12px] font-semibold leading-tight">Knowledge sources</h2>
-              <p className="text-2xs leading-tight text-muted-foreground">
-                Retrieved for this conversation
-              </p>
-            </div>
-            <Link2 className="size-3.5 text-muted-foreground" />
-          </div>
-
-          {/* S2.9 — retrieval stats pinned directly under the header so the panel has
-              no unlabelled dead band in the middle. S1.1 — every value comes from the
-              real `meta.retrieval` payload; "—" when the backend did not report it
-              (never a fabricated number). */}
-          <div className="shrink-0 border-b border-[var(--border)] p-4">
-            <div className="rounded-xl bg-[var(--muted)] p-3">
-              <div className="flex items-center gap-2">
-                <History className="size-3.5 text-blue-500" />
-                <span className="text-[10px] font-semibold">Retrieval information</span>
-              </div>
-              <div className="mt-3 space-y-2 text-[10px] text-muted-foreground">
-                <Row
-                  label="Chunks retrieved"
-                  value={retrieval?.chunks != null ? String(retrieval.chunks) : "—"}
-                />
-                <Row
-                  label="Sources cited"
-                  value={
-                    retrieval?.cited != null
-                      ? String(retrieval.cited)
-                      : sources.length > 0
-                        ? String(sources.length)
-                        : "—"
-                  }
-                />
-                <Row
-                  label="Search type"
-                  value={
-                    retrieval?.rerank_used === true
-                      ? "Hybrid + rerank"
-                      : retrieval?.rerank_used === false
-                        ? "Hybrid (rerank skipped)"
-                        : "—"
-                  }
-                />
-                <Row
-                  label="ACL filtering"
-                  value={
-                    retrieval?.acl_scoped == null
-                      ? "—"
-                      : retrieval.acl_scoped
-                        ? "Enforced (domain-scoped)"
-                        : "Enforced (unrestricted role)"
-                  }
-                  good={retrieval?.acl_scoped != null}
-                />
-                <Row
-                  label="Top K"
-                  value={retrieval?.top_k != null ? String(retrieval.top_k) : "—"}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4">
-            {sources.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 px-2 text-center">
-                <div className="grid size-9 place-items-center rounded-xl bg-[var(--muted)]">
-                  <Link2 className="size-4 text-muted-foreground" />
-                </div>
-                <p className="text-[11px] font-medium text-muted-foreground">No sources yet</p>
-                <p className="text-[10px] leading-relaxed text-muted-foreground/80">
-                  Ask a question — the KB articles used to ground the answer appear here.
-                </p>
-              </div>
-            ) : (
-              sources.map((source, index) => (
-                <SourceCard
-                  key={`${source.page_id}-${index}`}
-                  source={source}
-                  index={index + 1}
-                  onExplain={explainSource}
-                />
-              ))
-            )}
-          </div>
-        </aside>
+        <SourcePanel
+          sources={sources}
+          retrieval={retrieval}
+          live={lastIsLive}
+          onExplain={explainSource}
+          onAsk={() => composerRef.current?.focus()}
+          onNavigate={onNavigate}
+        />
       )}
 
       {/* v0.21.38 — rename conversation dialog */}

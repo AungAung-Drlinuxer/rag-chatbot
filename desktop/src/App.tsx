@@ -24,15 +24,12 @@ import { getMySettings } from "@/features/settings/api";
 import LoginPage from "@/features/auth/pages/LoginPage";
 import ChatPage from "@/features/chat/pages/ChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
-import ApiKeysPage from "@/features/apikeys/pages/ApiKeysPage";
 import KnowledgePage from "@/features/knowledge/pages/KnowledgePage";
 import TicketsPage from "@/features/tickets/pages/TicketsPage";
-// import DomainsPage from "@/features/domains/pages/DomainsPage"; // retired: merged into KnowledgePage tabs
+import DomainsPage from "@/features/domains/pages/DomainsPage";
 import UsersPage from "@/features/users/pages/UsersPage";
 import ConversationHistoryPage from "@/features/conversations/pages/ConversationHistoryPage";
 import AuditsPage from "@/features/audits/pages/AuditsPage";
-// Semantica spike — remove this import and the "graph" case to take the page out.
-import ContextGraphPage from "@/features/semantica/pages/ContextGraphPage";
 import SettingsPage from "@/features/settings/pages/SettingsPage";
 
 export default function App() {
@@ -169,17 +166,13 @@ export default function App() {
     case "tickets":
       return shell("tickets", <TicketsPage role={role} userName={userName} onToast={toast.push} />);
     case "domains":
-      return shell("articles", <KnowledgePage role={role} userName={userName} perms={perms} initialTab="domains" onToast={toast.push} />);
+      // Its own page again: routing configuration and article reading are different jobs.
+      return shell("domains", <DomainsPage role={role} perms={perms} />);
     case "users":
-      return shell("users", <UsersPage />);
-    case "apikeys":
-      return shell("apikeys", <ApiKeysPage role={role} userName={userName} onToast={toast.push} />);
-    case "history":
+      return shell("users", <UsersPage />);    case "history":
       return shell("history", <ConversationHistoryPage />);
     case "audits":
       return shell("audits", <AuditsPage />);
-    case "graph":
-      return shell("graph", <ContextGraphPage />);
     case "settings":
       return shell("settings", <SettingsPage role={role} />);
     default:

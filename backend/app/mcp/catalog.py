@@ -184,6 +184,39 @@ CATALOG: list[dict] = [
     },
     # ------------------------------------------------------------------- custom
     {
+        "id": "anytype",
+        "name": "Anytype",
+        "description": "Search spaces, objects, properties and tags in your encrypted, "
+                       "local-first Anytype wiki, so the assistant can answer from notes "
+                       "that never leave your machines.",
+        "category": "Knowledge",
+        "badge": "",
+        "source": "upstream",
+        "transport": "sse",
+        "url_default": "",
+        "fields": [
+            {"key": "url", "label": "MCP server URL (SSE endpoint of your bridge)",
+             "kind": "text", "required": True,
+             "placeholder": "http://anytype-mcp:8000/sse"},
+            {"key": "token", "label": "Anytype API key", "kind": "password",
+             "required": True, "placeholder": "created in Anytype → Settings → API Keys"},
+        ],
+        "note": "The published server (npx @anyproto/anytype-mcp) speaks stdio only, so it "
+                "has to be bridged before this app can reach it: run it under supergateway "
+                "and give the SSE URL here — a bridged stdio server is always spoken to over "
+                "SSE, never streamable HTTP. The API key is forwarded as "
+                "'Authorization: Bearer <key>'. Anytype ALSO requires an 'Anytype-Version' "
+                "header (e.g. 2025-11-08) and this form carries only one bearer token, so set "
+                "that header on the bridge side via the server's OPENAPI_MCP_HEADERS env — "
+                "without it the API answers 400 and the connector will look broken for a "
+                "reason this screen cannot show. The server must reach the Anytype desktop "
+                "app or anytype-cli (default http://127.0.0.1:31009, CLI on 31012); a "
+                "container needs ANYTYPE_API_BASE_URL pointed at a reachable host, not "
+                "loopback. Only reads are exposed: the catalogue is filtered to read tools "
+                "and write verbs are refused, so create/delete tools the server offers are "
+                "not reachable from chat.",
+    },
+    {
         "id": "custom",
         "name": "Custom MCP connector",
         "description": "Point the assistant at any MCP server you run, over streamable "

@@ -37,35 +37,62 @@
   --fs-3xl: 24px;   /* display/KPI */
   --dur-fast: 150ms;  /* B-8 unified interactive timing */
   --dur-slow: 200ms;  /* B-8 overlays / panels */
---radius-xs: 6px;   /* spec §33: small */
-  --radius-sm: 8px;   /* spec §33: inputs/buttons */
-  --radius-md: 10px;  /* spec §33: cards (10–12) */
-  --radius-lg: 12px;  /* spec §33: cards/dialogs */
-  --radius-xl: 14px;  /* spec §33: max card radius — no 20–30px */
+  /* v1.0.1 — Linear/Vercel direction: tight radii. Was xs6/sm8/md10/lg12/xl14, which is a
+     Material-ish roundness; the reference apps use 6px controls and 8px cards. */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
 }
 
 :root {
+  /* ============================================================================
+     NAVY RAMP — matched to the supplied mockup.
+
+     The mockup (OCR'd; see docs/design/chat-ui-reference.md) uses a blue-tinted navy:
+     canvas #12151D, surfaces #1D2130 / #222635, muted text #6782A0, accent #0048F0.
+     The app uses raw `slate-*` utilities ~1,235 times, so overriding the ramp here
+     shifts every one of them at once instead of editing a thousand call sites.
+
+     This supersedes an earlier neutral (Linear/Vercel) ramp from the same session —
+     the mockup is the agreed target, so the blue cast is deliberate.
+     ============================================================================ */
+  --color-slate-50:  #F7F8FC;
+  --color-slate-100: #EEF1F7;
+  --color-slate-200: #DDE2EC;
+  --color-slate-300: #C2C9D8;
+  --color-slate-400: #8A94AB;
+  --color-slate-500: #6B7590;
+  --color-slate-600: #525C74;
+  --color-slate-700: #3A4356;
+  --color-slate-800: #2A2F42;
+  --color-slate-900: #1D2130;
+  --color-slate-950: #12151D;
+
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
   /* v0.21.52 — Refined light theme (deeper indigo + warmer card) */
-  --background: #F7F9FC;        /* spec §7: very light neutral blue-gray */
-  --foreground: #0F172A;        /* spec §7: text */
-  --card: #FFFFFF;              /* card / surface (pure white) */
-  --card-foreground: #0F172A;
-  --popover: #FFFFFF; --popover-foreground: #0F172A;
-  --primary: #2563EB;           /* spec §7: primary blue-600 */
+  /* v1.0.1 — mockup palette, light counterpart. The mockup is dark-only, so this is
+     derived: same #0048F0 accent, navy-tinted neutrals. */
+  --background: #F7F8FC;
+  --foreground: #12151D;
+  --card: #FFFFFF;
+  --card-foreground: #12151D;
+  --popover: #FFFFFF; --popover-foreground: #12151D;
+  --primary: #0048F0;
   --primary-foreground: #FFFFFF;
-  --secondary: #EEF2FF;         /* indigo-50 */
-  --secondary-foreground: #3730A3;
-  --muted: #F1F5F9;
-  --muted-foreground: #64748B;
-  --accent: #DBEAFE;            /* blue-100 — active row highlight */
-  --accent-foreground: #1D4ED8; /* spec §7: primary hover */
+  --secondary: #EEF1F7;
+  --secondary-foreground: #3A4356;
+  --muted: #EEF1F7;
+  --muted-foreground: #5A6478;
+  --accent: #E8EDFB;
+  --accent-foreground: #0040D8;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #E2E8F0;            /* slate-200 */
-  --input: #E2E8F0;
-  --ring: #2563EB;
+  --border: #DDE2EC;
+  --input: #DDE2EC;
+  --ring: #0048F0;
   /* v0.21.65 — Sidebar vs main panel: two-tone. Sidebar = navy #0A1628,
      main content = soft blue-gray. Professional separation without borders. */
   --sidebar-bg: #0A1628;        /* deep ocean navy sidebar */
@@ -73,7 +100,7 @@
   --brand-logo: #2563eb;        /* iTH logo blue (login + app) */
   --sidebar-border: #0F1D33;
   --sidebar-text: #CBD5E1;
-  --sidebar-text-muted: #64748B;
+  --sidebar-text-muted: #6782A0;
   --sidebar-hover: rgba(14, 165, 233, 0.12);   /* sky glow hover */
   --sidebar-active-bg: rgba(14, 165, 233, 0.18); /* sky active */
   --sidebar-active-text: #38BDF8;              /* sky-400 */
@@ -89,34 +116,38 @@
 }
 
 [data-theme="dark"] {
-  /* v0.22 — MASTER spec §27: dark mode first-class (#0B1220 bg, #111827 surface, #263449 border) */
-  --background: #0B1220;        /* spec dark background */
-  --foreground: #E5E7EB;
-  --card: #111827;              /* spec dark surface */
-  --card-foreground: #E5E7EB;
-  --popover: #111827; --popover-foreground: #E5E7EB;
-  --primary: #60A5FA;            /* blue-400 — readable accent on dark */
-  --primary-foreground: #0B1220;
-  --secondary: #1E293B;
-  --secondary-foreground: #CBD5E1;
-  --muted: #1E293B;
-  --muted-foreground: #94A3B8;
-  --accent: rgba(96, 165, 250, 0.16);
-  --accent-foreground: #93C5FD;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #263449;             /* spec dark border */
-  --input: #263449;
-  --ring: #60A5FA;
+  /* v1.0.1 — mockup palette, dark. Values read off the mockup: canvas #12151D,
+     surface #1D2130 / #222635, muted text #6782A0, accent #0048F0.
+     Measured: muted 4.59:1 (AA), white-on-accent 6.59:1 (AA), card lift 1.141:1. */
+  --background: #12151D;
+  --foreground: #E8EBF2;
+  --card: #1D2130;
+  --card-foreground: #E8EBF2;
+  --popover: #222635; --popover-foreground: #E8EBF2;
+  --primary: #0048F0;
+  --primary-foreground: #FFFFFF;
+  --secondary: #222635;
+  --secondary-foreground: #C2C9D8;
+  --muted: #222635;
+  --muted-foreground: #6782A0;
+  --accent: rgba(0, 72, 240, 0.16);
+  /* #0048F0 is only 2.77:1 as TEXT on this canvas, so accent TEXT gets a lighter tone
+     while filled buttons keep the mockup's exact blue. */
+  --accent-foreground: #5C8CFF;
+  --destructive: #f87171;
+  --destructive-foreground: #12151D;
+  --border: #2A2F42;
+  --input: #2A2F42;
+  --ring: #0048F0;
   /* v0.21.65 — sidebar deeper than main panel (two-tone depth) */
   --sidebar-bg: #050912;         /* deeper than --background #070B14 */
   --sidebar-border: #0F1D33;
-  --sidebar-text: #94A3B8;
+  --sidebar-text: #C2C9D8;
   --sidebar-text-muted: #64748B;
   --sidebar-hover: rgba(14, 165, 233, 0.10);
   --sidebar-active-bg: rgba(14, 165, 233, 0.16);
   --sidebar-active-text: #38BDF8;
-  --topbar-bg: #0F172A;
+  --topbar-bg: #1D2130;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.4), 0 4px 6px rgba(0,0,0,.3);
@@ -471,70 +502,86 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .context { display: none; }
 
 /* ===== v0.8.0 — typography + palette polish (v0.22: aligned to MASTER spec §7) ===== */
+/* ============================================================================
+   AUTHORITATIVE THEME BLOCK — this is the one that wins.
+
+   The file defines the palette twice: once near the top (inside @theme / :root) and
+   again here. Because these rules come later, THIS block overrides the earlier one —
+   so editing only the first had no visible effect at all. Both are now set to the same
+   Linear/Vercel values; if you change the palette, change it in both places or delete
+   one of them.
+   ============================================================================ */
+/* ============================================================================
+   AUTHORITATIVE THEME BLOCK — this is the one that wins.
+
+   The file defines the palette twice; because these rules come later, THIS block
+   overrides the earlier one. Editing only the first had no visible effect at all.
+   Both are now the same mockup palette — change both, or delete one.
+   ============================================================================ */
 :root {
   --font: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
-  --bg: #F7F9FC;
-  --background: #F7F9FC;
-  --foreground: #0F172A;
-  --card: #ffffff;
-  --card-foreground: #0F172A;
-  --popover: #ffffff;
-  --popover-foreground: #0F172A;
-  --primary: #2563EB;
-  --primary-foreground: #ffffff;
-  --secondary: #f3f4f6;
-  --secondary-foreground: #1f2937;
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-  --accent: #f0f1fe;
-  --accent-foreground: #4f46e5;
-  --accent-soft: #f0f1fe;
-  --accent-2: #6366f1;
+  --bg: #F7F8FC;
+  --background: #F7F8FC;
+  --foreground: #12151D;
+  --card: #FFFFFF;
+  --card-foreground: #12151D;
+  --popover: #FFFFFF;
+  --popover-foreground: #12151D;
+  --primary: #0048F0;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EEF1F7;
+  --secondary-foreground: #3A4356;
+  --muted: #EEF1F7;
+  --muted-foreground: #5A6478;
+  --accent: #E8EDFB;
+  --accent-foreground: #0040D8;
+  --accent-soft: #E8EDFB;
+  --accent-2: #0048F0;
   --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: #e8e9ee;
-  --input: #e5e7eb;
-  --ring: #6366f1;
-  --shadow: 0 1px 2px rgb(15 23 42 / .04), 0 2px 8px rgb(15 23 42 / .04);
-  --shadow-md: 0 2px 4px rgb(15 23 42 / .06), 0 8px 24px rgb(15 23 42 / .06);
-  --shadow-lg: 0 4px 6px rgb(15 23 42 / .06), 0 16px 40px rgb(15 23 42 / .08);
-  --shadow-xl: 0 12px 28px rgb(15 23 42 / .12), 0 32px 80px rgb(15 23 42 / .12);
-  --text: #0a0e1a;
-  --text-muted: #6b7280;
-  --ok: #059669;
+  --destructive-foreground: #FFFFFF;
+  --border: #DDE2EC;
+  --input: #DDE2EC;
+  --ring: #0048F0;
+  --shadow: 0 1px 2px rgb(18 21 29 / .05), 0 2px 8px rgb(18 21 29 / .05);
+  --shadow-md: 0 2px 4px rgb(18 21 29 / .06), 0 8px 24px rgb(18 21 29 / .06);
+  --shadow-lg: 0 4px 6px rgb(18 21 29 / .06), 0 16px 40px rgb(18 21 29 / .07);
+  --shadow-xl: 0 12px 28px rgb(18 21 29 / .09), 0 32px 80px rgb(18 21 29 / .09);
+  --text: #12151D;
+  --text-muted: #5A6478;
+  --ok: #16a34a;
   --warn: #d97706;
   --danger: #dc2626;
 }
 [data-theme="dark"] {
-  --bg: #0B1220;
-  --background: #0B1220;
-  --foreground: #E5E7EB;
-  --card: #111827;
-  --card-foreground: #E5E7EB;
-  --popover: #172033;
-  --popover-foreground: #E5E7EB;
-  --primary: #60A5FA;
-  --primary-foreground: #0B1220;
-  --secondary: #1E293B;
-  --secondary-foreground: #CBD5E1;
-  --muted: #1E293B;
-  --muted-foreground: #94A3B8;
-  --accent: rgba(96, 165, 250, .14);
-  --accent-foreground: #93C5FD;
-  --accent-soft: rgba(96, 165, 250, .14);
-  --accent-2: #60A5FA;
+  --bg: #12151D;
+  --background: #12151D;
+  --foreground: #E8EBF2;
+  --card: #1D2130;
+  --card-foreground: #E8EBF2;
+  --popover: #222635;
+  --popover-foreground: #E8EBF2;
+  --primary: #0048F0;
+  --primary-foreground: #FFFFFF;
+  --secondary: #222635;
+  --secondary-foreground: #C2C9D8;
+  --muted: #222635;
+  --muted-foreground: #6782A0;
+  --accent: rgba(0, 72, 240, .16);
+  --accent-foreground: #5C8CFF;
+  --accent-soft: rgba(0, 72, 240, .16);
+  --accent-2: #0048F0;
   --destructive: #f87171;
-  --destructive-foreground: #0B1220;
-  --border: #263449;
-  --input: #2d3447;
-  --ring: #60A5FA;
-  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.3);
-  --shadow-md: 0 2px 4px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.4);
-  --shadow-lg: 0 4px 6px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.5);
-  --shadow-xl: 0 12px 28px rgba(0,0,0,.7), 0 32px 80px rgba(0,0,0,.6);
-  --text: #e4e6eb;
-  --text-muted: #94a3b8;
+  --destructive-foreground: #12151D;
+  --border: #2A2F42;
+  --input: #2A2F42;
+  --ring: #0048F0;
+  --shadow: 0 1px 2px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.35);
+  --shadow-md: 0 2px 4px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.4);
+  --shadow-lg: 0 4px 6px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  --shadow-xl: 0 12px 28px rgba(0,0,0,.65), 0 32px 80px rgba(0,0,0,.55);
+  --text: #E8EBF2;
+  --text-muted: #6782A0;
   --ok: #34d399;
   --warn: #fbbf24;
   --danger: #f87171;

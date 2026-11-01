@@ -1,9 +1,9 @@
 /** Shared nav sidebar for non-chat pages (extracted verbatim from App.tsx).
  * Capability-aware nav (v0.21.57): locked items stay visible; clicking shows WHY. */
 import { useEffect, useState } from "react";
-import { dateBucket } from "@/features/chat/model";
+import { dateBucket, relativeAge } from "@/features/chat/model";
 import { useBranding } from "@/app/useBranding";
-import { BookOpen, Bot, ChevronDown, ChevronRight, Home, KeyRound as KeyIcon, MessageSquare, MessagesSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Pin, ScrollText, Settings as SettingsIcon, Share2, Ticket as TicketIcon, Trash2, Users as UsersIcon } from "lucide-react";
+import { BookOpen, Bot, ChevronDown, Layers, ChevronRight, Home, MessageSquare, MessagesSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, ScrollText, Settings as SettingsIcon, Ticket as TicketIcon, Trash2, Users as UsersIcon } from "lucide-react";
 import { useNotifications, NotificationBell } from "@/components/NotificationBell";
 import {
   listConversations,
@@ -123,13 +123,12 @@ export default function PageSidebar({
   const items: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
     { id: "chat", label: "+ New", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
     { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
-    { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search knowledge base & domains" },
+    { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search the knowledge base" },
+    { id: "domains", label: "Domains & Routing", icon: <Layers className="size-4" />, cap: "manage_domains", capLabel: "Manage classification domains & Jira routing" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
     { id: "users", label: "Users", icon: <UsersIcon className="size-4" />, cap: "manage_users", capLabel: "Manage users, roles & settings" },
-    { id: "apikeys", label: "API Keys", icon: <KeyIcon className="size-4" /> },
     { id: "history", label: "Conversations", icon: <MessagesSquare className="size-4" />, cap: "manage_users", capLabel: "Review organization conversation history" },
     { id: "audits", label: "Audit Log", icon: <ScrollText className="size-4" />, cap: "manage_users", capLabel: "View platform audit trail" },
-    { id: "graph", label: "Context Graph", icon: <Share2 className="size-4" />, cap: "manage_users", capLabel: "Evaluate the Semantica context graph (spike)" },
     { id: "settings", label: "Settings", icon: <SettingsIcon className="size-4" /> },
   ];
   const pretty = displayRole || ({ admin: "Administrator", agent: "IT Support", knowledge: "Knowledge Manager", domain_manager: "Knowledge Manager" } as Record<string, string>)[role || "user"] || "User";
@@ -196,6 +195,28 @@ export default function PageSidebar({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* v1.0.1 — "New Chat" from the reference mockup. It dispatches the same
+          `ith:new-chat` event the Chat nav item fires, so there is one definition of
+          "start over" rather than a second code path that could drift from it. Hidden
+          when collapsed: an icon-only button would be indistinguishable from the nav
+          items beside it. */}
+      {!collapsed && (
+        <div className="px-3 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate("chat");
+              window.dispatchEvent(new CustomEvent("ith:new-chat"));
+              setMobileOpen(false);
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90"
+          >
+            <Plus className="size-3.5" />
+            New Chat
+          </button>
         </div>
       )}
 
@@ -330,6 +351,14 @@ export default function PageSidebar({
                               ×{_dupes.get((c.title || "Untitled chat").trim().toLowerCase())}
                             </span>
                           )}
+                          {/* The mockup puts a terse age on every row; it is what lets the
+                              eye skip a bucket it does not care about. */}
+                          <span
+                            className="ml-auto shrink-0 pl-1.5 text-[10px] tabular-nums text-slate-500 group-hover:text-slate-400"
+                            title={c.last_at || c.updated_at || ""}
+                          >
+                            {relativeAge(c.last_at ?? c.updated_at)}
+                          </span>
                         </span>
                       </button>
 

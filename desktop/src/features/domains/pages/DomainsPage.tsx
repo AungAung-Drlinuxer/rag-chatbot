@@ -1,8 +1,99 @@
-import { useEffect, useState, useCallback } from "react";
-import { Layers, ShieldAlert } from "lucide-react";
+/**
+ * Domains & Routing Engine — its own page.
+ *
+ * This view used to be TAB 2 of the Knowledge page. Tabs forced one shared header, one
+ * scroll position and one URL for two unrelated jobs: reading KB articles, and editing the
+ * classifier that decides where a question is routed. They are separate pages now, and
+ * `KnowledgePage` keeps only the articles half.
+ *
+ * Card layout follows the dashboard: equal columns, equal heights (`items-stretch` +
+ * `auto-rows-fr`), so no card is left orphaned on its own row.
+ */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { BookOpen, Layers, Route, ShieldAlert, Ticket, Workflow } from "lucide-react";
 import { PageShell, PageHeader } from "@/components/ui/page";
+import { Badge } from "@/components/ui/badge";
 import { ClassifierDomainItem, getClassifierDomains } from "@/features/domains/api";
 import { DomainClassifierManager } from "@/features/domains/components/DomainClassifierManager";
+
+/** One figure per card, every one of them counted from the list the API returned. */
+function StatCard({
+  icon,
+  value,
+  title,
+  description,
+  tone,
+  loading,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  title: string;
+  description: string;
+  tone: "indigo" | "sky" | "amber";
+  loading: boolean;
+}) {
+  const toneCls = {
+    indigo: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400",
+    sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400",
+    amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
+  }[tone];
+
+  return (
+    <div className="flex flex-col rounded-xl border border-[var(--border)] bg-card p-4 shadow-xs">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-2xl font-semibold tracking-tight">
+            {loading ? <div className="h-7 w-12 animate-pulse rounded bg-muted" /> : value}
+          </div>
+          <div className="mt-1 text-xs font-medium">{title}</div>
+        </div>
+        <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${toneCls}`}>{icon}</div>
+      </div>
+      <p className="mt-auto pt-2 text-[10px] leading-tight text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+/** The two halves of what a domain actually does, side by side and at equal height. */
+function ConceptCard({
+  icon,
+  step,
+  title,
+  tone,
+  children,
+}: {
+  icon: React.ReactNode;
+  step: string;
+  title: string;
+  tone: "sky" | "indigo";
+  children: React.ReactNode;
+}) {
+  const toneCls = {
+    sky: {
+      tile: "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400",
+      step: "text-sky-700 dark:text-sky-300",
+      card: "border-sky-100 bg-sky-50/50 dark:border-sky-900/40 dark:bg-sky-950/20",
+    },
+    indigo: {
+      tile: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400",
+      step: "text-indigo-700 dark:text-indigo-300",
+      card: "border-indigo-100 bg-indigo-50/50 dark:border-indigo-900/40 dark:bg-indigo-950/20",
+    },
+  }[tone];
+
+  return (
+    <div className={`flex flex-col rounded-xl border p-4 text-xs ${toneCls.card}`}>
+      <div className="flex items-center gap-2">
+        <div className={`grid size-7 shrink-0 place-items-center rounded-lg ${toneCls.tile}`}>{icon}</div>
+        <div className="min-w-0">
+          <div className={`text-[10px] font-semibold uppercase tracking-wide ${toneCls.step}`}>{step}</div>
+          <h5 className="text-xs font-semibold leading-tight">{title}</h5>
+        </div>
+      </div>
+      <p className="mt-2 leading-relaxed text-slate-600 dark:text-slate-300">{children}</p>
+    </div>
+  );
+}
 
 export default function DomainsPage({
   role,
@@ -42,22 +133,33 @@ export default function DomainsPage({
     }
   }, [canManage, loadData]);
 
+  // Counted from the list the API returned — never a placeholder figure.
+  const totals = useMemo(
+    () => ({
+      active: domains.filter((d) => d.is_active).length,
+      keywords: domains.reduce((n, d) => n + (d.keywords?.length ?? 0), 0),
+      routed: domains.filter((d) => !!d.jira_project).length,
+    }),
+    [domains],
+  );
+
   if (!canManage) {
     return (
       <PageShell>
         <PageHeader
-          icon={<Layers className="size-6 text-emerald-600 dark:text-emerald-400" />}
-          title="Domain Manager"
-          description="Manage routing domains, keywords, and classifier thresholds"
+          icon={<Layers className="size-5" />}
+          title="Domains & Routing Engine"
+          description="Classifier keywords, domain icons, colours, and Jira escalation routing"
         />
         <main className="mx-auto max-w-4xl">
-          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 rounded-full text-rose-600 mb-4">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--border)] bg-card p-12 text-center shadow-xs">
+            <div className="mb-4 rounded-full bg-rose-50 p-3 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
               <ShieldAlert className="size-8" />
             </div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">Access Restricted</h3>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-md">
-              Only Administrator and Knowledge Manager roles are authorized to access and modify routing domains and classification rules.
+            <h3 className="text-base font-semibold">Access restricted</h3>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              Only the Administrator and Knowledge Manager roles may view or change routing
+              domains and classification rules.
             </p>
           </div>
         </main>
@@ -68,51 +170,88 @@ export default function DomainsPage({
   return (
     <PageShell>
       <PageHeader
-        icon={<Layers className="size-6 text-emerald-600 dark:text-emerald-400" />}
-        title="Domain Manager"
+        icon={<Layers className="size-5" />}
         badge={role === "admin" ? "Administrator" : "Knowledge Manager"}
-        description="Live management of classification domains, dynamic keyword matching, and Jira routes."
+        title="Domains & Routing Engine"
+        description="Classifier keywords, domain icons, colours, and Jira escalation routing"
+        actions={
+          <Badge
+            variant="outline"
+            className="border-indigo-200 bg-indigo-50/60 px-3 py-1 text-xs text-indigo-600 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-400"
+          >
+            {domains.length} domain{domains.length === 1 ? "" : "s"} configured
+          </Badge>
+        }
       />
 
-      <main>
-        {/* Quick Guide for Domain Managers */}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-100 dark:border-sky-900/40 text-xs">
-            <h5 className="font-semibold text-sky-900 dark:text-sky-300 flex items-center gap-1.5 mb-1.5">
-              <span>📖</span> 1. Confluence Knowledge Base (Answer Retrieval)
-            </h5>
-            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-              Based on keyword matching in user queries, the assistant automatically retrieves and references relevant <strong>Confluence KB Articles</strong> within this domain to formulate answers.
-            </p>
-          </div>
+      <main className="space-y-5">
+        {/* Three equal cards, one figure each. */}
+        <section className="grid auto-rows-fr gap-4 md:grid-cols-3">
+          <StatCard
+            tone="indigo"
+            icon={<Layers className="size-4" />}
+            value={String(totals.active)}
+            title="Active domains"
+            description="Domains the classifier may route to"
+            loading={loading}
+          />
+          <StatCard
+            tone="sky"
+            icon={<Workflow className="size-4" />}
+            value={String(totals.keywords)}
+            title="Classifier keywords"
+            description="Matched against every incoming question"
+            loading={loading}
+          />
+          <StatCard
+            tone="amber"
+            icon={<Route className="size-4" />}
+            value={String(totals.routed)}
+            title="Jira routes"
+            description="Domains that escalate to a Jira project"
+            loading={loading}
+          />
+        </section>
 
-          <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 text-xs">
-            <h5 className="font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5 mb-1.5">
-              <span>🎫</span> 2. Jira Ticket Routing (Escalation Target)
-            </h5>
-            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-              When a query cannot be resolved automatically and the user requests escalation, tickets are routed to the assigned <strong>Jira Project Key (e.g. ITHD)</strong> for human IT follow-up.
-            </p>
-          </div>
-        </div>
+        {/* The two halves of a domain's job, side by side at equal height. */}
+        <section className="grid auto-rows-fr gap-4 md:grid-cols-2">
+          <ConceptCard
+            tone="sky"
+            step="Step 1"
+            title="Knowledge base (answer retrieval)"
+            icon={<BookOpen className="size-3.5" />}
+          >
+            Keyword matching in the user's question selects a domain, and the assistant
+            retrieves the <strong>Confluence KB articles</strong> filed under that domain to
+            answer from.
+          </ConceptCard>
+          <ConceptCard
+            tone="indigo"
+            step="Step 2"
+            title="Jira routing (escalation target)"
+            icon={<Ticket className="size-3.5" />}
+          >
+            When the question cannot be answered and the user asks for a human, the ticket is
+            created in the domain's <strong>Jira project key</strong> (for example ITHD) for IT
+            follow-up.
+          </ConceptCard>
+        </section>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-xs">
           {error && (
-            <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-600 text-sm border-b border-rose-200 dark:border-rose-900">
+            <div className="border-b border-rose-200 bg-rose-50 p-3 text-xs text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
               {error}
             </div>
           )}
 
           {loading && domains.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-sm">Loading domains configuration...</div>
+            <div className="p-12 text-center text-xs text-muted-foreground">
+              Loading domains configuration…
+            </div>
           ) : (
-            <DomainClassifierManager
-              domains={domains}
-              onRefresh={loadData}
-              canManage={canManage}
-            />
+            <DomainClassifierManager domains={domains} onRefresh={loadData} canManage={canManage} />
           )}
-        </div>
+        </section>
       </main>
     </PageShell>
   );

@@ -1,5 +1,6 @@
 # === rag-chatbot — Frontend (Vite/React, served by nginx) ===============
-# Source: harbor.drlinuxer.com/ragchatbot/frontend
+# Source: harbor.drlinuxer.com/rag-chatbot/frontend   (project is 'rag-chatbot' —
+# the old 'ragchatbot' path does not exist in Harbor and would fail to pull)
 # Static SPA — pure nginx, no API in the pod. All `/api/*` calls are reverse
 # proxied to the backend service in-cluster.
 
@@ -39,11 +40,16 @@ spec:
         fsGroup: 101
       containers:
         - name: frontend
-          image: harbor.drlinuxer.com/ragchatbot/frontend:0.0.25
+          image: harbor.drlinuxer.com/rag-chatbot/frontend:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 80
+          # NOTE: nginx.conf hardcodes `proxy_pass http://backend:80` and resolves that
+          # name AT STARTUP, so this pod cannot start unless the `backend` Service already
+          # exists in this namespace. BACKEND_UPSTREAM below is NOT read by nginx.conf —
+          # it is documentation of the target, not configuration. Keep the two in sync or
+          # the env var will describe a proxy that is not in effect.
           env:
             # Vite build-time env (VITE_*) is baked into the bundle; runtime
             # only configures nginx behaviour.

@@ -9,14 +9,12 @@ import {
   Save,
   Settings as SettingsIcon,
   ShieldCheck,
-  Sparkles,
   Lock,
   Pencil,
   ServerCog,
   Plug,
   BookOpen,
   LayoutGrid,
-  ChevronDown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
@@ -25,12 +23,12 @@ import { dashHealth } from "@/features/dashboard/api";
 import { IntegrationsConfig } from "../components/IntegrationsConfig";
 import ConnectorsGallery from "../components/ConnectorsGallery";
 import { BrandingSettings } from "../components/BrandingSettings";
+import { AiServiceSettings } from "../components/AiServiceSettings";
 import { Image as ImageIcon } from "lucide-react";
 import {
-  getMySettings, updateMySettings, getIntegrationSettings, putIntegrationSettings,
-  getSmtpSettings, putSmtpSettings, sendTestEmail, getRuntime, putRuntime,
+  getMySettings, updateMySettings, getIntegrationSettings,
+  getSmtpSettings, putSmtpSettings, sendTestEmail,
 } from "@/features/settings/api";
-import { LLM_PRESETS, presetFor, providerLabel } from "../llmProviders";
 
 /* v0.21.81 — Settings redesigned to the reference single-scroll layout:
    section cards (General/Appearance/Integrations/AI Assistant/Notifications/
@@ -154,10 +152,6 @@ export default function Settings({ role }: { role?: string }) {
   const [showTokenUsage, setShowTokenUsage] = useState(true);
   const [markdownRendering, setMarkdownRendering] = useState(true);
 
-  // Shared assistant runtime controls (administrator only).
-  const [topK, setTopK] = useState("5");
-  const [similarityThreshold, setSimilarityThreshold] = useState("0.72");
-
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -200,12 +194,6 @@ export default function Settings({ role }: { role?: string }) {
     };
     try {
       await updateMySettings(payload);
-      if (isAdmin && active === "skills") {
-        await putRuntime({
-          retrieval_top_k: Number(topK) || 5,
-          confidence_gate_threshold: Number(similarityThreshold) || 0.75,
-        });
-      }
       applyThemeNow(darkMode, compact, animations, chatFontSize);
       window.dispatchEvent(new CustomEvent("ith:settings-saved", { detail: payload }));
       setSaved(true);
@@ -215,59 +203,6 @@ export default function Settings({ role }: { role?: string }) {
     } finally { setSaving(false); }
   }
 
-  // v0.21.83 — load real backend runtime knobs on mount (admin only; silently
-  // ignored for other roles since /api/runtime is gated 403).
-  useEffect(() => {
-    if (!isAdmin) return;
-    getRuntime()
-      .then((d) => {
-        if (!d) return;
-        const o = d.overrides ?? {};
-        if (o.retrieval_top_k != null) setTopK(String(o.retrieval_top_k));
-        if (o.confidence_gate_threshold != null) setSimilarityThreshold(String(o.confidence_gate_threshold));
-      })
-      .catch(() => {});
-  }, [isAdmin]);
-
-  // v0.21.90 — real AI provider info (from /api/settings/integrations/llm), not a label
-  const [llmCfg, setLlmCfg] = useState<Record<string, any> | null>(null);
-  // v0.22.1 — switching the provider here writes the same DB-backed integration
-  // config; nothing is kept on this device.
-  const [llmSaving, setLlmSaving] = useState(false);
-  const [llmMsg, setLlmMsg] = useState<string | null>(null);
-
-  const refreshLlm = async () => {
-    try {
-      const d: any = await getIntegrationSettings("llm");
-      setLlmCfg(d?.settings ?? d);
-    } catch { /* non-admin or unconfigured */ }
-  };
-
-  useEffect(() => { if (isAdmin) refreshLlm(); }, [isAdmin]);
-
-  async function changeLlmProvider(id: string) {
-    const preset = presetFor(id);
-    setLlmSaving(true);
-    setLlmMsg(null);
-    try {
-      // provider + base URL + model travel together: a ClinePass provider with
-      // an OpenRouter-style model id (or the reverse) authenticates fine and
-      // then 404s on every request.
-      const body: Record<string, string> = { provider: id };
-      if (preset.base_url) body.base_url = preset.base_url;
-      if (preset.model) body.model = preset.model;
-      await putIntegrationSettings("llm", body);
-      await refreshLlm();
-      setLlmMsg("Saved to the database");
-      window.setTimeout(() => setLlmMsg(null), 3000);
-    } catch (err: any) {
-      setLlmMsg(err?.message || "Could not change the provider");
-    } finally {
-      setLlmSaving(false);
-    }
-  }
-
-  const llmPreset = presetFor(llmCfg?.provider);
   const visibleNav = SETTINGS_NAV
     .map((group) => ({
       ...group,
@@ -291,7 +226,7 @@ export default function Settings({ role }: { role?: string }) {
                 </span>
               )}
               {saveError && <span className="max-w-[200px] truncate text-[11px] text-red-600" title={saveError}>{saveError}</span>}
-              {(active === "general" || active === "skills") && (
+              {active === "general" && (
                 <button type="button" onClick={saveSettings} disabled={saving}
                   className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
                   <Save className="size-3.5" />
@@ -458,105 +393,9 @@ export default function Settings({ role }: { role?: string }) {
 
 
             {/* ==================== AI ASSISTANT ==================== */}
-            {active === "skills" && (
-            <SectionCard icon={<Bot className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-              iconTone="bg-indigo-50 dark:bg-indigo-950/40"
-              title="AI Assistant" description="Configure AI provider and response behavior.">
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                <div className="flex items-center justify-between gap-6 px-5 py-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">AI provider</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      {isAdmin
-                        ? "Provider used for assistant responses — saved to the database, not to this device"
-                        : "Provider used for assistant responses"}
-                    </p>
-                  </div>
-                  <div className="flex min-w-0 flex-col items-end gap-1">
-                    {isAdmin ? (
-                      <div className="relative">
-                        <select
-                          value={llmPreset.id}
-                          onChange={(e) => changeLlmProvider(e.target.value)}
-                          disabled={llmSaving}
-                          aria-label="AI provider"
-                          className="h-9 w-56 appearance-none rounded-xl border border-[var(--border)] bg-background px-3 pr-9 text-xs font-medium text-foreground outline-none transition focus:border-blue-500 disabled:opacity-60"
-                        >
-                          {LLM_PRESETS.map((p) => (
-                            <option key={p.id} value={p.id}>{p.label}</option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
-                        <Sparkles className="h-4 w-4 text-indigo-500" />
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                          {providerLabel(llmCfg?.provider)}
-                        </span>
-                      </div>
-                    )}
-                    <span className="max-w-[220px] truncate text-[10px] text-muted-foreground" title={String(llmCfg?.model || "")}>
-                      {llmCfg?.model ? `model: ${llmCfg.model}` : "no model selected"}
-                    </span>
-                    {llmSaving && <span className="text-[10px] text-muted-foreground">Saving…</span>}
-                    {llmMsg && (
-                      <span className={[
-                        "max-w-[220px] truncate text-[10px]",
-                        /saved/i.test(llmMsg) ? "text-emerald-600" : "text-rose-600",
-                      ].join(" ")} title={llmMsg}>
-                        {llmMsg}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="px-5 py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">Confidence threshold</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Minimum confidence required before returning an answer (backend runtime)
-                      </p>
-                    </div>
-                    <span className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
-                      {Math.round((Number(similarityThreshold) || 0.75) * 100)}%
-                    </span>
-                  </div>
-                  <input type="range" min="50" max="100" step="5"
-                    value={Math.round((Number(similarityThreshold) || 0.75) * 100)}
-                    onChange={(e) => setSimilarityThreshold(String(Number(e.target.value) / 100))}
-                    className="mt-4 w-full accent-indigo-600" />
-                  <div className="mt-1 flex justify-between text-[11px] text-slate-400">
-                    <span>50%</span><span>75%</span><span>100%</span>
-                  </div>
-                </div>
-                <div className="px-5 pb-3">
-                  <div className="flex items-center justify-between gap-6 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">Top K results</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Knowledge chunks retrieved per question (backend runtime)
-                      </p>
-                    </div>
-                    <div className="w-52">
-                      <input type="number" min={1} max={20} value={topK}
-                        onChange={(e) => setTopK(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-indigo-50/60 px-3 py-2.5 text-[10px] leading-4 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
-                    Threshold and Top K are shared backend settings (runtime_kv). They update
-                    the assistant for everyone once you press Save changes. The provider and
-                    model are stored in the database (system_settings) as well — this page
-                    keeps no copy on the device. Enter or replace credentials under
-                    Settings → Integrations → Models Provider.
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
-            )}
-
-            
+            {/* Provider, credentials, model detection and the retrieval knobs are one
+                decision, so they are one section with one Save. */}
+            {active === "skills" && <AiServiceSettings isAdmin={isAdmin} />}
 
             {/* ==================== SECURITY INFO ==================== */}
             <section className="rounded-xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
@@ -865,10 +704,9 @@ function IntegrationStatusCards() {
       detail: cfg.jira?.base_url ? `URL: ${cfg.jira.base_url}` : "URL: (configured)" },
     { key: "ldap", name: "LDAP / Active Directory", desc: "User authentication and group synchronization.",
       detail: cfg.ldap?.host ? `Server: ${cfg.ldap.host}:${cfg.ldap.port ?? 389}` : "Server: 10.10.10.10" },
-    { key: "h-chat", name: "Models Provider", desc: "External LLM provider for generating responses.",
-      detail: cfg.llm?.model
-        ? `Model: ${cfg.llm.model}${cfg.llm.base_url ? ` · ${cfg.llm.base_url.replace(/^https?:\/\//, "")}` : ""}`
-        : "Provider: OpenRouter" },
+    // The model provider's status lives in the AI service section now — it shows the
+    // provider, model, key state and detection count, which is strictly more than this
+    // card said. Keeping a second copy here is how the two screens drifted apart before.
     { key: "redis", name: "Redis (Cache & Queue)", desc: "Caching and asynchronous task queue.",
       detail: "Mode: Sentinel" },
   ];

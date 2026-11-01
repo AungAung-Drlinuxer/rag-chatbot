@@ -2,7 +2,8 @@
  * MessageParts — small presentational pieces of a chat message, extracted from
  * ChatPage.tsx (v1.6.68) so the page file stops carrying them.
  */
-import { Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Check, Copy, ExternalLink, Sparkles } from "lucide-react";
 
 import { type Source } from "@/features/chat/model";
 
@@ -31,78 +32,226 @@ export function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+/* ============================================================================
+   SourceCard — one retrieved KB article in the right-hand panel.
+
+   WHAT CHANGED AND WHY (this is the layout, not decoration)
+   The previous card put a rank chip and a title on top, then "Relevance" as a
+   label/value pair, then a bar, then a 3-line excerpt, then a FULL-WIDTH
+   "Explain this source in detail" button. Every card therefore had the same
+   visual weight and the same height, and at 8 sources the panel was 8 stacked
+   blocks of identical grey text — the rank, which is the one thing that tells
+   you where to look first, was the smallest element on the card.
+
+   Now: the score is on the rank line (right-aligned, tabular, colour-tiered),
+   the title gets two lines at body size, the excerpt is clamped with a real
+   More/Less toggle, and the actions are a compact row. Reading order is
+   score -> title -> why it matched -> what you can do with it.
+
+   The relevance bar renders ONLY when a score exists. A ticket lookup has no
+   relevance score, and `width: ${null}%` is an invalid declaration — the old
+   card still drew a bar for it, at whatever width the browser fell back to.
+   ========================================================================= */
+
+/** The same 85/70 thresholds ConfidenceBadge uses, so the panel and the answer's
+ *  badge can never disagree about what a good score looks like. */
+type Tier = "high" | "medium" | "low" | "none";
+
+function tierOf(relevance: number | null): Tier {
+  if (relevance == null) return "none";
+  if (relevance >= 85) return "high";
+  if (relevance >= 70) return "medium";
+  return "low";
+}
+
+const TIER_TEXT: Record<Tier, string> = {
+  high: "text-emerald-600 dark:text-emerald-400",
+  medium: "text-amber-600 dark:text-amber-400",
+  low: "text-red-600 dark:text-red-400",
+  none: "text-muted-foreground",
+};
+
+const TIER_BAR: Record<Tier, string> = {
+  high: "bg-emerald-500",
+  medium: "bg-amber-500",
+  low: "bg-red-500",
+  none: "bg-muted-foreground/30",
+};
+
+/** Icon-only action. Every one carries `title` AND `aria-label`: the UI standard's
+ *  a11y rule, and the only way an icon-only control is usable without sight. */
+const ICON_BTN =
+  "grid size-6 place-items-center rounded-md text-muted-foreground transition duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]";
+
+/** Excerpts longer than this get a More/Less toggle instead of being silently cut. */
+const EXCERPT_CLAMP = 96;
+
 export function SourceCard({
   source,
   index,
+  chunks = 1,
   onExplain,
 }: {
   source: Source;
   index: number;
+  /** Chunks this article contributed to the answer — the list can repeat a page. */
+  chunks?: number;
   /** Ask the assistant to expand this specific source in full detail. */
   onExplain?: (source: Source) => void;
 }) {
-  const body = (
-    <>
-      <div className="flex items-start gap-3">
-        <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-blue-50 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
-          {index}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="line-clamp-2 text-[10px] font-semibold">{source.title}</div>
-          <div className="mt-1 text-[10px] text-muted-foreground">{source.space}</div>
-        </div>
-      </div>
-      {source.relevance == null ? (
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Type</span>
-          <span className="text-[10px] font-semibold text-blue-600">Ticket</span>
-        </div>
-      ) : (
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">Relevance</span>
-          <span className="text-[10px] font-semibold text-emerald-600">{source.relevance}%</span>
-        </div>
-      )}
-      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${source.relevance}%` }} />
-      </div>
-      <p className="mt-3 line-clamp-3 text-[10px] leading-4 text-muted-foreground">{source.excerpt}</p>
-    </>
-  );
-  // The action row lives OUTSIDE the anchor: a <button> nested in an <a> is
-  // invalid HTML, and clicking it would also trigger the link navigation.
-  const explainRow = onExplain ? (
-    <button
-      type="button"
-      onClick={() => onExplain(source)}
-      className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/60 px-2 py-1.5 text-[10px] font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70"
-      title="Ask the assistant to explain this source in full detail, with steps and commands"
-    >
-      <Sparkles className="size-3" />
-      Explain this source in detail
-    </button>
-  ) : null;
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const card = source.url ? (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noreferrer"
-      className="block w-full rounded-xl border bg-white p-3 text-left transition hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:bg-slate-900"
-    >
-      {body}
-    </a>
-  ) : (
-    <div className="w-full rounded-xl border bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-      {body}
-    </div>
-  );
+  const tier = tierOf(source.relevance);
+  // The top three are the ones a reader actually opens; below that the rank is
+  // reference information and must not compete for attention.
+  const top = index <= 3;
+  const long = source.excerpt.length > EXCERPT_CLAMP;
+  // `space` carries the classifier domain or the KB provider verbatim; the only
+  // transformation is cosmetic, so nothing is invented when it is missing.
+  const provider = (source.space || "KB").replace(/[_-]+/g, " ");
+
+  async function copyLink() {
+    if (!source.url) return;
+    try {
+      await navigator.clipboard.writeText(source.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* clipboard unavailable (insecure origin or denied) — the link is still on screen */
+    }
+  }
 
   return (
-    <div className="mb-3">
-      {card}
-      {explainRow}
-    </div>
+    <article className="group mb-2.5 rounded-xl bg-card p-3 shadow-xs ring-1 ring-[var(--border)] transition duration-150 hover:-translate-y-px hover:shadow-sm">
+      {/* --- line 1: rank · provider · chunks · score --------------------------- */}
+      <div className="flex items-center gap-1.5">
+        <span
+          className={[
+            "grid size-5 shrink-0 place-items-center rounded-md text-[10px] font-semibold tabular-nums",
+            top ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+          ].join(" ")}
+          title={`Rank ${index} of this answer's sources`}
+        >
+          {index}
+        </span>
+        <span className="truncate rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+          {provider}
+        </span>
+        {chunks > 1 && (
+          <span
+            className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground"
+            title={`${chunks} chunks of this article were retrieved`}
+          >
+            ×{chunks}
+          </span>
+        )}
+        <span
+          className={[
+            "ml-auto shrink-0 text-[11px] font-semibold tabular-nums",
+            TIER_TEXT[tier],
+          ].join(" ")}
+          title={
+            source.relevance == null
+              ? "This answer came from a live ticket lookup — it has no retrieval score"
+              : `Retrieval relevance ${source.relevance}%`
+          }
+        >
+          {source.relevance == null ? "Ticket" : `${source.relevance}%`}
+        </span>
+      </div>
+
+      {/* --- line 2: title (2 lines at body size) ------------------------------ */}
+      <h4 className="mt-2 line-clamp-2 text-xs font-semibold leading-snug" title={source.title}>
+        {source.url ? (
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors duration-150 hover:text-primary hover:underline"
+          >
+            {source.title}
+          </a>
+        ) : (
+          source.title
+        )}
+      </h4>
+
+      {/* --- line 3: score meter (only when a score exists) -------------------- */}
+      {source.relevance != null && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className={["h-full rounded-full transition-[width] duration-300", TIER_BAR[tier]].join(" ")}
+            style={{ width: `${Math.max(0, Math.min(100, source.relevance))}%` }}
+          />
+        </div>
+      )}
+
+      {/* --- line 4: why it matched ------------------------------------------- */}
+      {source.excerpt && (
+        <>
+          <p
+            className={[
+              "mt-2 text-[11px] leading-relaxed text-muted-foreground",
+              open ? "" : "line-clamp-2",
+            ].join(" ")}
+          >
+            {source.excerpt}
+          </p>
+          {long && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="mt-1 rounded-sm text-[10px] font-medium text-primary transition-colors duration-150 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            >
+              {open ? "Less" : "More"}
+            </button>
+          )}
+        </>
+      )}
+
+      {/* --- line 5: actions --------------------------------------------------- */}
+      <div className="mt-2.5 flex items-center gap-1 border-t border-[var(--border)] pt-2">
+        {source.url && (
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            title="Open the original article"
+            aria-label="Open the original article"
+            className={ICON_BTN}
+          >
+            <ExternalLink className="size-3.5" />
+          </a>
+        )}
+        {source.url && (
+          <button
+            type="button"
+            onClick={copyLink}
+            title={copied ? "Link copied" : "Copy the article link"}
+            aria-label="Copy the article link"
+            className={ICON_BTN}
+          >
+            {copied ? (
+              <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+          </button>
+        )}
+        {onExplain && (
+          <button
+            type="button"
+            onClick={() => onExplain(source)}
+            title="Ask the assistant to explain this source in full detail, with steps and commands"
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium text-primary transition duration-150 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+          >
+            <Sparkles className="size-3" />
+            Explain
+          </button>
+        )}
+      </div>
+    </article>
   );
 }
-

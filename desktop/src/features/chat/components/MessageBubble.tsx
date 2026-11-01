@@ -86,13 +86,19 @@ function MessageBubble({
         </div>
       )}
 
-      <div className={["min-w-0", isUser ? "max-w-[80%]" : "max-w-[88%]"].join(" ")}>
+      {/* The user turn stays a bubble; the ANSWER is no longer one. A bordered, shadowed
+          box at 88% of the column made the reply read as a card floating in the page and
+          cost ~40px of horizontal space on every line. Answers now fill the column as
+          plain prose (ChatGPT/Claude convention), which is what makes the text legible at
+          a normal reading size. `flex-1` rather than `w-full` because the row is a flex
+          container with a 36px avatar + gap — `w-full` would overflow it. */}
+      <div className={["min-w-0", isUser ? "max-w-[85%]" : "flex-1"].join(" ")}>
         <div
           className={[
-            "min-w-0 max-w-full overflow-hidden rounded-2xl px-5 py-4 text-xs leading-relaxed",
+            "min-w-0 max-w-full overflow-hidden text-[13.5px] leading-[1.7]",
             isUser
-              ? "rounded-br-md bg-blue-600 text-white"
-              : "rounded-tl-none border border-slate-200 bg-white text-slate-800 shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100",
+              ? "rounded-2xl rounded-br-md bg-blue-600 px-5 py-3.5 text-white"
+              : "pt-1.5 text-slate-800 dark:text-slate-100",
           ].join(" ")}
         >
           {isUser ? (
@@ -385,7 +391,17 @@ function MessageBubble({
         </div>
 
         {!isUser && message.content && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          /* v1.0.1 — the reference mockup's answer footer: a "Was this helpful?" label
+             over the feedback pair, then Copy / Regenerate / Create Jira Ticket. The
+             feedback buttons used to sit unlabelled, which read as two more actions
+             rather than as a question. Copy and Regenerate are duplicated from the
+             header actions on purpose: by the time a reader reaches the end of a long
+             answer that is where the eye already is, and the header copy has scrolled
+             away. */
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800/60">
+            <span className="mr-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              Was this helpful?
+            </span>
             <button
               onClick={() => onHelpful()}
               disabled={busy}
@@ -398,7 +414,7 @@ function MessageBubble({
               ].join(" ")}
             >
               <CheckCircle2 className="size-3.5 text-emerald-500" />
-              Helpful{message.feedback === 1 ? " ✓" : ""}
+              Helpful{message.feedback === 1 ? " \u2713" : ""}
             </button>
             <button
               onClick={() => onNotHelpful()}
@@ -412,14 +428,38 @@ function MessageBubble({
               ].join(" ")}
             >
               <AlertTriangle className="size-3.5 text-amber-500" />
-              Not helpful{message.feedback === -1 ? " ✓" : ""}
+              Not helpful{message.feedback === -1 ? " \u2713" : ""}
+            </button>
+
+            <span aria-hidden className="mx-1 hidden h-4 w-px bg-slate-200 sm:block dark:bg-slate-700" />
+
+            <button
+              type="button"
+              title="Copy answer"
+              aria-label="Copy answer"
+              onClick={() => copyText(message.content)}
+              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              title="Regenerate — re-run this question"
+              aria-label="Regenerate answer"
+              onClick={() => onRetryQuestion?.()}
+              disabled={busy || !onRetryQuestion}
+              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <RotateCcw className="size-3.5" />
+              Regenerate
             </button>
             <button
               onClick={onOpenTicketForm}
               className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3.5 py-1.5 text-[11px] font-medium text-orange-700 transition hover:bg-orange-100 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
             >
               <Ticket className="size-3.5 text-orange-600 dark:text-orange-400" />
-              Create ticket
+              Create Jira Ticket
             </button>
           </div>
         )}

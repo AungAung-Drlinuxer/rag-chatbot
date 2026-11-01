@@ -69,7 +69,8 @@ def load_fileshare(base_dir: str | None = None) -> list[dict]:
 
 
 def load_all() -> list[dict]:
-    """Aggregate KB sources: Confluence + OpenProject wiki + XWiki + Notion + ClickUp.
+    """Aggregate KB sources: Confluence + OpenProject wiki + XWiki + Notion + ClickUp
+    + Anytype.
 
     Each loader returns article dicts with the standard shape; missing/empty
     integrations simply contribute nothing (safe no-op)."""
@@ -102,5 +103,21 @@ def load_all() -> list[dict]:
         articles.extend(_fetch_clickup())
     except Exception as exc:  # pragma: no cover
         logger.warning("clickup load skipped: %s", exc)
+
+    # Anytype (local-first wiki). No key configured → returns [] and costs nothing, so
+    # air-gapped deployments and anyone not running Anytype are unaffected.
+    try:
+        from app.integrations.anytype import fetch_pages as _fetch_anytype
+        articles.extend(_fetch_anytype())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("anytype load skipped: %s", exc)
+
+    # Hashnode (hosted blog). GraphQL reads need a Pro plan and a PAT; with neither
+    # configured this returns [] and costs nothing.
+    try:
+        from app.integrations.hashnode import fetch_pages as _fetch_hashnode
+        articles.extend(_fetch_hashnode())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("hashnode load skipped: %s", exc)
 
     return articles

@@ -30,6 +30,7 @@ const TONE: Record<string, string> = {
   Data: "bg-emerald-600",
   Productivity: "bg-amber-500",
   Files: "bg-cyan-600",
+  Knowledge: "bg-indigo-500",
   Custom: "bg-rose-500",
 };
 

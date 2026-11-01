@@ -1,0 +1,370 @@
+{
+  "groups": [
+    {
+      "category": "Infrastructure",
+      "connectors": [
+        {
+          "id": "rancher",
+          "name": "Rancher / Kubernetes",
+          "description": "Read-only access to this cluster and, with a Rancher API token, to every downstream cluster. Nodes, workloads, events and logs.",
+          "category": "Infrastructure",
+          "badge": "Built-in",
+          "source": "builtin",
+          "transport": "streamable_http",
+          "url_default": "http://rancher-mcp:8080/mcp",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": false,
+              "placeholder": "http://rancher-mcp:8080/mcp"
+            },
+            {
+              "key": "rancher_url",
+              "label": "Rancher server URL",
+              "kind": "text",
+              "required": false,
+              "placeholder": "https://rancher.example.com"
+            },
+            {
+              "key": "rancher_token",
+              "label": "Rancher API token",
+              "kind": "password",
+              "required": false,
+              "placeholder": "token-xxxxx:xxxxxxxxxxxx"
+            }
+          ],
+          "note": "Leave the token empty to stay on the read-only ServiceAccount path, which sees this cluster only. Paste a token to reach downstream clusters; bind it to a READ-ONLY Rancher role.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        },
+        {
+          "id": "proxmox",
+          "name": "Proxmox VE",
+          "description": "Read-only inventory of the Proxmox estate: nodes, VMs, containers, storage, snapshots, backups and task history.",
+          "category": "Infrastructure",
+          "badge": "Built-in",
+          "source": "builtin",
+          "transport": "sse",
+          "url_default": "http://proxmox-mcp:8000/sse",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": false,
+              "placeholder": "http://proxmox-mcp:8000/sse"
+            }
+          ],
+          "note": "Scaled to zero by default. Credentials live in the K8s Secret proxmox-mcp-credentials (PVEAuditor role), not here \u2014 a hypervisor token is too powerful to hold in the application's own settings. PROXMOX_ENABLE_DESTRUCTIVE is never set, so destroy/exec tools are refused in code before any API call.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Observability",
+      "connectors": [
+        {
+          "id": "grafana",
+          "name": "Grafana / Observability",
+          "description": "Query dashboards, Prometheus metrics and Loki logs. Pairs with the LGTM stack for \"why was it slow\" questions.",
+          "category": "Observability",
+          "badge": "Popular",
+          "source": "upstream",
+          "transport": "sse",
+          "url_default": "http://grafana-mcp:8000",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": false,
+              "placeholder": "http://grafana-mcp:8000"
+            },
+            {
+              "key": "token",
+              "label": "Grafana service account token",
+              "kind": "password",
+              "required": true,
+              "placeholder": "glsa_xxxxxxxx"
+            }
+          ],
+          "note": "Deployed in this cluster as grafana-mcp, pinned read-only (--disable-write), serving http://10.10.10.18:3000. Create a service account in Grafana with the VIEWER role and paste its token here \u2014 the token is sent per request and never stored in the cluster manifest.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        },
+        {
+          "id": "zabbix",
+          "name": "Zabbix",
+          "description": "Host availability, triggers and problems from Zabbix, alongside the Kubernetes view.",
+          "category": "Observability",
+          "badge": "",
+          "source": "upstream",
+          "transport": "streamable_http",
+          "url_default": "",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": true,
+              "placeholder": "http://zabbix-mcp:8000/mcp"
+            },
+            {
+              "key": "token",
+              "label": "API token",
+              "kind": "password",
+              "required": true,
+              "placeholder": "api token"
+            }
+          ],
+          "note": "Read-only API user only. Disable host/trigger write scopes.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Data",
+      "connectors": [
+        {
+          "id": "postgres",
+          "name": "PostgreSQL",
+          "description": "Read-only SQL against an operational database \u2014 inventory, counts and audit questions the knowledge base cannot answer.",
+          "category": "Data",
+          "badge": "Popular",
+          "source": "upstream",
+          "transport": "sse",
+          "url_default": "http://postgres-mcp:8000",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": false,
+              "placeholder": "http://postgres-mcp:8000"
+            }
+          ],
+          "note": "Deployed in this cluster as postgres-mcp, restricted mode. It connects with the mcp_reader role, which can SELECT an explicit allowlist of 11 structural tables and nothing else \u2014 no users, credentials, API keys, system settings, chat history or audit log. The DSN lives in the postgres-mcp-credentials Secret, never here.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Developer",
+      "connectors": [
+        {
+          "id": "gitea",
+          "name": "Gitea / GitHub",
+          "description": "Repositories, issues, pull requests and CI status, so \"what changed recently\" can be answered from code rather than tickets.",
+          "category": "Developer",
+          "badge": "",
+          "source": "upstream",
+          "transport": "streamable_http",
+          "url_default": "",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": true,
+              "placeholder": "http://gitea-mcp:8000/mcp"
+            },
+            {
+              "key": "token",
+              "label": "Access token",
+              "kind": "password",
+              "required": true,
+              "placeholder": "read-only token"
+            }
+          ],
+          "note": "Scope the token to read:repository and read:issue only.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Productivity",
+      "connectors": [
+        {
+          "id": "jira",
+          "name": "Jira / OpenProject",
+          "description": "Ticket search and status. The escalation path already creates tickets; this lets the assistant read them back.",
+          "category": "Productivity",
+          "badge": "",
+          "source": "upstream",
+          "transport": "streamable_http",
+          "url_default": "",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": true,
+              "placeholder": "http://jira-mcp:8000/mcp"
+            },
+            {
+              "key": "token",
+              "label": "API token",
+              "kind": "password",
+              "required": true,
+              "placeholder": "api token"
+            }
+          ],
+          "note": "Read issues only. Ticket creation stays on the reviewed escalation flow, not on a tool the model can call freely.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Files",
+      "connectors": [
+        {
+          "id": "filesystem",
+          "name": "Filesystem",
+          "description": "Read files from a mounted directory \u2014 runbooks, exports and logs that are not in the knowledge base.",
+          "category": "Files",
+          "badge": "",
+          "source": "upstream",
+          "transport": "streamable_http",
+          "url_default": "",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": true,
+              "placeholder": "http://filesystem-mcp:8000/mcp"
+            }
+          ],
+          "note": "Mount one directory read-only. Never mount a host path or a secrets volume \u2014 a filesystem tool can read whatever it is given.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Knowledge",
+      "connectors": [
+        {
+          "id": "anytype",
+          "name": "Anytype",
+          "description": "Search spaces, objects, properties and tags in your encrypted, local-first Anytype wiki, so the assistant can answer from notes that never leave your machines.",
+          "category": "Knowledge",
+          "badge": "",
+          "source": "upstream",
+          "transport": "sse",
+          "url_default": "",
+          "fields": [
+            {
+              "key": "url",
+              "label": "MCP server URL (SSE endpoint of your bridge)",
+              "kind": "text",
+              "required": true,
+              "placeholder": "http://anytype-mcp:8000/sse"
+            },
+            {
+              "key": "token",
+              "label": "Anytype API key",
+              "kind": "password",
+              "required": true,
+              "placeholder": "created in Anytype \u2192 Settings \u2192 API Keys"
+            }
+          ],
+          "note": "The published server (npx @anyproto/anytype-mcp) speaks stdio only, so it has to be bridged before this app can reach it: run it under supergateway and give the SSE URL here \u2014 a bridged stdio server is always spoken to over SSE, never streamable HTTP. The API key is forwarded as 'Authorization: Bearer <key>'. Anytype ALSO requires an 'Anytype-Version' header (e.g. 2025-11-08) and this form carries only one bearer token, so set that header on the bridge side via the server's OPENAPI_MCP_HEADERS env \u2014 without it the API answers 400 and the connector will look broken for a reason this screen cannot show. The server must reach the Anytype desktop app or anytype-cli (default http://127.0.0.1:31009, CLI on 31012); a container needs ANYTYPE_API_BASE_URL pointed at a reachable host, not loopback. Only reads are exposed: the catalogue is filtered to read tools and write verbs are refused, so create/delete tools the server offers are not reachable from chat.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    },
+    {
+      "category": "Custom",
+      "connectors": [
+        {
+          "id": "custom",
+          "name": "Custom MCP connector",
+          "description": "Point the assistant at any MCP server you run, over streamable HTTP or SSE.",
+          "category": "Custom",
+          "badge": "",
+          "source": "custom",
+          "transport": "streamable_http",
+          "url_default": "",
+          "fields": [
+            {
+              "key": "name",
+              "label": "Display name",
+              "kind": "text",
+              "required": true,
+              "placeholder": "Internal CMDB"
+            },
+            {
+              "key": "url",
+              "label": "MCP server URL",
+              "kind": "text",
+              "required": true,
+              "placeholder": "http://my-mcp:8000/mcp"
+            },
+            {
+              "key": "token",
+              "label": "Bearer token",
+              "kind": "password",
+              "required": false,
+              "placeholder": "optional"
+            },
+            {
+              "key": "transport",
+              "label": "Transport (streamable_http or sse)",
+              "kind": "text",
+              "required": false,
+              "placeholder": "streamable_http"
+            }
+          ],
+          "note": "Only read tools are exposed to the assistant: the catalogue is filtered to reads and anything matching a write verb is refused, whoever wrote the server.",
+          "configured": false,
+          "enabled": false,
+          "reachable": null,
+          "tools_available": 0,
+          "tools_exposed": 0
+        }
+      ]
+    }
+  ],
+  "extras": [],
+  "counts": {
+    "total": 10,
+    "connected": 0,
+    "reachable": 0
+  }
+}

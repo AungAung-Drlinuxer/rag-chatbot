@@ -182,7 +182,8 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
 INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama",
-                    "openproject", "xwiki", "notion", "clickup", "mcp"}
+                    "openproject", "xwiki", "notion", "clickup", "anytype", "hashnode",
+                    "mcp"}
 
 # ClinePass is an OpenAI-compatible gateway (api.cline.bot). Two things make it
 # different from the other providers and are handled below:
@@ -485,6 +486,22 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
         elif key == "clickup":
             from app.integrations.clickup import test_connection as _cu_test
             result = _cu_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("message", "")
+        elif key == "anytype":
+            # Anytype is local-first: the usual failure is that nothing is listening on
+            # the base URL at all, or the mandatory Anytype-Version header is missing.
+            # The module separates those outcomes so the message names the fix.
+            from app.integrations.anytype import test_connection as _at_test
+            result = _at_test()
+            status = 200 if result.get("ok") else 502
+            detail = result.get("message", "")
+        elif key == "hashnode":
+            # Hashnode reports GraphQL application errors inside an HTTP 200, and since
+            # 2026-05-13 every read needs a Pro plan. The module tells those apart so the
+            # operator sees "not on Pro" rather than a generic failure.
+            from app.integrations.hashnode import test_connection as _hn_test
+            result = _hn_test()
             status = 200 if result.get("ok") else 502
             detail = result.get("message", "")
         elif key == "mcp":

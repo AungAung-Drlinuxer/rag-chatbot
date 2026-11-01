@@ -1,10 +1,70 @@
 import { useState } from "react";
-import { Save, Loader2, CheckCircle2, XCircle, Eye, EyeOff, ExternalLink, Loader as LoaderIcon, AlertCircle, ChevronDown, RefreshCw, Lock, ShieldCheck, Trash2, Pencil } from "lucide-react";
-import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, getLlmModels, syncOpenProjectTickets } from "@/features/settings/api";
-import type { ProviderModel } from "@/features/settings/api";
-import { LLM_PRESETS, presetFor, providerLabel } from "../llmProviders";
+import {
+  BookOpen, CheckCircle2, ChevronRight, ClipboardList, Rss,
+  Eye, EyeOff, ExternalLink, FileText, Info, KeyRound, ListChecks, Loader2,
+  Loader as LoaderIcon, Lock, NotebookPen, Pencil, RefreshCw, Save, ServerCog,
+  Shapes, ShieldCheck, Ticket, Trash2, Users, XCircle,
+} from "lucide-react";
+import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, syncOpenProjectTickets } from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "llm" | "openproject" | "xwiki" | "notion" | "clickup" | "mcp";
+type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "openproject" | "xwiki" | "notion" | "clickup" | "anytype" | "hashnode" | "mcp";
+
+/** Per-integration icon. A text-only tab bar of 11 items is slow to scan; the icon is
+ *  what makes the row navigable at a glance. */
+const ICON: Record<IntegrationKey, typeof BookOpen> = {
+  confluence: BookOpen,
+  jira: Ticket,
+  openproject: ClipboardList,
+  xwiki: FileText,
+  notion: NotebookPen,
+  clickup: ListChecks,
+  anytype: Shapes,
+  hashnode: Rss,
+  mcp: ServerCog,
+  ldap: Users,
+  keycloak: KeyRound,
+};
+
+/** Order the nav shows. Knowledge sources first (they feed the assistant), then the
+ *  infrastructure ones, then the model provider. */
+const NAV_ORDER: IntegrationKey[] = [
+  "confluence", "jira", "openproject", "xwiki", "notion", "clickup", "anytype", "hashnode",
+  "mcp", "ldap", "keycloak",
+];
+
+/**
+ * Field groups. Every integration's fields answer one of three different questions, and
+ * putting them in a single flat column is what made this screen hard to read — an endpoint,
+ * a secret and an optional tuning knob all carried the same visual weight.
+ *
+ * The group is DERIVED from the field key rather than declared on each of the ~50 field
+ * definitions, so it stays right when an integration is added. Anything unrecognised lands
+ * in "options", which is the safe default: a mis-grouped endpoint is a cosmetic problem,
+ * whereas silently presenting a secret as ordinary config would not be.
+ */
+type FieldGroup = "connection" | "credentials" | "options";
+
+const CREDENTIAL_KEYS = new Set([
+  "api_key", "api_token", "access_token", "bind_password", "client_secret", "password",
+  "token", "secret",
+]);
+const CONNECTION_KEYS = new Set([
+  "base_url", "host", "port", "issuer", "redirect_uri", "url", "realm",
+]);
+
+function groupOf(fieldKey: string): FieldGroup {
+  const k = fieldKey.toLowerCase();
+  if (CREDENTIAL_KEYS.has(k)) return "credentials";
+  if (CONNECTION_KEYS.has(k)) return "connection";
+  return "options";
+}
+
+const GROUP_ORDER: FieldGroup[] = ["connection", "credentials", "options"];
+const GROUP_META: Record<FieldGroup, { label: string; hint: string }> = {
+  connection: { label: "Connection", hint: "Where the service lives" },
+  credentials: { label: "Credentials", hint: "Write-only — stored server-side, never returned" },
+  options: { label: "Options", hint: "Scope and tuning" },
+};
 
 const META: Record<IntegrationKey, {
   label: string;
@@ -59,15 +119,17 @@ const META: Record<IntegrationKey, {
       { key: "redirect_uri", label: "Redirect URI", placeholder: "https://chat.drlinuxer.com/auth/callback" },
     ],
   },
-  llm: {
-    label: "Models Provider",
-    desc: "Primary AI provider for generating answers. Presets below are OpenAI-compatible gateways (ClinePass, OpenRouter, OpenAI, DeepSeek, Ollama). Credentials are write-only — once saved they can never be read back. Changes apply within 30 seconds without a rebuild.",
-    docs: "https://cline.bot/cline-pass",
+  hashnode: {
+    label: "Hashnode (Blog)",
+    desc: "Ingest a Hashnode blog's published posts into the knowledge base. Reads go through the GraphQL API at gql.hashnode.com — note that Hashnode retired free API access on 2026-05-13, so every query now needs a Pro plan on the publication. The PAT is write-only.",
+    docs: "https://hashnode.com/settings/developer",
     fields: [
-      { key: "provider", label: "Provider", placeholder: "clinepass" },
-      { key: "base_url", label: "Base URL", placeholder: "https://api.cline.bot/api/v1" },
-      { key: "api_key", label: "API Key", placeholder: "your provider API key", isSecret: true },
-      { key: "model", label: "Model", placeholder: "cline-pass/deepseek-v4.1-flash" },
+      { key: "publication_host", label: "Publication host", placeholder: "blog.example.com" },
+      { key: "api_key", label: "Personal Access Token", placeholder: "your Hashnode PAT", isSecret: true },
+      { key: "base_url", label: "GraphQL endpoint", placeholder: "https://gql.hashnode.com" },
+      { key: "domain", label: "KB domain tag", placeholder: "engineering (empty = auto-classify)" },
+      { key: "max_posts", label: "Max posts per sync", placeholder: "200" },
+      { key: "include_drafts", label: "Include drafts", placeholder: "false" },
     ],
   },
   openproject: {
@@ -129,6 +191,29 @@ const META: Record<IntegrationKey, {
       { key: "max_tasks", label: "Max tasks per sync", placeholder: "500" },
     ],
   },
+  anytype: {
+    label: "Anytype (Knowledge Base)",
+    desc:
+      "Import objects from a local-first Anytype space into the knowledge base. Anytype runs on " +
+      "YOUR machine, so the base URL is usually http://127.0.0.1:31009 for the desktop app (the " +
+      "CLI listens on 31012) — a containerised backend cannot reach loopback, so point this at a " +
+      "reachable host instead. Create the key in Anytype under Settings → API Keys. " +
+      "Anytype ALSO requires an 'Anytype-Version' header on every request: leave it blank to use " +
+      "the dated default, and change it if a newer Anytype refuses the old one. " +
+      "Objects are read as blocks and flattened to markdown; an object that yields no text is " +
+      "skipped rather than indexed as a blank article. Nothing is ever written back to Anytype — " +
+      "this integration only issues reads.",
+    docs: "https://developers.anytype.io/docs/reference",
+    fields: [
+      { key: "base_url", label: "Anytype API base URL", placeholder: "http://127.0.0.1:31009" },
+      { key: "api_key", label: "API Key (Anytype → Settings → API Keys)", placeholder: "your Anytype API key", isSecret: true },
+      { key: "api_version", label: "Anytype-Version header (blank = 2025-11-08)", placeholder: "2025-11-08" },
+      { key: "space_ids", label: "Space IDs or names (comma separated, empty = all spaces)", placeholder: "My Space, 6f2a...c9" },
+      { key: "object_types", label: "Object types (comma separated, empty = all)", placeholder: "page, note" },
+      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
+      { key: "max_objects", label: "Max objects per sync", placeholder: "300" },
+    ],
+  },
   mcp: {
     label: "MCP (Live Infrastructure)",
     desc:
@@ -164,6 +249,11 @@ const META: Record<IntegrationKey, {
   },
 };
 
+/** Tab label without the parenthetical: "Confluence (Knowledge Base)" → "Confluence". */
+function shortLabel(k: IntegrationKey): string {
+  return META[k].label.split(" (")[0].split(" /")[0].replace(" SSO", "");
+}
+
 export function IntegrationsConfig() {
   const [active, setActive] = useState<IntegrationKey>("confluence");
   // v1.6.35 — `form` holds ONLY newly typed values. Stored values are never
@@ -176,80 +266,32 @@ export function IntegrationsConfig() {
   const [replacing, setReplacing] = useState<Record<string, boolean>>({});
   const [clearing, setClearing] = useState(false);
   const [tokenSet, setTokenSet] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
+  // PER FIELD. A single shared flag meant revealing one secret revealed every secret on
+  // the form at once, which is the opposite of what an eye toggle is for.
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [models, setModels] = useState<ProviderModel[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [modelsError, setModelsError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  // `provider` and `model` are plain (readable) config fields, unlike the
-  // credentials and endpoints, so the form can seed them and show what the
-  // database actually holds. Everything else stays write-only.
-  const [storedProvider, setStoredProvider] = useState("");
-  const [storedModel, setStoredModel] = useState("");
-
-  const isLlm = active === "llm";
-  const activeProviderId = presetFor(form.provider || storedProvider).id;
-  const activePreset = presetFor(form.provider || storedProvider);
-
-  /** v0.22.1 — a preset writes provider + base URL + model id together, so the
-   *  backend never receives a ClinePass provider with an OpenRouter-style model. */
-  const applyPreset = (id: string) => {
-    const preset = presetFor(id);
-    const next: Record<string, string> = { ...form, provider: id };
-    if (preset.base_url) next.base_url = preset.base_url;
-    if (preset.model) next.model = preset.model;
-    setForm(next);
-    setModels([]);
-    setModelsError(null);
-    setResult(null);
-  };
-
-  async function fetchModels() {
-    setLoadingModels(true);
-    setModelsError(null);
-    try {
-      const res = await getLlmModels();
-      setModels(res.models || []);
-    if (!res.models?.length) setModelsError("Provider returned an empty model list.");
-    } catch (err: any) {
-      setModels([]);
-      setModelsError(err?.message || "Failed to load models");
-    } finally {
-      setLoadingModels(false);
-    }
-  }
 
   const load = async (key: IntegrationKey) => {
     setResult(null);
     try {
       const res = await getIntegrationSettings(key);
-      // Credentials and endpoints come back as mask tokens, so they are never
-      // seeded into the form. `provider` and `model` are plain fields — the
-      // server returns them readably, and showing the real values is what makes
-      // the provider switch visible instead of a mystery.
-      const plain = (res.settings || {}) as Record<string, unknown>;
-      const seeded: Record<string, string> = {};
-      if (typeof plain.provider === "string" && plain.provider.trim()) seeded.provider = plain.provider;
-      if (typeof plain.model === "string" && plain.model.trim()) seeded.model = plain.model;
-      setForm(seeded);
+      // Every integration here is write-only: nothing readable is ever seeded back into
+      // the form, so a stored value can only be replaced, never read.
+      setForm({});
       setReplacing({});
       setFieldsSet(res.fields_set || []);
       setSecretFields(res.secret_fields || []);
       setUpdatedAt(res.updated_at || null);
       setTokenSet(!!res.token_set || (res.secret_fields || []).length > 0);
-      setStoredProvider(seeded.provider || "");
-      setStoredModel(seeded.model || "");
     } catch {
       setForm({});
       setFieldsSet([]);
       setSecretFields([]);
       setUpdatedAt(null);
       setTokenSet(false);
-      setStoredProvider("");
-      setStoredModel("");
     }
   };
 
@@ -282,10 +324,8 @@ export function IntegrationsConfig() {
 
   const switchTab = (key: IntegrationKey) => {
     setActive(key);
-    setShowSecret(false);
+    setRevealed({});
     setReplacing({});
-    setModels([]);
-    setModelsError(null);
     load(key);
   };
 
@@ -329,213 +369,193 @@ export function IntegrationsConfig() {
     }
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 px-5 pt-3">
-        {(["confluence", "jira", "openproject", "xwiki", "notion", "clickup", "mcp", "ldap", "keycloak", "llm"] as IntegrationKey[]).map((k) => (
-          <button
-            key={k}
-            onClick={() => switchTab(k)}
-            className={[
-              "px-3 py-2 text-xs font-medium border-b-2 -mb-px",
-              active === k
-                ? "border-blue-600 text-blue-700 dark:text-blue-300"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
-            ].join(" ")}
-          >
-            {META[k].label.split(" (")[0].split(" /")[0].replace(" SSO", "")}
-          </button>
-        ))}
-        <a
-          href={isLlm ? activePreset.docs : META[active].docs}
-          target="_blank"
-          rel="noreferrer"
-          className="ml-auto mr-2 text-2xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 inline-flex items-center gap-1"
-        >
-          Get API token <ExternalLink className="h-3 w-3" />
-        </a>
-      </div>
+  /** One field row. Kept as a local function so the grouping loop above stays readable. */
+  function renderField(f: { key: string; label: string; placeholder: string; type?: string; isSecret?: boolean }) {
+    const configured = isConfigured(f.key);
+    const editable = isEditable(f.key);
+    const isSecret = !!f.isSecret || secretFields.includes(f.key);
+    const show = !!revealed[f.key];
+    const showBadge = configured;
 
-      <div className="px-5 pb-5 space-y-4">
-        <p className="text-xs text-slate-500 dark:text-slate-400">{META[active].desc}</p>
-
-        {isLlm && (
-          <div className="flex flex-wrap items-center gap-2 text-2xs">
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              Database: {providerLabel(storedProvider)}
+    return (
+      <div key={f.key} className="space-y-1.5">
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+          {f.label}
+          {showBadge && (
+            <span className="inline-flex items-center gap-1 text-2xs text-emerald-600">
+              {isSecret ? <Lock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+              {isSecret ? "Saved — not retrievable" : "Configured"}
             </span>
-            {storedModel && (
-              <span className="truncate rounded-full bg-slate-50 px-2 py-0.5 font-mono text-slate-500 dark:bg-slate-900 dark:text-slate-400" title={storedModel}>
-                model {storedModel}
-              </span>
-            )}
-          </div>
-        )}
+          )}
+        </label>
 
-        {/* v1.6.35 — state the posture up front so nobody is surprised that values
-            cannot be read back. */}
-        <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50">
+        {/* A stored value is never rendered. The admin sees a mask and must press Replace. */}
+        {configured && !editable ? (
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+              <Lock className="h-3 w-3 shrink-0 text-slate-400" />
+              <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
+              <span className="ml-auto text-2xs text-slate-400">write-only</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplacing({ ...replacing, [f.key]: true })}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              title="Enter a new value for this field"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Replace
+            </button>
+          </div>
+        ) : (
+          <>
+              <div className="relative">
+                <input
+                  type={isSecret && !show ? "password" : (f.type || "text")}
+                  value={form[f.key] || ""}
+                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                  placeholder={isSecret && tokenSet ? "leave blank to keep current" : f.placeholder}
+                  /* Security: an integration token is not a site login. Without these the
+                     browser and password managers offer to save it into the admin's personal
+                     vault, and autocorrect/spellcheck can ship the value to a third party. */
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+                {isSecret && (
+                  <button
+                    type="button"
+                    aria-label={show ? `Hide ${f.label}` : `Reveal ${f.label}`}
+                    onClick={() => setRevealed({ ...revealed, [f.key]: !show })}
+                    className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+              </div>
+            {configured && (
+              <button
+                type="button"
+                onClick={() => {
+                  setReplacing({ ...replacing, [f.key]: false });
+                  const next = { ...form };
+                  delete next[f.key];
+                  setForm(next);
+                }}
+                className="mt-1 text-2xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Keep the stored value
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const groups = GROUP_ORDER
+    .map((g) => ({ group: g, fields: META[active].fields.filter((f) => groupOf(f.key) === g) }))
+    .filter((x) => x.fields.length > 0);
+
+  const dirty = Object.values(form).some((v) => typeof v === "string" && v.trim().length > 0);
+
+  return (
+    <div className="flex flex-col lg:flex-row">
+      {/* ---- nav rail ------------------------------------------------------------ */}
+      <nav className="shrink-0 border-b border-slate-200 p-3 dark:border-slate-800 lg:w-60 lg:border-b-0 lg:border-r">
+        <p className="hidden px-2 pb-2 text-2xs font-semibold uppercase tracking-wider text-slate-400 lg:block">
+          Knowledge &amp; Services
+        </p>
+        <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+          {NAV_ORDER.map((k) => {
+            const Icon = ICON[k];
+            const on = active === k;
+            return (
+              <button
+                key={k}
+                onClick={() => switchTab(k)}
+                title={META[k].label}
+                className={[
+                  "flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium transition lg:w-full",
+                  on
+                    ? "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+                    : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60",
+                ].join(" ")}
+              >
+                <Icon className="size-3.5 shrink-0" />
+                <span className="whitespace-nowrap lg:truncate">{shortLabel(k)}</span>
+                {on && <ChevronRight className="ml-auto hidden size-3 shrink-0 lg:block" />}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* ---- panel --------------------------------------------------------------- */}
+      <div className="min-w-0 flex-1 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{META[active].label}</h3>
+              {fieldsSet.length > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" /> Configured
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-2xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  <span className="size-1.5 rounded-full bg-slate-400" /> Not configured
+                </span>
+              )}
+            </div>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              {META[active].desc}
+            </p>
+          </div>
+          <a
+            href={META[active].docs}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-2xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Get API token <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+
+        <div className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50">
           <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
           <p className="text-2xs leading-relaxed text-slate-600 dark:text-slate-400">
-            <b>Credentials are write-only.</b> Every value below — URLs, hosts, accounts,
-            keys and tokens — is stored server-side and is <b>never returned</b> once saved.
-            {" "}Enter a value only when adding or replacing it; leaving a field blank keeps
-            what is already stored.
+            <b>Credentials are write-only.</b> Every value below — URLs, hosts, accounts, keys and
+            tokens — is stored server-side and is <b>never returned</b> once saved. Enter a value
+            only when adding or replacing it; leaving a field blank keeps what is already stored.
             {updatedAt && <> Last saved {new Date(updatedAt).toLocaleString()}.</>}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
-          {META[active].fields.map((f) => {
-            const isModelField = isLlm && f.key === "model";
-            const isProviderField = isLlm && f.key === "provider";
-            const configured = isConfigured(f.key);
-            const editable = isEditable(f.key);
-            const isSecret = !!f.isSecret || secretFields.includes(f.key);
-            // provider/model are plain fields: the real value is shown, so the
-            // "configured — value hidden" badge would be a lie.
-            const showBadge = configured && !isProviderField && !isModelField;
-            return (
-            <div key={f.key} className="space-y-1">
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-                {f.label}
-                {showBadge && (
-                  <span className="ml-2 inline-flex items-center gap-1 text-2xs text-emerald-600">
-                    {isSecret ? <Lock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-                    {isSecret ? "Secret saved — not retrievable" : "Configured — value hidden"}
-                  </span>
-                )}
-              </label>
-
-              {/* v1.6.35 — a stored value is never rendered. The admin sees a mask
-                  and must press Replace to write a new one. */}
-              {configured && !editable ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-                    <Lock className="h-3 w-3 shrink-0 text-slate-400" />
-                    <span className="font-mono text-xs tracking-widest text-slate-400 select-none">
-                      ••••••••
-                    </span>
-                    <span className="ml-auto text-2xs text-slate-400">write-only</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setReplacing({ ...replacing, [f.key]: true })}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                    title="Enter a new value for this field"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Replace
-                  </button>
-                </div>
-              ) : (
-              <>
-              <div className="relative">
-                {isProviderField ? (
-                  <div className="relative">
-                    <select
-                      value={activeProviderId}
-                      onChange={(e) => applyPreset(e.target.value)}
-                      className="w-full appearance-none rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-9 text-xs text-slate-900 dark:text-white"
-                    >
-                      {LLM_PRESETS.map((p) => (
-                        <option key={p.id} value={p.id}>{p.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-                ) : isModelField ? (
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <select
-                        value={form[f.key] || ""}
-                        onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                        disabled={loadingModels || models.length === 0}
-                        className="w-full appearance-none rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-9 text-xs text-slate-900 dark:text-white disabled:opacity-60"
-                      >
-                        <option value="">
-                          {models.length === 0
-                            ? (loadingModels ? "Loading models..." : "— Load models first —")
-                            : models.some((m) => m.id === form[f.key])
-                              ? (form[f.key] as string)
-                              : `${form[f.key] || ""} (custom, not in list)`}
-                        </option>
-                        {models.map((m) => (
-                          <option key={m.id} value={m.id}>{m.id}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={fetchModels}
-                      disabled={loadingModels}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                      title="Fetch the model catalogue from the provider using the saved API key"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${loadingModels ? "animate-spin" : ""}`} />
-                      {loadingModels ? "Loading..." : models.length ? "Reload" : "Load models"}
-                    </button>
-                  </div>
-                ) : (
-                  <input
-                    type={f.isSecret && !showSecret ? "password" : (f.type || "text")}
-                    value={form[f.key] || ""}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                    placeholder={f.isSecret && tokenSet ? "leave blank to keep current" : f.placeholder}
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 pr-10 text-xs text-slate-900 dark:text-white placeholder:text-slate-400"
-                  />
-                )}
-                {f.isSecret && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className={isModelField ? "hidden" : "absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"}
-                  >
-                    {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  </button>
-                )}
+        <div className="mt-5 space-y-6">
+          {groups.map(({ group, fields }) => (
+            <section key={group}>
+              <div className="mb-2 flex flex-wrap items-baseline gap-2 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+                <h4 className="text-2xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {GROUP_META[group].label}
+                </h4>
+                <span className="text-2xs text-slate-400">{GROUP_META[group].hint}</span>
+                {group === "credentials" && <Lock className="size-3 text-slate-400" />}
               </div>
-              {isProviderField && (
-                <p className="mt-1 text-2xs leading-relaxed text-slate-400">{activePreset.note}</p>
-              )}
-              {isModelField && modelsError && (
-                <p className="mt-1 flex items-center gap-1 text-2xs text-rose-600">
-                  <AlertCircle className="h-3 w-3" /> {modelsError}
-                  <button type="button" onClick={fetchModels} className="ml-1 underline hover:no-underline">retry</button>
-                </p>
-              )}
-              {isModelField && models.length > 0 && (
-                <p className="mt-1 text-2xs text-slate-400">
-                  {models.length} models available from your provider — pick one, or keep a custom ID.
-                </p>
-              )}
-              {configured && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReplacing({ ...replacing, [f.key]: false });
-                    const next = { ...form };
-                    delete next[f.key];
-                    setForm(next);
-                  }}
-                  className="mt-1 text-2xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  Keep the stored value
-                </button>
-              )}
-              </>
-              )}
-            </div>
-            );
-          })}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {fields.map(renderField)}
+              </div>
+            </section>
+          ))}
         </div>
 
-        <div className="flex items-center gap-2 pt-2">
+        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
           <button
             onClick={save}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-2 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
             Save
@@ -543,22 +563,11 @@ export function IntegrationsConfig() {
           <button
             onClick={test}
             disabled={testing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium px-3 py-2 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LoaderIcon className="h-3.5 w-3.5" />}
             Test connection
           </button>
-          {fieldsSet.length > 0 && (
-            <button
-              onClick={clearIntegration}
-              disabled={clearing}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30 text-xs font-medium px-3 py-2 disabled:opacity-50"
-              title="Revoke the stored credentials — the only way to remove a write-only value"
-            >
-              {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              Remove stored settings
-            </button>
-          )}
           {active === "openproject" && (
             <button
               onClick={async () => {
@@ -578,25 +587,46 @@ export function IntegrationsConfig() {
                 }
               }}
               disabled={syncing}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-xs font-medium px-3 py-2 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
               title="Pull work packages from OpenProject into the tickets board"
             >
               {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Sync tickets now
             </button>
           )}
-          {result && (
-            <span
-              className={[
-                "inline-flex items-center gap-1 text-xs",
-                result.ok ? "text-emerald-600" : "text-rose-600",
-              ].join(" ")}
+
+          {fieldsSet.length > 0 && (
+            <button
+              onClick={clearIntegration}
+              disabled={clearing}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30"
+              title="Revoke the stored credentials — the only way to remove a write-only value"
             >
-              {result.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-              {result.message}
-            </span>
+              {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Remove stored settings
+            </button>
           )}
         </div>
+
+        {/* Unsaved input is called out, because a write-only field cannot be read back to
+            check whether the value was actually stored. */}
+        {dirty && !result && (
+          <p className="mt-2 flex items-center gap-1 text-2xs text-amber-600 dark:text-amber-400">
+            <Info className="h-3 w-3" /> Unsaved changes — press Save to store them.
+          </p>
+        )}
+
+        {result && (
+          <p
+            className={[
+              "mt-2 inline-flex items-center gap-1 text-xs",
+              result.ok ? "text-emerald-600" : "text-rose-600",
+            ].join(" ")}
+          >
+            {result.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+            {result.message}
+          </p>
+        )}
       </div>
     </div>
   );

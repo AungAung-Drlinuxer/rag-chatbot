@@ -30,6 +30,57 @@ def _rows(sql: str, params: dict | None = None) -> list[dict]:
         result = conn.execute(text(sql), params or {})
         return [dict(m) for m in result.mappings()]
 
+# --- reporting window ----------------------------------------------------------
+# The dashboard's range picker offers presets (7 / 30 / 90 days) and a CUSTOM window.
+# A custom window is a real date range, not "the last N days": asking for March cannot be
+# expressed as a day count, so the two series endpoints accept explicit start/end dates.
+#
+# Two things this fixes, both of which made the UI state something untrue:
+#   1. `days` was capped at 30, so the "Last 90 days" preset silently returned 30 days.
+#   2. The picker was not wired to the request at all — every window fetched 7 days.
+MAX_WINDOW_DAYS = 180
+
+
+def _window(days: int, start: str | None, end: str | None) -> tuple[str, str, int]:
+    """Resolve a reporting window to (start_iso, end_iso, n_days).
+
+    An explicit start/end pair wins over `days`. The span is clamped to MAX_WINDOW_DAYS by
+    moving the START forward, so the response always ends on the requested end date — a
+    chart that quietly stretched its own window would be the same class of bug this fixes.
+    The caller echoes the effective dates back so the UI can show what it actually got.
+    """
+    today = datetime.now(UTC).date()
+
+    def _parse(value: str | None):
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.strip()[:10]).date()
+        except ValueError:
+            return None
+
+    first, last = _parse(start), _parse(end)
+    if first and last:
+        if first > last:
+            first, last = last, first
+        if last > today:
+            last = today
+        if (last - first).days + 1 > MAX_WINDOW_DAYS:
+            first = last - timedelta(days=MAX_WINDOW_DAYS - 1)
+    else:
+        days = max(1, min(days, MAX_WINDOW_DAYS))
+        last = today
+        first = today - timedelta(days=days - 1)
+    return first.isoformat(), last.isoformat(), (last - first).days + 1
+
+
+def _day_labels(start_iso: str, n: int) -> list[str]:
+    """Every day in the window, in order — a day with no rows still gets a point at 0,
+    otherwise the chart silently compresses gaps and the x-axis lies."""
+    first = datetime.fromisoformat(start_iso).date()
+    return [(first + timedelta(days=i)).isoformat() for i in range(n)]
+
+
 @router.get("/dashboard/stats")
 def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
     """v1.1.6 — real week-over-week deltas (the frontend previously showed
@@ -151,32 +202,38 @@ def dashboard_stats(user: str = Depends(get_current_user)) -> dict:
 
 @router.get("/dashboard/conversations")
 def dashboard_conversations(
-    days: int = 7, user: str = Depends(get_current_user)
+    days: int = 7,
+    start: str | None = None,
+    end: str | None = None,
+    user: str = Depends(get_current_user),
 ) -> dict:
-    days = max(1, min(days, 30))
-    since = (datetime.now(UTC) - timedelta(days=days)).date().isoformat()
+    """Daily totals / resolved / escalated for the reporting window.
+
+    `start`+`end` (ISO dates, inclusive) express a CUSTOM window; `days` is the preset
+    shortcut. The reply echoes the effective window so the UI never has to guess.
+    """
+    since, until, days = _window(days, start, end)
 
     totals = {
         str(r["day"]): int(r["n"])
         for r in _rows(
             "SELECT date(created_at) AS day, count(*) AS n FROM chat_messages "
-            "WHERE role = 'user' AND date(created_at) >= :since "
+            "WHERE role = 'user' AND date(created_at) BETWEEN :since AND :until "
             "GROUP BY day ORDER BY day",
-            {"since": since},
+            {"since": since, "until": until},
         )
     }
     escalated = {
         str(r["day"]): int(r["n"])
         for r in _rows(
             "SELECT date(created_at) AS day, count(*) AS n FROM jira_tickets "
-            "WHERE date(created_at) >= :since GROUP BY day ORDER BY day",
-            {"since": since},
+            "WHERE date(created_at) BETWEEN :since AND :until GROUP BY day ORDER BY day",
+            {"since": since, "until": until},
         )
     }
 
     series = []
-    for i in range(days):
-        day = (datetime.now(UTC) - timedelta(days=days - 1 - i)).date().isoformat()
+    for day in _day_labels(since, days):
         label = datetime.fromisoformat(day).strftime("%b %d")
         total = totals.get(day, 0)
         esc = escalated.get(day, 0)
@@ -189,7 +246,7 @@ def dashboard_conversations(
             }
         )
 
-    return {"days": days, "series": series}
+    return {"days": days, "start": since, "end": until, "series": series}
 
 
 # ---------------------------------------------------------------------------
@@ -332,34 +389,40 @@ def dashboard_recent_tickets(
 
 @router.get("/dashboard/gate-trend")
 def dashboard_gate_trend(
-    days: int = 7, user: str = Depends(get_current_user)
+    days: int = 7,
+    start: str | None = None,
+    end: str | None = None,
+    user: str = Depends(get_current_user),
 ) -> dict:
     """Daily counts of 'answer' (passed the 0.75 confidence gate) vs 'caution'
     decisions — the at-a-glance trustworthiness trend. Reads the same meta JSON
-    the chat pipeline writes."""
-    days = max(1, min(days, 30))
-    since = (datetime.now(UTC) - timedelta(days=days)).date().isoformat()
+    the chat pipeline writes.
+
+    Same window contract as /dashboard/conversations: `start`+`end` for a CUSTOM range,
+    `days` for a preset, and the effective window echoed back.
+    """
+    since, until, days = _window(days, start, end)
 
     rows = _rows(
         "SELECT date(created_at) AS day, "
         "  sum(CASE WHEN meta LIKE '%\"decision\": \"answer\"%' THEN 1 ELSE 0 END) AS answered, "
         "  sum(CASE WHEN meta LIKE '%\"decision\": \"caution\"%' THEN 1 ELSE 0 END) AS cautioned "
-        "FROM chat_messages WHERE role = 'assistant' AND date(created_at) >= :since "
+        "FROM chat_messages WHERE role = 'assistant' "
+        "  AND date(created_at) BETWEEN :since AND :until "
         "GROUP BY day ORDER BY day",
-        {"since": since},
+        {"since": since, "until": until},
     )
     by_day = {str(r["day"]): (int(r["answered"] or 0), int(r["cautioned"] or 0)) for r in rows}
 
     series = []
-    for i in range(days):
-        day = (datetime.now(UTC) - timedelta(days=days - 1 - i)).date().isoformat()
+    for day in _day_labels(since, days):
         answered, cautioned = by_day.get(day, (0, 0))
         series.append({
             "day": datetime.fromisoformat(day).strftime("%b %d"),
             "answered": answered,
             "cautioned": cautioned,
         })
-    return {"days": days, "series": series}
+    return {"days": days, "start": since, "end": until, "series": series}
 
 
 # ---------------------------------------------------------------------------
