@@ -6,7 +6,7 @@ import json
 import os
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -25,6 +25,7 @@ from app.rag.gate import DECISION_CAUTION, caution_message
 from app.integrations.contacts import get_contact
 from app.integrations.jira import escalate as jira_escalate
 from app.llm.client import stream_answer
+from app.schemas import EscalationsResponse, FeedbackResponse
 import logging
 logger = logging.getLogger("chat")
 
@@ -127,6 +128,11 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             logger.warning("guardrail check failed (%s) — allowing request", guardrail_err)
 
         # Persist the user turn (best-effort; must not break the stream).
+        #
+        # The session is released in a `finally`: this block runs on the hot path of
+        # every question, so a session leaked here is a pool connection lost per
+        # failed persist. `s = None` in the handler (the old form) closed nothing.
+        s = None
         try:
             from app.persistence.database import SessionLocal
             s = SessionLocal()
@@ -154,7 +160,10 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
             s.commit()
         except Exception as exc:
             logger.warning(f"persist user turn skipped ({type(exc).__name__}): {exc}")
-            s = None
+        finally:
+            if s is not None:
+                with suppress(Exception):  # never let cleanup break the stream
+                    s.close()
 
         # Stage feedback (v0.16.4): tell the client what the pipeline is doing so the
         # user sees progress instead of silence during retrieval + rerank.
@@ -482,10 +491,12 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 s.add(_am)
                 s.commit()
                 db_msg_id = str(_am.id)  # v0.21.90 — real row id so feedback can reference it
-                s.close()
             except Exception as exc:
                 db_msg_id = ""
                 logger.warning(f"persist assistant turn skipped ({type(exc).__name__}): {exc}")
+            finally:
+                with suppress(Exception):
+                    s.close()
 
         message_id = db_msg_id or str(uuid.uuid4())
         from app.observability.metrics import CHAT_REQUESTS_TOTAL, CHAT_LATENCY_SECONDS
@@ -559,6 +570,7 @@ def escalate(req: EscalateRequest, user: str = Depends(get_current_user)) -> dic
         return {"ok": False, "error": result.get("error")
                 or "Jira ticket was not created — check Settings → Integrations",
                 **{k: result.get(k) for k in ("link", "mode")}}
+    s = None
     try:
         from app.persistence.database import SessionLocal
         from app.persistence.models import JiraTicket
@@ -567,23 +579,29 @@ def escalate(req: EscalateRequest, user: str = Depends(get_current_user)) -> dic
         s.add(JiraTicket(session_id=req.session_id, jira_key=result.get("jira_key"),
                          domain=req.domain, status="created", created_by=user))
         s.commit()
-        s.close()
     except Exception as exc:
         logger.warning(f"persist jira ticket skipped ({type(exc).__name__}): {exc}")
+    finally:
+        if s is not None:
+            with suppress(Exception):
+                s.close()
 
     return result
 
 
-@router.post("/api/feedback")
+@router.post("/api/feedback", response_model=FeedbackResponse)
 def feedback(req: FeedbackRequest, user: str = Depends(get_current_user)) -> dict:
     """Record Helpful / Not Helpful (design doc §7)."""
     from app.persistence.database import SessionLocal
 
     s = SessionLocal()
-    fb = Feedback(message_id=req.message_id, rating=req.rating, comment=req.comment)
-    s.add(fb)
-    s.commit()
-    s.close()
+    try:
+        fb = Feedback(message_id=req.message_id, rating=req.rating, comment=req.comment)
+        s.add(fb)
+        s.commit()
+    finally:
+        with suppress(Exception):
+            s.close()
     audit("feedback", user, detail=f"message_id={req.message_id} rating={req.rating}")
 
     try:
@@ -596,7 +614,7 @@ def feedback(req: FeedbackRequest, user: str = Depends(get_current_user)) -> dic
     return {"status": "ok", "saved": True, "rating": req.rating}
 
 
-@router.get("/api/escalations")
+@router.get("/api/escalations", response_model=EscalationsResponse)
 def list_escalations(user: str = Depends(get_current_user)) -> dict:
     """Phase 6 — list the current user's escalation (Jira) tickets, newest first."""
     try:
@@ -614,7 +632,6 @@ def list_escalations(user: str = Depends(get_current_user)) -> dict:
                 "link": f"{_base}/browse/{t.jira_key}" if (_base and t.jira_key) else None,
                 "session_id": str(t.session_id) if t.session_id else None}
                for t in rows]
-        s.close()
         return {"escalations": out}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"escalations unavailable: {type(exc).__name__}")

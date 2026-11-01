@@ -5,12 +5,15 @@ usernames (e.g. `dev`) to admin so the whole flow stays testable without a direc
 """
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import Depends, HTTPException, status
 
 from app.auth.deps import get_current_user
 from app.config import SETTINGS
+
+logger = logging.getLogger("rbac")
 
 ROLES = ("admin", "agent", "user", "knowledge")  # v1.1.1: domain_manager merged into knowledge
 
@@ -55,8 +58,12 @@ def get_role(username: str) -> str:
             ).first()
         if row and row.role_override:
             return row.role_override
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fail safe, but never silently: a DB outage here silently downgrades a
+        # user to group-derived roles, which looks like a permissions bug with
+        # no trace. The fallback stays (login must not break), the silence does not.
+        logger.warning("role_override lookup failed for %s, falling back to groups: %s",
+                       username, exc)
     groups = set(get_groups(username))
     if groups & {g.strip() for g in SETTINGS.rbac_admin_groups.split(",") if g.strip()}:
         return "admin"
@@ -223,8 +230,8 @@ def effective_role(username: str) -> str:
             ).first()
         if row and row.role_override:
             return row.role_override
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("effective-role override lookup failed for %s: %s", username, exc)
     return get_role(username)
 
 

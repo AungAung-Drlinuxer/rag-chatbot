@@ -14,6 +14,11 @@ from app.auth.rbac import require_role, require_cap
 from app.config import SETTINGS
 from app.observability.audit import audit
 from app.persistence.database import SessionLocal
+from app.schemas import (
+    DomainCreateRequest,
+    DomainUpdateRequest,
+    EvalCasesResponse,
+)
 
 router = APIRouter()
 
@@ -149,7 +154,7 @@ async def eval_run_endpoint(user: str = Depends(get_current_user),
     return await _run_eval()
 
 
-@router.get("/api/eval")
+@router.get("/api/eval", response_model=EvalCasesResponse)
 def eval_cases_endpoint(user: str = Depends(get_current_user)) -> dict:
     """Return the eval dataset (no scoring, just questions + expectations)."""
     from app.eval import load_cases
@@ -166,7 +171,6 @@ def eval_cases_endpoint(user: str = Depends(get_current_user)) -> dict:
 #   /api/admin/domains         GET, POST
 #   /api/admin/domains/{id}    PUT, DELETE
 # --------------------------------------------------------------------------
-from app.schemas import DomainCreateRequest, DomainUpdateRequest
 from app.persistence.models import ClassifierDomain
 from app.classifier.engine import reload_rules_cache
 

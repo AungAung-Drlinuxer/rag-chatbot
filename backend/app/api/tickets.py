@@ -117,6 +117,40 @@ def _rows(sql: str, params: dict | None = None) -> list[dict]:
 _jira_status_cache: dict[str, tuple[float, str]] = {}  # jira_key -> (ts, mapped_local_status)
 _JIRA_SYNC_TTL = 60  # seconds
 
+def _persist_status_changes(s, mapped_by_key: dict[str, str]) -> None:
+    """Persist canonical statuses for many tickets with TWO statements, not 2N.
+
+    One SELECT for every key, then one UPDATE per distinct status. The previous
+    shape opened a fresh SessionLocal + SELECT + UPDATE per ticket inside the
+    loop, so a board page with 50 tickets cost 50 pooled sessions and 100
+    statements — and a session was leaked for every ticket whose status matched.
+    """
+    if not mapped_by_key:
+        return
+    keys = list(mapped_by_key)
+    found = s.execute(
+        text("SELECT id, jira_key, status FROM jira_tickets WHERE jira_key = ANY(:keys)"),
+        {"keys": keys},
+    ).all()
+    by_status: dict[str, list[int]] = {}
+    for row_id, key, current in found:
+        want = mapped_by_key.get(key)
+        if want and want != current and row_id is not None:
+            by_status.setdefault(want, []).append(row_id)
+    for status, ids in by_status.items():
+        s.execute(
+            text("UPDATE jira_tickets SET status = :s WHERE id = ANY(:ids)"),
+            {"s": status, "ids": ids},
+        )
+    if by_status:
+        s.commit()
+
+
+def _is_op_key(jira_key: str) -> bool:
+    """OpenProject mirrors are stored as OP-<id>; case has drifted in the past."""
+    return (jira_key or "").upper().startswith("OP-")
+
+
 def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
     """v1.6.13 — auto-resync statuses from upstream on every list read.
 
@@ -126,6 +160,10 @@ def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
     full sync only runs when an admin clicks Sync — so here we re-read the
     live status of OP rows too (single search call, cached 60s).
     Rows are only updated when the canonical status differs from the mirror.
+
+    v1.6.14 — all DB writes for the batch go through one session and two
+    statements (see `_persist_status_changes`); the per-ticket session in the
+    loop was an N+1 that also leaked a session per unchanged ticket.
     """
     from app.integrations.ticket_status import (
         canonical_from_jira_status,
@@ -143,31 +181,29 @@ def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
         if cached and (time.time() - cached[0]) < _JIRA_SYNC_TTL:
             r["status"] = cached[1]
             continue
-        if jk.startswith("OP-"):
+        if _is_op_key(jk):
             op_ids.append(jk)
         else:
             jira_keys.append(jk)
 
     if jira_keys:
         from app.integrations.jira import fetch_issue_status
+        mapped_by_key: dict[str, str] = {}
         for jk in jira_keys:
             live = fetch_issue_status(jk)
-            mapped = (canonical_from_jira_status(live.get("status") or "")
-                      if live.get("ok") else None)
-            mapped = mapped or _map_jira_status(live.get("status", "") if live.get("ok") else "")
-            _jira_status_cache[jk] = (time.time(), mapped or "")
-            if not mapped:
-                continue
-            with SessionLocal() as s:
-                row = s.execute(text("SELECT id, status FROM jira_tickets WHERE jira_key = :k"),
-                                {"k": jk}).first()
-                if row and row[1] != mapped:
-                    s.execute(text("UPDATE jira_tickets SET status=:s WHERE id=:i"),
-                              {"s": mapped, "i": row[0]})
-                    s.commit()
-            for r in rows:
-                if r.get("jira_key") == jk and mapped:
-                    r["status"] = mapped
+            # One mapper only. The canonical model is the single source of truth
+            # for status semantics (it also drives the transition table), and it
+            # never returns None — so the old `mapped or _map_jira_status(...)`
+            # fallback could not fire and was deleted with the duplicate mapper.
+            mapped = canonical_from_jira_status(live.get("status") or "") if live.get("ok") else ""
+            _jira_status_cache[jk] = (time.time(), mapped)
+            if mapped:
+                mapped_by_key[jk] = mapped
+        with SessionLocal() as s:
+            _persist_status_changes(s, mapped_by_key)
+        for r in rows:
+            if r.get("jira_key") in mapped_by_key:
+                r["status"] = mapped_by_key[r["jira_key"]]
 
     if op_ids:
         from app.integrations.openproject import get_op_cfg
@@ -180,10 +216,11 @@ def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
                 # v1.6.13 - the work_packages listing endpoint rejects id filters
                 # (InvalidQuery: got Array), so fetch each WP individually.
                 # N is small (mirrored OP tickets) and results are 60s-cached.
+                mapped_by_key = {}
                 with httpx.Client(timeout=30, auth=("apikey", key),
                                   headers={"Accept": "application/hal+json"}) as client:
                     for jk in op_ids:
-                        wp_id = jk.replace("OP-", "")
+                        wp_id = jk.split("-", 1)[-1]
                         r = client.get(f"{base}/api/v3/work_packages/{wp_id}")
                         if r.status_code != 200:
                             continue
@@ -191,33 +228,15 @@ def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
                                      .get("title", ""))
                         mapped = canonical_from_op_status(live_name)
                         _jira_status_cache[jk] = (time.time(), mapped)
-                        with SessionLocal() as s:
-                            row = s.execute(text(
-                                "SELECT id, status FROM jira_tickets WHERE jira_key = :k"),
-                                {"k": jk}).first()
-                            if row and row[1] != mapped:
-                                s.execute(text(
-                                    "UPDATE jira_tickets SET status=:s WHERE id=:i"),
-                                    {"s": mapped, "i": row[0]})
-                                s.commit()
-                        for r2 in rows:
-                            if r2.get("jira_key") == jk:
-                                r2["status"] = mapped
+                        mapped_by_key[jk] = mapped
+                with SessionLocal() as s:
+                    _persist_status_changes(s, mapped_by_key)
+                for r2 in rows:
+                    if r2.get("jira_key") in mapped_by_key:
+                        r2["status"] = mapped_by_key[r2["jira_key"]]
             except Exception as exc:
                 logger.warning("op bulk status refresh failed: %s", exc)
 
-
-def _map_jira_status(name: str) -> str | None:
-    s = (name or "").lower()
-    if any(w in s for w in ("open", "to do", "backlog", "reopened", "re-open")):
-        return "open"
-    if any(w in s for w in ("progress", "pending", "waiting")):
-        return "pending"
-    if any(w in s for w in ("done", "resolved", "complete")):
-        return "resolved"
-    if "clos" in s:
-        return "closed"
-    return None
 
 @router.get("/tickets")
 def list_tickets(
@@ -240,38 +259,13 @@ def list_tickets(
         params["user"] = user
 
     rows = _rows(sql, params)
-    _bulk_upstream_status_refresh(rows)  # v1.6.13 — auto-resync from Jira/OP
-
-    # v0.21.4 — Jira status sync-on-read (60s TTL per ticket): the board shows
-    # fresh status after changes made directly in Jira (reopen, done, etc.).
-    now = time.time()
-    for r in rows:
-        jk = r.get("jira_key")
-        if not jk:
-            continue
-        # v1.1.0 — OpenProject work packages: status already synced at pull time;
-        # Jira-only live sync path below.
-        if jk.startswith("op-"):
-            continue
-        cached = _jira_status_cache.get(jk)
-        if cached and (now_cached := cached[0]) and (time.time() - now_cached) < _JIRA_SYNC_TTL:
-            r["status"] = cached[1]
-            continue
-        from app.integrations.jira import fetch_issue_status
-
-        live = fetch_issue_status(jk)
-        mapped = _map_jira_status(live.get("status") if live.get("ok") else None)
-        if mapped:
-            r["status"] = mapped
-            # look up internal DB id by jira_key (r["id"] may be missing/None on this row shape)
-            with SessionLocal() as s:
-                row = s.execute(text("SELECT id FROM jira_tickets WHERE jira_key = :k"),
-                                {"k": jk}).first()
-                if row and row[0] is not None:
-                    s.execute(text("UPDATE jira_tickets SET status=:s WHERE id=:i"),
-                              {"s": mapped, "i": row[0]})
-                    s.commit()
-        _jira_status_cache[jk] = (time.time(), mapped or (r.get("status") or ""))
+    # v1.6.14 — the status refresh is the ONLY place that talks to Jira/OP. The
+    # inline per-ticket loop that used to follow this call re-fetched every key,
+    # re-mapped it with a second, weaker mapper and re-wrote the row: the board
+    # paid twice for one answer, and the two mappers disagreed on "Pending"
+    # (open vs pending). Removed; `_bulk_upstream_status_refresh` already sets
+    # r["status"] and persists any change.
+    _bulk_upstream_status_refresh(rows)
 
     _labels = _domain_labels()  # v1.6.3 — pretty category labels
     out = []

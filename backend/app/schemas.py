@@ -110,3 +110,78 @@ class DomainUpdateRequest(BaseModel):
     color: str | None = None
     custom_icon: str | None = None
     is_active: bool | None = None
+
+
+# --------------------------------------------------------------------------- #
+# RESPONSE models (audit 2026-11-01)
+#
+# Every route previously declared `-> dict`, so the wire contract lived only in
+# the handler body: a renamed key shipped silently and the SPA found out at
+# runtime. These models make the contract explicit and give /docs a real schema.
+#
+# They use `extra="allow"` on purpose. FastAPI FILTERS the response through the
+# model, so a strict model that misses a field would silently delete that field
+# from the payload — turning a documentation improvement into an outage. With
+# extra="allow" the typed fields are documented and anything the handler adds
+# still reaches the client.
+# --------------------------------------------------------------------------- #
+
+class LooseModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class HealthResponse(LooseModel):
+    status: str
+    env: str | None = None
+    conf_threshold: float | None = None
+
+
+class BrandingResponse(LooseModel):
+    """PUBLIC — the login page renders before any token exists."""
+    logo: str | None = None
+    appName: str | None = None
+    updated_at: str | None = None
+
+
+class McpServerItem(LooseModel):
+    """One entry of the chat composer's scope picker. Never carries a URL/token."""
+    name: str
+    label: str | None = None
+    reachable: bool | None = None
+
+
+class McpServersResponse(LooseModel):
+    servers: list[McpServerItem] = []
+    can_scope: bool = False
+
+
+class EscalationItem(LooseModel):
+    id: int | None = None
+    jira_key: str | None = None
+    domain: str | None = None
+    status: str | None = None
+    created_at: str | None = None
+    link: str | None = None
+    session_id: str | None = None
+
+
+class EscalationsResponse(LooseModel):
+    escalations: list[EscalationItem] = []
+
+
+class FeedbackResponse(LooseModel):
+    status: str
+    saved: bool
+    rating: int
+
+
+class EvalCase(LooseModel):
+    question: str
+    domain: str | None = None
+    must_contain: list[str] = []
+    expected_sources: list[str] = []
+
+
+class EvalCasesResponse(LooseModel):
+    n_cases: int
+    cases: list[EvalCase] = []

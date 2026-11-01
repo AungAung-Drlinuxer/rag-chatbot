@@ -197,8 +197,10 @@ def _ldap_authenticate(username: str, password: str) -> str | None:
                             ), {"u": base, "dn": None})
                             s.commit()
                             return f"pending:{base}"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # The user is about to be logged in regardless, but without a
+                    # users row they are invisible to the approval queue. Log it.
+                    logger.warning("could not record pending LDAP user %s: %s", base, exc)
                 return username.split("@")[0]
             logger.warning("LDAP UPN bind failed for %s (%s)", username,
                            uc2.result.get("description"))

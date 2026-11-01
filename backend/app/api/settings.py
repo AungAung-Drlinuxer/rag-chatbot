@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,7 +19,37 @@ from app.persistence.database import SessionLocal, engine
 
 logger = logging.getLogger("dashboard")
 
+
+
+def _json_dict(raw, default: dict | None = None) -> dict:
+    """Decode a `system_settings.value` column into a dict.
+
+    The column is JSONB in prod but plain TEXT in some older rows, so a stored
+    value can arrive as a str, as a dict, or as None. Ten endpoints used to
+    repeat this decode inline, which is why a fix to one copy never reached the
+    others. Unknown / malformed shapes degrade to `default` rather than raising:
+    a corrupt settings blob must not take the endpoint down.
+    """
+    if raw is None:
+        return dict(default or {})
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return dict(default or {})
+    return raw if isinstance(raw, dict) else dict(default or {})
+
+
+def _load_setting(key: str, default: dict | None = None) -> dict:
+    """Read one `system_settings` row and decode it. Missing row -> `default`."""
+    with SessionLocal() as s:
+        from sqlalchemy import text as _t
+        row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
+                        {"k": key}).first()
+    return _json_dict(row[0] if row else None, default)
+
 from app.observability.audit import audit
+from app.schemas import BrandingResponse, McpServersResponse
 from fastapi import UploadFile as _UPLOAD_FILE, File as _FILE, Form as _FORM
 
 router = APIRouter(prefix="/api")
@@ -35,7 +66,6 @@ def _rows(sql: str, params: dict | None = None) -> list[dict]:
 @router.get("/settings")
 def get_user_settings(user: str = Depends(get_current_user)) -> dict:
     """Returns the current user's saved preferences as a flat key/value map."""
-    import json as _json
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t(
@@ -43,7 +73,7 @@ def get_user_settings(user: str = Depends(get_current_user)) -> dict:
         ), {"u": user}).first()
     prefs = row[0] if row and row[0] else {}
     if isinstance(prefs, str):
-        try: prefs = _json.loads(prefs)
+        try: prefs = json.loads(prefs)
         except Exception: prefs = {}
     return {"settings": prefs or {}, "username": user}
 
@@ -56,14 +86,13 @@ def put_user_settings(payload: dict, user: str = Depends(get_current_user)) -> d
     settings = payload.get("settings")
     if not isinstance(settings, dict):
         raise HTTPException(status_code=400, detail="settings must be an object")
-    import json as _json
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         s.execute(_t(
             "INSERT INTO user_settings (username, theme, density, prefs) "
             "VALUES (:u, 'light', 'comfortable', :p) "
             "ON CONFLICT (username) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = NOW()"
-        ), {"u": user, "p": _json.dumps(settings)})
+        ), {"u": user, "p": json.dumps(settings)})
         s.commit()
     return {"ok": True, "username": user, "count": len(settings)}
 
@@ -81,17 +110,12 @@ def get_smtp_settings(user: str = Depends(get_current_user)) -> dict:
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = 'smtp'")).first()
-    import json as _json
-    val = row[0] if row else {}
-    if isinstance(val, str):
-        try: val = _json.loads(val)
-        except Exception: val = {}
+    val = _json_dict(row[0] if row else None)
     # v1.6.35 — same write-only policy as the integrations: no stored value is
     # returned (host / username / from-address were being echoed verbatim, and the
     # smarthost account name is itself sensitive in most enterprises).
     from app.security.credentials import MASK, fields_set, redact_config
 
-    val = val or {}
     set_keys = fields_set(val)
     return {
         "smtp": redact_config(val),
@@ -110,12 +134,7 @@ def put_smtp_settings(payload: dict, user: str = Depends(get_current_user)) -> d
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = 'smtp'")).first()
-        import json as _json
-        current = row[0] if row else {}
-        if isinstance(current, str):
-            try: current = _json.loads(current)
-            except Exception: current = {}
-        current = current or {}
+        current = _json_dict(row[0] if row else None)
         # merge; empty password keeps the existing one
         for k, v in data.items():
             if k in SMTP_KEYS:
@@ -125,7 +144,7 @@ def put_smtp_settings(payload: dict, user: str = Depends(get_current_user)) -> d
         s.execute(_t(
             "INSERT INTO system_settings (key, value, updated_at) VALUES ('smtp', :v, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
-        ), {"v": _json.dumps(current)})
+        ), {"v": json.dumps(current)})
         s.commit()
     return {"ok": True}
 
@@ -138,12 +157,7 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = 'smtp'")).first()
-    import json as _json
-    cfg = row[0] if row else {}
-    if isinstance(cfg, str):
-        try: cfg = _json.loads(cfg)
-        except Exception: cfg = {}
-    cfg = cfg or {}
+    cfg = _json_dict(row[0] if row else None)
     host = cfg.get("host"); port = int(cfg.get("port") or 587)
     username = cfg.get("username"); password = cfg.get("password")
     from_addr = cfg.get("from_address") or username
@@ -264,7 +278,6 @@ def get_integration_settings(key: str, user: str = Depends(get_current_user)) ->
     if key not in INTEGRATION_KEYS:
         raise HTTPException(status_code=404, detail="Unknown integration")
 
-    import json as _json
 
     from app.security.credentials import (
         MASK,
@@ -283,10 +296,9 @@ def get_integration_settings(key: str, user: str = Depends(get_current_user)) ->
     updated_at = row[1] if row else None
     if isinstance(val, str):
         try:
-            val = _json.loads(val)
+            val = json.loads(val)
         except Exception:
             val = {}
-    val = val or {}
 
     set_keys = fields_set(val)
     return {
@@ -346,11 +358,7 @@ def put_integration_settings(key: str, payload: dict, user: str = Depends(get_cu
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"), {"k": key}).first()
-        import json as _json
-        current = row[0] if row else {}
-        if isinstance(current, str):
-            try: current = _json.loads(current)
-            except Exception: current = {}
+        current = _json_dict(row[0] if row else None)
         # v1.6.35 — central policy in app/security/credentials.py:
         #   mask echoed back -> refused (would destroy the real value)
         #   "__CLEAR__"      -> delete the field
@@ -360,7 +368,7 @@ def put_integration_settings(key: str, payload: dict, user: str = Depends(get_cu
         s.execute(_t(
             "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
-        ), {"k": key, "v": _json.dumps(current)})
+        ), {"k": key, "v": json.dumps(current)})
         s.commit()
     _reload_after_change(key)
     return {"ok": True}
@@ -373,12 +381,7 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"), {"k": key}).first()
-    import json as _json
-    cfg = row[0] if row else {}
-    if isinstance(cfg, str):
-        try: cfg = _json.loads(cfg)
-        except Exception: cfg = {}
-    cfg = cfg or {}
+    cfg = _json_dict(row[0] if row else None)
     try:
         if key == "confluence":
             url = (cfg.get("base_url") or "").rstrip("/")
@@ -550,12 +553,7 @@ def list_llm_models(user: str = Depends(get_current_user)) -> dict:
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = 'llm'")).first()
-    import json as _json
-    cfg = row[0] if row else {}
-    if isinstance(cfg, str):
-        try: cfg = _json.loads(cfg)
-        except Exception: cfg = {}
-    cfg = cfg or {}
+    cfg = _json_dict(row[0] if row else None)
     # ClinePass: the gateway's generic /models listing omits every cline-pass/*
     # id, so the public recommended-models catalogue is the only correct source.
     if _is_clinepass(cfg):
@@ -599,7 +597,7 @@ _ALLOWED_MIME = {"image/png": "png", "image/jpeg": "jpg"}
 _MAX_LOGO_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
-@router.get("/branding")
+@router.get("/branding", response_model=BrandingResponse)
 def get_branding() -> dict:
     """PUBLIC (no auth) — the login page needs the logo before any token exists.
 
@@ -607,17 +605,12 @@ def get_branding() -> dict:
     The data-url embeds the bytes, so the SPA can render it without a separate
     authenticated fetch.
     """
-    import json as _json
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t(
             "SELECT value, updated_at FROM system_settings WHERE key = :k"
         ), {"k": BRANDING_KEY}).first()
-    val = row[0] if row else None
-    if isinstance(val, str):
-        try: val = _json.loads(val)
-        except Exception: val = {}
-    val = val or {}
+    val = _json_dict(row[0] if row else None)
     return {
         "logo": val.get("logo") or None,          # data:image/png;base64,...
         "appName": val.get("appName") or None,
@@ -654,23 +647,18 @@ async def put_branding_logo(
         raise HTTPException(status_code=415, detail="File is not a real JPEG")
 
     data_url = f"data:{mime};base64," + _b64.b64encode(data).decode()
-    import json as _json
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
                         {"k": BRANDING_KEY}).first()
-        cur = row[0] if row else {}
-        if isinstance(cur, str):
-            try: cur = _json.loads(cur)
-            except Exception: cur = {}
-        cur = cur or {}
+        cur = _json_dict(row[0] if row else None)
         cur["logo"] = data_url
         if appName is not None:
             cur["appName"] = str(appName).strip() or None
         s.execute(_t(
             "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
-        ), {"k": BRANDING_KEY, "v": _json.dumps(cur)})
+        ), {"k": BRANDING_KEY, "v": json.dumps(cur)})
         s.commit()
     audit("branding.logo.update", user, detail=f"mime={mime} bytes={len(data)}")
     return {"ok": True, "bytes": len(data), "mime": mime, "appName": cur.get("appName")}
@@ -689,16 +677,11 @@ def put_branding_app_name(
     _require_admin(user)
     name = body.get("appName")
     name = str(name).strip() if name is not None else None
-    import json as _json
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
                         {"k": BRANDING_KEY}).first()
-        cur = row[0] if row else {}
-        if isinstance(cur, str):
-            try: cur = _json.loads(cur)
-            except Exception: cur = {}
-        cur = cur or {}
+        cur = _json_dict(row[0] if row else None)
         if name:
             cur["appName"] = name[:60]  # cap length
         else:
@@ -706,7 +689,7 @@ def put_branding_app_name(
         s.execute(_t(
             "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
-        ), {"k": BRANDING_KEY, "v": _json.dumps(cur)})
+        ), {"k": BRANDING_KEY, "v": json.dumps(cur)})
         s.commit()
     audit("branding.appname.update", user, detail=f"appName={name or '(reset)'}")
     return {"ok": True, "appName": cur.get("appName")}
@@ -716,25 +699,20 @@ def put_branding_app_name(
 def delete_branding_logo(user: str = Depends(get_current_user)) -> dict:
     """ADMIN — reset to the default built-in ITH mark."""
     _require_admin(user)
-    import json as _json
     with SessionLocal() as s:
         from sqlalchemy import text as _t
         row = s.execute(_t("SELECT value FROM system_settings WHERE key = :k"),
                         {"k": BRANDING_KEY}).first()
-        cur = row[0] if row else {}
-        if isinstance(cur, str):
-            try: cur = _json.loads(cur)
-            except Exception: cur = {}
-        cur = cur or {}
+        cur = _json_dict(row[0] if row else None)
         cur.pop("logo", None)
         s.execute(_t(
             "INSERT INTO system_settings (key, value, updated_at) VALUES (:k, :v, NOW()) "
             "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"
-        ), {"k": BRANDING_KEY, "v": _json.dumps(cur)})
+        ), {"k": BRANDING_KEY, "v": json.dumps(cur)})
         s.commit()
     audit("branding.logo.reset", user)
     return {"ok": True}
-@router.get("/mcp/servers")
+@router.get("/mcp/servers", response_model=McpServersResponse)
 def mcp_servers(user: str = Depends(get_current_user)) -> dict:
     """The connectors a CONVERSATION can be scoped to — the chat's scope picker.
 
