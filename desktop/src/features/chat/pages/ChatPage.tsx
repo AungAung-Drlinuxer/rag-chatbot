@@ -1,6 +1,6 @@
 import {
-  Trash2, Send, Bot,
-  Menu, Paperclip, Search, Square,
+  Trash2, Bot,
+  Menu, Search,
   Shield, Info, MessageSquareText,
   Check, Pencil,
   Ticket as TicketIcon,
@@ -24,6 +24,7 @@ import {
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import ComposerControls, { ModeControl } from "@/features/chat/components/ComposerControls";
 import ScopeControl from "@/features/chat/components/ScopeControl";
+import Composer from "@/components/Composer";
 import MessageBubble from "@/features/chat/components/MessageBubble";
 import SessionPanel from "@/features/chat/components/SessionPanel";
 import {
@@ -83,7 +84,6 @@ export default function Chat({
   const [pendingFiles, setPendingFiles] = useState<{ id: string; filename: string; mime: string }[]>([]);
   // B-6 — notification bell data (admin/agent)
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [stage, setStage] = useState("");
   // v1.6.12 — RAG pipeline live tracker (per-stage telemetry + streaming pill)
@@ -946,100 +946,62 @@ useEffect(() => {
                 engine={llmProvider}
                 onEngineChange={setLlmProvider}
               />
-              <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-1.5 shadow-xs transition-all focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-800 dark:bg-slate-900/80 dark:focus-within:bg-slate-900">
-                {/* The connector scope lives IN the field, not on the row above it: the
-                    type area is where the user decides what this question may reach, and
-                    a control that changes the answer belongs next to the box that asks.
-                    Hidden in knowledge-base mode — with documents-only answers there is no
-                    connector to scope, and a visible-but-inert control reads as a bug. */}
-                {chatMode !== "kb" && (
-                  <ScopeControl
-                    servers={mcpServers}
-                    value={chatServers}
-                    onChange={changeScope}
-                    className="hidden shrink-0 sm:block"
-                  />
-                )}
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-700 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                  title="Attach file or image"
-                >
-                  <Paperclip className="size-4" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.pdf,.txt,.md,.doc,.docx,.xlsx,.csv"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    setUploading(true);
-                    try {
-                      const res = await uploadAttachment(f, sessionRef.current);
-                      setPendingFiles((p) => [...p, res]);
-                    } catch (err: any) {
-                      console.warn("upload failed:", err?.message);
-                    } finally {
-                      setUploading(false);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }
-                  }}
-                />
-                <textarea
-                  ref={composerRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Ctrl/Cmd+Enter is what the composer advertises, so it must work.
-                    // Plain Enter keeps working too — it is what people actually press.
-                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault();
-                      sendMessage();
-                      return;
-                    }
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  rows={1}
-                  placeholder="Ask an IT question..."
-                  className="max-h-40 min-h-[30px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] leading-6 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                 aria-label="Ask an IT question"/>
-                {/* The key hint belongs INSIDE the field, beside the button it describes,
-                    rather than on the disclaimer row below where it read as fine print. */}
-                <kbd className="hidden shrink-0 rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 font-mono text-2xs text-slate-500 md:inline-block dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
-                  Ctrl+Enter
-                </kbd>
-                {isTyping ? (
-                  /* Stop-generation: same footprint as Send so the row never shifts. */
-                  <button
-                    type="button"
-                    onClick={stopGeneration}
-                    aria-label="Stop generating"
-                    title="Stop generating (Esc)"
-                    className="grid size-9 shrink-0 place-items-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 active:scale-95 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    <Square className="size-3.5 fill-current" />
-                  </button>
-                ) : (
-                  /* A round accent disc with a paper-plane glyph — the shape the reference
-                     draws. ArrowUp read as "scroll to top" next to a rounded-square field. */
-                  <button
-                    type="submit"
-                    disabled={!input.trim()}
-                    aria-label="Send message"
-                    title="Send (Ctrl+Enter)"
-                    className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
-                  >
-                    <Send className="size-4" />
-                  </button>
-                )}
-              </div>
+              <Composer
+                value={input}
+                onChange={setInput}
+                onSubmit={sendMessage}
+                busy={isTyping}
+                onStop={stopGeneration}
+                hint
+                multiline
+                attaching={uploading}
+                attachAccept="image/*,.pdf,.txt,.md,.doc,.docx,.xlsx,.csv"
+                inputRef={composerRef}
+                aria-label="Ask an IT question"
+                onAttach={async (f: File) => {
+                  setUploading(true);
+                  try {
+                    const res = await uploadAttachment(f, sessionRef.current);
+                    setPendingFiles((p) => [...p, res]);
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+                leading={
+                  chatMode !== "kb" ? (
+                    /* The connector scope lives IN the field, not on the row above it: the
+                       type area is where the user decides what this question may reach, and
+                       a control that changes the answer belongs next to the box that asks.
+                       Hidden in knowledge-base mode — with documents-only answers there is
+                       no connector to scope, and a visible-but-inert control reads as a bug. */
+                    <ScopeControl
+                      servers={mcpServers}
+                      value={chatServers}
+                      onChange={changeScope}
+                    />
+                  ) : null
+                }
+                above={
+                  pendingFiles.length > 0 ? (
+                    <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
+                      {pendingFiles.map((f) => (
+                        <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-2xs">
+                          {f.mime.startsWith("image/") ? "🖼️" : "📄"} {f.filename}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${f.filename}`}
+                            className="text-muted-foreground hover:text-red-500"
+                            onClick={() => setPendingFiles((p) => p.filter((x) => x.id !== f.id))}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null
+                }
+              />
+
             </form>
 
             {/* S3.11 — 9.5px slate-500 on the page background failed comfortable

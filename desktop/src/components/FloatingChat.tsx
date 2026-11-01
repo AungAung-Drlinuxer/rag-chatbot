@@ -19,15 +19,14 @@ import {
   type ReactNode,
 } from "react";
 import AgentActivity, { stageFromText } from "@/components/AgentActivity";
+import Composer from "@/components/Composer";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import {
-  ArrowUp,
   Bot,
   Check,
   Copy,
   Minus,
   Pencil,
-  Paperclip,
   RefreshCw,
   RotateCcw,
   Share2,
@@ -127,7 +126,6 @@ export function FloatingChatPopup() {
   }, []);
   const [editText, setEditText] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -539,46 +537,22 @@ export function FloatingChatPopup() {
         </div>
       )}
 
-      {/* Composer */}
+      {/* Composer — the same component the chat page uses, so the two cannot drift. */}
       <div className="shrink-0 border-t border-[var(--border)] bg-white p-2.5 dark:bg-[#111827]">
-        <form
-          onSubmit={(e) => { e.preventDefault(); send(); }}
-          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 px-2 py-1 transition focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900/60 dark:focus-within:bg-[#0B1220]"
-        >
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
+        <form onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <Composer
+            value={input}
+            onChange={setInput}
+            onSubmit={send}
+            busy={isTyping}
+            hint={false}
+            multiline={false}
+            placeholder="Ask an IT question..."
+            aria-label="Ask a question"
+            onAttach={async (f: File) => {
               try { await uploadAttachment(f, sessionRef); } catch { /* non-blocking */ }
-              e.target.value = "";
             }}
           />
-          <button
-            type="button"
-            aria-label="Attach file"
-            onClick={() => fileRef.current?.click()}
-            className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-slate-200/60 hover:text-foreground dark:hover:bg-slate-800"
-          >
-            <Paperclip className="size-4" />
-          </button>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Ask an IT question..."
-            className="h-9 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-           aria-label="Ask a question"/>
-          <button
-            type="submit"
-            aria-label="Send message"
-            disabled={!input.trim() || isTyping}
-            className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-slate-800 dark:disabled:text-slate-600"
-          >
-            <ArrowUp className="size-4" />
-          </button>
         </form>
         <div className="mt-1.5 flex items-center justify-center gap-1 text-2xs text-muted-foreground">
           <Shield className="size-3" />
