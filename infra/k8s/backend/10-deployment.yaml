@@ -121,7 +121,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: backend
-          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.14
+          image: harbor.drlinuxer.com/rag-chatbot/backend:1.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

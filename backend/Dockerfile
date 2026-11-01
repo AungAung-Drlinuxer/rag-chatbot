@@ -8,8 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app"
 
 # 1) Install dependencies (cached layer)
+# v1.0.1 — drop uv's download cache in the SAME RUN that creates it. `uv sync`
+#    hardlinks from /root/.cache/uv into the venv, so deleting the cache here
+#    costs nothing at runtime but removes ~1.3GB from the layer; deleting it in
+#    a later RUN would not shrink the image at all (layer sizes are additive).
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project && rm -rf /root/.cache/uv
 
 # 4) v0.21.54 — bake the reranker model into the image. Without this, every fresh
 #    pod re-downloads ~1.1GB from huggingface.co on the first chat request: CPU
@@ -22,6 +26,13 @@ RUN uv sync --frozen --no-dev --no-install-project
 #    BAKE_RERANKER=0 skips it entirely once RERANK_MODE=remote is rolled out
 #    (scoring then lives in rerank-svc) → ~1.1GB lighter image:
 #      docker build --build-arg BAKE_RERANKER=0 ...
+# v1.0.1 — prod has RERANK_MODE=remote in backend-config and rerank-svc is up,
+#    so 1.0.1 is built with BAKE_RERANKER=0. Verified safe: app/rag/reranker.py
+#    only reaches CrossEncoder when rerank_mode != "remote" (line 52 returns the
+#    remote client first), and the import is lazy inside _get_model(), so nothing
+#    touches /opt/hf-cache at startup. The ARG default stays 1 on purpose — a
+#    plain `docker build` with RERANK_MODE=local would otherwise fail on
+#    HF_HUB_OFFLINE=1 below.
 ENV HF_HOME=/opt/hf-cache
 # v0.21.54 — cgroup CPU limit is 2 cores. Torch/OMP default to the HOST core count
 # (16+), so every inference call oversubscribes, gets throttled by the cgroup, and
@@ -49,7 +60,9 @@ COPY workers ./workers
 COPY scripts ./scripts
 
 # 3) Install the project itself
-RUN uv sync --frozen --no-dev
+# v1.0.1 — the first sync already removed the cache, so this RUN recreates it
+#    from scratch; clean it again in the same RUN for the same reason.
+RUN uv sync --frozen --no-dev && rm -rf /root/.cache/uv
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
