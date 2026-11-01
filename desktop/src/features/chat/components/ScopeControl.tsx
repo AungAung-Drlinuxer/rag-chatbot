@@ -130,10 +130,13 @@ export default function ScopeControl({
         title={`Connectors: ${label}`}
         aria-haspopup="listbox"
         aria-expanded={open}
+        /* The pill now sits INSIDE the composer field, next to the textarea, so it needs a
+           real border to read as a control rather than as loose text. Previously it sat on
+           its own row above the field, where a borderless chip was the quieter choice. */
         className={`inline-flex max-w-[11rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition ${
           open
-            ? "border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-            : "border-transparent bg-slate-100/80 text-slate-500 hover:bg-slate-200/80 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:bg-slate-800"
+            ? "border-slate-400 bg-white text-slate-700 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100"
+            : "border-slate-300 bg-white/70 text-slate-600 hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300 dark:hover:bg-slate-800"
         }`}
       >
         <Plug className={`size-3 shrink-0 ${value.length ? "text-violet-500" : ""}`} />

@@ -88,6 +88,21 @@ window.fetch = async (input: RequestInfo | URL, _init?: RequestInit) => {
       ],
     });
   }
+
+  // The composer's connector-scope pill reads GET /api/mcp/servers and hides itself when the
+  // list is empty. Without a stub the pill never mounts, so the composer screenshot would be
+  // missing the very control under review.
+  if (/\/api\/mcp\/servers/.test(url)) {
+    return json({
+      servers: [
+        { name: "rancher", label: "Rancher", curated: true },
+        { name: "proxmox", label: "Proxmox", curated: true },
+        { name: "grafana", label: "Grafana", curated: true },
+        { name: "postgres", label: "PostgreSQL", curated: false },
+        { name: "gitea", label: "Gitea", curated: false },
+      ],
+    });
+  }
   if (/\/api\/conversations\/[^/]+\/messages/.test(url)) {
     return json({ session_id: SESSION, messages: CONV_MESSAGES, connector_scope: [] });
   }
