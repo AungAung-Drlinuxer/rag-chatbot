@@ -1,11 +1,13 @@
 import {
   Bell,
   Bot,
+  Building2,
   Check,
   Globe,
   Mail,
   Link2,
   Monitor,
+  RotateCcw,
   Save,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -27,11 +29,13 @@ import {
   getSmtpSettings, putSmtpSettings, sendTestEmail,
 } from "@/features/settings/api";
 
-/* v0.21.81 — Settings redesigned to the reference single-scroll layout:
-   section cards (General/Appearance/Integrations/AI Assistant/Notifications/
-   Security info) + sticky bottom save bar. All live logic preserved: server
-   load/save, instant theme side-effects, RAG runtime knobs (admin), and the
-   Integrations status cards + editor tabs + System health checks. */
+/* v1.6.90 — Settings re-skinned to the workspace mockup:
+   breadcrumb + H1 + right-aligned access badge, a horizontal TAB row that
+   switches between the four groups (Preferences / Integrations / AI service /
+   Email server), a two-column body (content + 260px right rail) and a sticky
+   footer bar. All live logic is preserved: server load/save, instant theme
+   side-effects, RAG runtime knobs (admin), the Integrations status cards +
+   editor tabs + System health checks, and write-only credentials. */
 
 /* ============================================================
    SHARED ROW COMPONENTS (reference style)
@@ -75,12 +79,11 @@ function SelectRow({ label, description, value, onChange, options, width = "w-52
 }
 
 
-/* Grouped settings navigation (v1.6.75). Modelled on the Claude Desktop settings
- * sidebar: labelled groups, icon + label rows, one panel visible at a time.
- *
- * Only panels that HAVE content are listed. That screen also shows Extensions,
- * Developer and Plugins; this app has no settings behind those yet, and an empty page
- * is worse than an absent one. The service-status block lives inside Integrations. */
+/* Grouped settings navigation (v1.6.75). The four groups are the four TABS the
+ * mockup renders as a horizontal row. Only panels that HAVE content are listed:
+ * this app has no settings behind Extensions / Developer / Plugins, and an empty
+ * page is worse than an absent one. The service-status block lives inside
+ * Integrations. */
 const SETTINGS_NAV: { group: string; items: { id: string; label: string; icon: React.ReactNode }[] }[] = [
   {
     group: "Application",
@@ -125,19 +128,32 @@ function applyThemeNow(dark: boolean, dense: boolean, anim: boolean, fontSize: n
   root.style.setProperty("--chat-font-size", `${fontSize}px`);
 }
 
+/** The exact payload the preferences Save writes, and the shape the dirty check
+ *  compares against. Kept in one place so "dirty" and "what gets saved" can never
+ *  drift apart. */
+type PrefValues = {
+  theme: "light" | "dark";
+  density: "comfortable" | "compact";
+  compact: boolean;
+  animations: boolean;
+  chat_font_size: number;
+  show_rag_sources: boolean;
+  show_token_usage: boolean;
+  markdown_rendering: boolean;
+};
+
 /* ============================================================
    PAGE
 ============================================================ */
 
 export default function Settings({ role }: { role?: string }) {
-  // v1.6.75 — which settings panel is open (grouped sidebar nav).
+  // v1.6.75 — which settings tab is open.
   const [active, setActive] = useState("general");
-  // v0.21.90 — role gating: user/IT Support/Knowledge Manager only see General,
-  // Appearance, AI Assistant, Notifications. Integrations + Mail are admin-only.
+  // v0.21.90 — role gating: user/IT Support/Knowledge Manager only see Preferences,
+  // AI Assistant, Notifications. Integrations + Mail are admin-only.
   const isAdmin = role === "admin";
 
-  const [saved, setSaved] =
-    useState(false);
+  const [saved, setSaved] = useState(false);
 
   // Personal preferences backed by typed user_settings fields where available.
   const [darkMode, setDarkMode] = useState(false);
@@ -151,6 +167,23 @@ export default function Settings({ role }: { role?: string }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // v1.6.90 — the last values known to be stored server-side. `dirty` is derived by
+  // comparing the live form to this baseline, so the sticky footer can tell the truth
+  // about whether there is anything to save, and Discard can restore it exactly.
+  const [baseline, setBaseline] = useState<PrefValues | null>(null);
+
+  const currentValues: PrefValues = {
+    theme: darkMode ? "dark" : "light",
+    density: compact ? "compact" : "comfortable",
+    compact,
+    animations,
+    chat_font_size: chatFontSize,
+    show_rag_sources: sourceCitations,
+    show_token_usage: showTokenUsage,
+    markdown_rendering: markdownRendering,
+  };
+  const dirty = baseline !== null && JSON.stringify(currentValues) !== JSON.stringify(baseline);
+
   // The API returns a flat preference object (older servers may wrap it).
   useEffect(() => {
     let mounted = true;
@@ -163,13 +196,26 @@ export default function Settings({ role }: { role?: string }) {
         const dense = typeof s.compact === "boolean" ? s.compact : s.density === "compact";
         const fontSize = typeof s.chat_font_size === "number" ? s.chat_font_size : 14;
         const anim = s.animations !== false;
+        const showSources = typeof s.show_rag_sources === "boolean" ? s.show_rag_sources : true;
+        const showTokens = typeof s.show_token_usage === "boolean" ? s.show_token_usage : true;
+        const mdRender = typeof s.markdown_rendering === "boolean" ? s.markdown_rendering : true;
         setDarkMode(dark);
         setCompact(dense);
         setAnimations(anim);
         setChatFontSize(fontSize);
-        if (typeof s.show_rag_sources === "boolean") setSourceCitations(s.show_rag_sources);
-        if (typeof s.show_token_usage === "boolean") setShowTokenUsage(s.show_token_usage);
-        if (typeof s.markdown_rendering === "boolean") setMarkdownRendering(s.markdown_rendering);
+        setSourceCitations(showSources);
+        setShowTokenUsage(showTokens);
+        setMarkdownRendering(mdRender);
+        setBaseline({
+          theme: dark ? "dark" : "light",
+          density: dense ? "compact" : "comfortable",
+          compact: dense,
+          animations: anim,
+          chat_font_size: fontSize,
+          show_rag_sources: showSources,
+          show_token_usage: showTokens,
+          markdown_rendering: mdRender,
+        });
         applyThemeNow(dark, dense, anim, fontSize);
       })
       .catch((e) => { if (mounted) setSaveError(e?.message || "Could not load saved settings"); });
@@ -178,20 +224,12 @@ export default function Settings({ role }: { role?: string }) {
 
   async function saveSettings() {
     setSaving(true); setSaveError(null);
-    const payload = {
-      theme: darkMode ? "dark" as const : "light" as const,
-      density: compact ? "compact" as const : "comfortable" as const,
-      compact,
-      animations,
-      chat_font_size: chatFontSize,
-      show_rag_sources: sourceCitations,
-      show_token_usage: showTokenUsage,
-      markdown_rendering: markdownRendering,
-    };
+    const payload = currentValues;
     try {
       await updateMySettings(payload);
       applyThemeNow(darkMode, compact, animations, chatFontSize);
       window.dispatchEvent(new CustomEvent("ith:settings-saved", { detail: payload }));
+      setBaseline(currentValues);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2500);
     } catch (err: any) {
@@ -199,91 +237,75 @@ export default function Settings({ role }: { role?: string }) {
     } finally { setSaving(false); }
   }
 
-  const visibleNav = SETTINGS_NAV
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => isAdmin || item.id === "general"),
-    }))
-    .filter((group) => group.items.length > 0);
+  /** Restore the form to the last stored values and re-apply the theme. */
+  function discardChanges() {
+    if (!baseline) return;
+    const dark = baseline.theme === "dark";
+    setDarkMode(dark);
+    setCompact(baseline.compact);
+    setAnimations(baseline.animations);
+    setChatFontSize(baseline.chat_font_size);
+    setSourceCitations(baseline.show_rag_sources);
+    setShowTokenUsage(baseline.show_token_usage);
+    setMarkdownRendering(baseline.markdown_rendering);
+    applyThemeNow(dark, baseline.compact, baseline.animations, baseline.chat_font_size);
+    setSaveError(null);
+  }
+
+  const visibleItems = SETTINGS_NAV
+    .flatMap((group) => group.items)
+    .filter((item) => isAdmin || item.id === "general");
+
+  // Right-rail facts. Both are the app's real values, not decoration: the access
+  // level is the signed-in role and the environment is the build mode the app runs.
+  const roleLabel = isAdmin ? "Administrator" : role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
+  const buildMode = import.meta.env.MODE || "production";
+  const environment = buildMode.charAt(0).toUpperCase() + buildMode.slice(1);
 
   return (
     <PageShell>
-      <div className="min-h-full">
+      <div className="flex min-h-full flex-col">
         <PageHeader
+          breadcrumbs={["Workspace", "Settings"]}
           icon={<SettingsIcon className="size-5" />}
           title="Settings"
-          badge={isAdmin ? "Administrator" : "Preferences"}
-          description="Manage your IT Help application preferences"
+          description="Manage your workspace, connections, and preferences."
           actions={
             <div className="flex items-center gap-2">
-              {saved && (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-                  <Check className="size-3.5" /> Saved
-                </span>
-              )}
-              {saveError && <span className="max-w-[200px] truncate text-xs text-red-600" title={saveError}>{saveError}</span>}
-              {active === "general" && (
-                <button type="button" onClick={saveSettings} disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
-                  <Save className="size-3.5" />
-                  {saving ? "Saving…" : "Save changes"}
-                </button>
-              )}
+              {saveError && <span className="max-w-[240px] truncate text-xs text-red-600" title={saveError}>{saveError}</span>}
+              <span className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-2xs font-semibold text-[var(--accent-foreground)]">
+                {isAdmin ? "Admin access" : "Preferences"}
+              </span>
             </div>
           }
         />
 
-        {/* Main content — grouped nav on the left, one panel at a time (v1.6.75) */}
-        <main className="flex gap-6">
-          <nav aria-label="Settings sections" className="hidden w-52 shrink-0 lg:block">
-            {visibleNav.map((g) => (
-              <div key={g.group} className="mb-5">
-                <p className="mb-1.5 px-3 text-2xs font-semibold uppercase tracking-wider text-slate-400">
-                  {g.group}
-                </p>
-                <div className="space-y-0.5">
-                  {g.items.map((it) => (
-                    <button
-                      key={it.id}
-                      type="button"
-                      onClick={() => setActive(it.id)}
-                      aria-current={active === it.id ? "page" : undefined}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
-                        active === it.id
-                          ? "bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100"
-                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60"
-                      }`}
-                    >
-                      <span className={active === it.id ? "text-slate-700 dark:text-slate-200" : "text-slate-400"}>
-                        {it.icon}
-                      </span>
-                      {it.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
+        {/* Tabs — one group visible at a time (the mockup's horizontal switch). The
+            aria-label is kept so the section nav stays a labelled landmark. */}
+        <nav aria-label="Settings sections" className="mb-6 flex items-center gap-1 overflow-x-auto border-b border-[var(--border)]">
+          {visibleItems.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => setActive(it.id)}
+              aria-current={active === it.id ? "page" : undefined}
+              className={[
+                "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-xs font-medium transition",
+                active === it.id
+                  ? "border-[var(--primary)] text-[var(--primary)]"
+                  : "border-transparent text-muted-foreground hover:border-[var(--border)] hover:text-foreground",
+              ].join(" ")}
+            >
+              <span aria-hidden>{it.icon}</span>
+              {it.label}
+            </button>
+          ))}
+        </nav>
 
-          {/* On small screens the nav is a horizontal strip so nothing is unreachable. */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 lg:hidden">
-              {visibleNav.flatMap((g) => g.items).map((it) => (
-                <button
-                  key={it.id}
-                  type="button"
-                  onClick={() => setActive(it.id)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    active === it.id
-                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                  }`}
-                >
-                  {it.label}
-                </button>
-              ))}
-            </div>
-          <div className="space-y-5">
+        {/* Two-column body: content on the left, the 260px rail on the right. The rail
+            is hidden below ~1100px so the content column keeps the full width. */}
+        <main className="flex flex-1 items-start gap-8">
+          <div className="min-w-0 flex-1 space-y-4">
 
             {/* Personal chat preferences: every control changes message rendering. */}
             {active === "general" && (
@@ -375,7 +397,7 @@ export default function Settings({ role }: { role?: string }) {
             </SectionCard>
             )}
 
-            {/* Mail (SMTP) — admin only; part of the Notifications panel */}
+            {/* Mail (SMTP) — admin only; the Email server tab */}
             {isAdmin && active === "notifications" && <MailSettings />}
 
 
@@ -383,25 +405,85 @@ export default function Settings({ role }: { role?: string }) {
             {/* Provider, credentials, model detection and the retrieval knobs are one
                 decision, so they are one section with one Save. */}
             {active === "skills" && <AiServiceSettings isAdmin={isAdmin} />}
+          </div>
 
-            {/* ==================== SECURITY INFO ==================== */}
+          {/* ---- right rail ---------------------------------------------------------- */}
+          <aside className="hidden w-[260px] shrink-0 space-y-4 min-[1100px]:block">
+            <section className="rounded-xl border border-[var(--border)] bg-card p-5 text-card-foreground shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-8 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
+                  <Building2 className="size-4" />
+                </div>
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">Workspace settings</h2>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Your account and this deployment, at a glance.
+              </p>
+              <dl className="mt-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Access level</dt>
+                  <dd className="text-xs font-medium text-slate-900 dark:text-white">{roleLabel}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Environment</dt>
+                  <dd className="text-xs font-medium text-slate-900 dark:text-white">{environment}</dd>
+                </div>
+              </dl>
+            </section>
+
             <section className="rounded-xl border border-sky-100 bg-sky-50/60 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
               <div className="flex gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" />
                 <div>
                   <p className="text-sm font-semibold text-sky-900 dark:text-sky-300">Enterprise security</p>
                   <p className="mt-1 text-xs leading-5 text-sky-700 dark:text-sky-400">
-                    Authentication (LDAP/AD), RBAC roles, session policies, and integration credentials
-                    are managed by your IT administrators.
+                    Authentication (LDAP/AD), roles, session policies, and integration credentials
+                    are managed by IT administrators.
                   </p>
                 </div>
               </div>
             </section>
-          </div>
-          </div>
+          </aside>
         </main>
 
-        </div>
+        {/* Sticky footer. Rendered ONLY on Preferences: that is the one tab whose changes
+            the page itself owns and can save/discard. The other tabs (Integrations, AI
+            service, Email server) each own their own save button inside the panel, so a
+            page-level Save there would be a lie. */}
+        {active === "general" && (
+          <div className="sticky bottom-0 z-20 -mx-5 mt-6 border-t border-[var(--border)] bg-[var(--background)]/85 px-5 py-3 backdrop-blur lg:-mx-8 lg:px-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs" aria-live="polite">
+                {saving ? (
+                  <span className="text-muted-foreground">Saving…</span>
+                ) : saved ? (
+                  <span className="flex items-center gap-1.5 font-medium text-emerald-600">
+                    <Check className="size-3.5" /> Saved
+                  </span>
+                ) : dirty ? (
+                  <span className="flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                    <span className="size-1.5 rounded-full bg-amber-500" /> Unsaved changes
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">No unsaved changes</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={discardChanges} disabled={!dirty || saving}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-card px-3.5 py-2 text-xs font-medium text-foreground shadow-xs transition hover:bg-muted/50 disabled:opacity-50">
+                  <RotateCcw className="size-3.5" />
+                  Discard
+                </button>
+                <button type="button" onClick={saveSettings} disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
+                  <Save className="size-3.5" />
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </PageShell>
   );
 }
@@ -457,7 +539,6 @@ function MailSettings() {
       })
       .catch(() => setError("Failed to load mail settings"))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save() {
@@ -719,6 +800,3 @@ function IntegrationStatusCards() {
     </div>
   );
 }
-
-
-
