@@ -40,6 +40,7 @@ export function PageHeader({
   actions,
   icon,
   breadcrumbs,
+  eyebrow,
 }: {
   title: string;
   badge?: string;
@@ -48,6 +49,8 @@ export function PageHeader({
   icon?: ReactNode;
   /** B-5: optional breadcrumb trail, e.g. ["Workspace", "Tickets", "ITHD-22"] */
   breadcrumbs?: string[];
+  /** Optional uppercase kicker above the title, e.g. "ADMINISTRATION". */
+  eyebrow?: string;
 }) {
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -61,6 +64,11 @@ export function PageHeader({
               </span>
             ))}
           </nav>
+        )}
+        {eyebrow && (
+          <div className="mb-1.5 text-2xs font-semibold tracking-[0.14em] text-[var(--accent-foreground)]">
+            {eyebrow.toUpperCase()}
+          </div>
         )}
         <div className="flex items-center gap-3">
         {/* v0.21.67 — standardized page icon chip (every page, both themes) */}
