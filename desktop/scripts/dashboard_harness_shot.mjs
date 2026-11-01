@@ -103,7 +103,7 @@ const MEASURE = () => {
   const uniform = (a) => a.length > 0 && a.every((v) => Math.abs(v - a[0]) <= 1);
 
   const kpi = sectionWith("Total Conversations");
-  const chartRow = sectionWith("Top domains");
+  const chartRow = sectionWith("Knowledge by domain");
   const lowerRow = sectionWith("System health");
   const body = document.body.textContent ?? "";
   const de = document.documentElement;

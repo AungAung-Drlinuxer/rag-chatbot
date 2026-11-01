@@ -13,96 +13,76 @@ import {
 import { Card } from "@/components/ui/card";
 import type { Domain, HealthItem } from "@/features/dashboard/lib/dashboardTypes";
 import type { ReactNode } from "react";
-import { MiniSparkline } from "@/features/dashboard/components/DashboardCharts";
 
+/**
+ * One figure per KPI card, read top to bottom: muted label, big number, caption.
+ *
+ * The workspace mockup draws no icon tile and no sparkline on these cards, so neither is
+ * rendered — the figure is the whole card. `icon` and `tone` stay in the props (callers
+ * still pass them) so the component's public shape is unchanged, but nothing decorative
+ * is drawn from them any more.
+ */
 export function KpiCard({
-  icon,
   value,
   title,
   change,
   description,
   positive,
   loading,
-  tone = "sky",
   className,
 }: {
-  icon: ReactNode;
+  icon?: ReactNode;
   value: string;
   title: string;
   change?: string | null;
   description: string;
   positive?: boolean;
   loading: boolean;
-  /** v1.5.3 — semantic color for the icon tile */
   tone?: "sky" | "emerald" | "orange" | "violet" | "rose";
   /** grid placement — used to close an odd KPI row */
   className?: string;
 }) {
-  const toneCls: Record<string, string> = {
-    sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
-    orange: "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400",
-    rose: "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400",
-    violet: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400",
-  };
   return (
-    <Card className={["relative overflow-hidden rounded-xl p-4", className ?? ""].join(" ")}>
+    <Card className={["gap-0 rounded-xl border-[var(--border)] px-5 py-4 shadow-xs", className ?? ""].join(" ")}>
 
-      <div className="flex items-start justify-between">
-
-        <div>
-
-          <div className="text-2xl font-semibold tracking-tight">
-            {loading ? (
-              <div className="h-7 w-20 animate-pulse rounded bg-muted" />
-            ) : (
-              value
-            )}
-          </div>
-
-          <div className="mt-1 text-xs font-medium">
-            {title}
-          </div>
-
-          <div className="mt-2 flex items-center gap-1.5 text-2xs">
-
-            {change != null && (
-              positive ? (
-                <ArrowUpRight className="size-3 text-emerald-600" />
-              ) : (
-                <ArrowDownRight className="size-3 text-red-600" />
-              )
-            )}
-
-            {change != null && (
-              <span
-                className={
-                  positive
-                    ? "font-medium text-emerald-600"
-                    : "font-medium text-red-600"
-                }
-              >
-                {change}
-              </span>
-            )}
-
-            <span className="text-muted-foreground">
-              {description}
-            </span>
-
-          </div>
-
-        </div>
-
-        <div className={`grid size-10 place-items-center rounded-xl ${toneCls[tone]}`}>
-          {icon}
-        </div>
-
+      <div className="text-xs font-medium text-muted-foreground">
+        {title}
       </div>
 
-      {/* Small decorative sparkline */}
-      <div className="absolute bottom-3 right-3 opacity-60">
-        <MiniSparkline />
+      <div className="mt-2.5 text-3xl font-semibold tracking-tight">
+        {loading ? (
+          <div className="h-8 w-16 animate-pulse rounded bg-muted" />
+        ) : (
+          value
+        )}
+      </div>
+
+      <div className="mt-1 flex items-center gap-1.5 text-2xs">
+
+        {change != null && (
+          positive ? (
+            <ArrowUpRight className="size-3 text-emerald-600" />
+          ) : (
+            <ArrowDownRight className="size-3 text-red-600" />
+          )
+        )}
+
+        {change != null && (
+          <span
+            className={
+              positive
+                ? "font-medium text-emerald-600"
+                : "font-medium text-red-600"
+            }
+          >
+            {change}
+          </span>
+        )}
+
+        <span className="text-muted-foreground">
+          {description}
+        </span>
+
       </div>
 
     </Card>

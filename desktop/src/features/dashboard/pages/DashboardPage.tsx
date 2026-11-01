@@ -262,10 +262,12 @@ export default function Dashboard({ role }: Props) {
     return (
     <PageShell>
       <PageHeader
+      breadcrumbs={["Workspace", "Overview"]}
+      eyebrow="Administration"
       icon={<Activity className="size-5" />}
       badge={role === "admin" ? "Administrator" : "User"}
-      title="Dashboard"
-      description="Overview of IT Help Chatbot and system activity"
+      title="Workspace overview"
+      description="A clear view of support activity, knowledge, and system health."
       actions={<>
         {/* #15 — the reporting window is a FILTER, so it reads left-to-right
             before the actions that operate within it. */}
@@ -413,7 +415,7 @@ export default function Dashboard({ role }: Props) {
               />
             ) : (
             <>
-            <section className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <section className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
 
               <KpiCard
                 icon={
@@ -460,7 +462,7 @@ export default function Dashboard({ role }: Props) {
                 icon={<BookOpen className="size-4" />}
                 value={stats ? String(stats.kb_pages ?? "—") : "—"}
                 title="KB Articles"
-                description="knowledge base size"
+                description="Knowledge base size"
                 loading={loading}
                 /* closes the row when the card count is odd (5) */
                 className={kpiFillLast ? "md:col-span-2 xl:col-span-2" : undefined}
@@ -472,7 +474,7 @@ export default function Dashboard({ role }: Props) {
                   icon={<ShieldAlert className="size-4" />}
                   value={stats ? String(stats.attacks_blocked_7d ?? 0) : "—"}
                   title="Attacks Blocked (7d)"
-                  description="guardrail: injection + overflow"
+                  description="Injection + overflow - 7d"
                   loading={loading}
                 />
               )}
@@ -487,19 +489,31 @@ export default function Dashboard({ role }: Props) {
 
               {/* Conversations */}
 
-              <Card className="rounded-xl p-5">
+              <Card className="rounded-xl border-[var(--border)] p-5">
 
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
 
-                  <div>
-                    <h2 className="text-sm font-semibold">
-                      Conversations over time
-                    </h2>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold">
+                        Conversations over time
+                      </h2>
+
+                      {stats && (
+                        <span className="rounded-md bg-[var(--muted)] px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                          {stats.total_conversations} total
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-0.5 text-2xs text-muted-foreground">
+                      Daily conversation volume - last 7 days
+                    </p>
 
                     <div className="mt-3 flex items-center gap-4 text-2xs text-muted-foreground">
 
                       <Legend
-                        label="Total"
+                        label="Total conversations"
                         className="bg-blue-500"
                       />
 
@@ -516,11 +530,6 @@ export default function Dashboard({ role }: Props) {
                     </div>
                   </div>
 
-                  <button className="flex h-8 items-center gap-2 rounded-lg border px-2.5 text-2xs font-medium">
-                    7 Days
-                    <ChevronDown className="size-3" />
-                  </button>
-
                 </div>
 
                 <ConversationChart data={series} />
@@ -529,11 +538,16 @@ export default function Dashboard({ role }: Props) {
 
               {/* Escalation */}
 
-              <Card className="rounded-xl p-5">
+              <Card className="rounded-xl border-[var(--border)] p-5">
 
-                <h2 className="text-sm font-semibold">
-                  Escalation rate
-                </h2>
+                <div>
+                  <h2 className="text-sm font-semibold">
+                    Conversation outcomes
+                  </h2>
+                  <p className="mt-0.5 text-2xs text-muted-foreground">
+                    As reported by the summary cards
+                  </p>
+                </div>
 
                 <div className="mt-5 flex items-center justify-center">
 
@@ -553,7 +567,7 @@ export default function Dashboard({ role }: Props) {
                       <>
                         <EscalationRow
                           color="bg-emerald-500"
-                          label="Resolved by Bot"
+                          label="Resolved by bot"
                           value={stats ? String(res) : "—"}
                           percentage={pc(res)}
                         />
@@ -567,7 +581,7 @@ export default function Dashboard({ role }: Props) {
 
                         <EscalationRow
                           color="bg-slate-300"
-                          label="Others / No action"
+                          label="Other / no action"
                           value={stats ? String(oth) : "—"}
                           percentage={pc(oth)}
                         />
@@ -581,11 +595,22 @@ export default function Dashboard({ role }: Props) {
 
               {/* Domains */}
 
-              <Card className="rounded-xl p-5">
+              <Card className="rounded-xl border-[var(--border)] p-5">
 
-                <h2 className="text-sm font-semibold">
-                  Top domains
-                </h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold">
+                      Knowledge by domain
+                    </h2>
+                    <p className="mt-0.5 text-2xs text-muted-foreground">
+                      Source domain counts{stats?.kb_pages != null ? ` - ${stats.kb_pages} articles` : ""}
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 rounded-md bg-[var(--muted)] px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                    All content
+                  </span>
+                </div>
 
                 <div className="mt-5 space-y-4">
 
@@ -617,7 +642,7 @@ export default function Dashboard({ role }: Props) {
                 <div>
                   <h2 className="text-sm font-semibold">Confidence gate trend</h2>
                   <p className="mt-0.5 text-2xs text-muted-foreground">
-                    Answers that passed the 0.75 confidence gate vs cautioned — daily
+                    Answers passing the 0.75 threshold vs cautioned responses
                   </p>
                 </div>
                 <div className="flex items-center gap-4 text-2xs text-muted-foreground">
@@ -644,10 +669,11 @@ export default function Dashboard({ role }: Props) {
 
               {/* Recent conversations */}
 
-              <Card className="flex flex-col overflow-hidden rounded-xl">
+              <Card className="flex flex-col overflow-hidden rounded-xl border-[var(--border)]">
 
                 <SectionHeader
                   title="Recent conversations"
+                  pill={liveConversations ? String(liveConversations.length) : undefined}
                                   />
 
                 <div className="max-h-[360px] min-h-0 flex-1 overflow-y-auto xl:max-h-none">
@@ -828,10 +854,15 @@ export default function Dashboard({ role }: Props) {
 
               {/* Recent tickets */}
 
-              <Card className="flex flex-col overflow-hidden rounded-xl">
+              <Card className="flex flex-col overflow-hidden rounded-xl border-[var(--border)]">
 
                 <SectionHeader
                   title="Recent tickets"
+                  pill={
+                    liveTickets
+                      ? `${liveTickets.filter((t) => t.status === "Open").length} open`
+                      : undefined
+                  }
                                   />
 
                 <div className="max-h-[360px] min-h-0 flex-1 divide-y overflow-y-auto xl:max-h-none">
@@ -875,7 +906,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* System health */}
 
-              <Card className="flex flex-col overflow-hidden rounded-xl">
+              <Card className="flex flex-col overflow-hidden rounded-xl border-[var(--border)]">
 
                 {/* #3 — three items packed into one flex row squeezed the title and
                     wrapped the badge onto two lines. Title + status line stack on the
@@ -888,19 +919,30 @@ export default function Dashboard({ role }: Props) {
                         ? "Checking dependencies…"
                         : healthSummary.down.length > 0
                           ? `Failing: ${healthSummary.down.join(", ")}`
-                          : `${(liveHealth ?? []).length} dependencies healthy`}
+                          : `${(liveHealth ?? []).length} dependencies reporting healthy`}
                     </p>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
                     <span className={[
-                      "whitespace-nowrap rounded-full px-2.5 py-1 text-2xs font-medium",
+                      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-2xs font-medium",
                       healthSummary.overall === "Healthy"
                         ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                         : healthSummary.overall === "Down"
                           ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
                           : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
                     ].join(" ")}>
+                      <span
+                        aria-hidden
+                        className={[
+                          "size-1.5 rounded-full",
+                          healthSummary.overall === "Healthy"
+                            ? "bg-emerald-500"
+                            : healthSummary.overall === "Down"
+                              ? "bg-rose-500"
+                              : "bg-amber-500",
+                        ].join(" ")}
+                      />
                       {healthSummary.overall}
                     </span>
 

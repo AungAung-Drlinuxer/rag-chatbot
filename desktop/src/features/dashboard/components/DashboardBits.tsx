@@ -16,27 +16,45 @@ import { dashboardCsv } from "@/features/dashboard/lib/dashboardUtils";
 
 export function SectionHeader({
   title,
+  description,
+  pill,
   action,
   href,
 }: {
   title: string;
+  /** Optional muted caption under the heading. */
+  description?: string;
+  /** Optional count pill on the right — the mockup's list-header treatment. */
+  pill?: string;
   action?: string;
   href?: string;
 }) {
   return (
-    <div className="flex items-center justify-between border-b px-5 py-4">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      {action && href && (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-2xs font-medium text-blue-600 hover:underline"
-        >
-          {action}
-          <ArrowUpRight className="size-3" />
-        </a>
-      )}
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {description && (
+          <p className="mt-0.5 truncate text-2xs text-muted-foreground">{description}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {pill && (
+          <span className="rounded-md bg-[var(--muted)] px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+            {pill}
+          </span>
+        )}
+        {action && href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--accent-foreground)] hover:underline"
+          >
+            {action}
+            <ArrowUpRight className="size-3" />
+          </a>
+        )}
+      </div>
     </div>
   );
 }

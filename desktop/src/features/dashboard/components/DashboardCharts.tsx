@@ -305,7 +305,7 @@ export function DonutChart({ stats }: { stats: Record<string, number> | null }) 
           </div>
 
           <div className="text-2xs text-muted-foreground">
-            Escalation Rate
+            Escalation rate
           </div>
         </div>
 
