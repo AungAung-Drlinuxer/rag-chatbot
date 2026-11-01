@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Plus,
   Tag,
@@ -40,6 +40,10 @@ interface Props {
   domains: ClassifierDomainItem[];
   onRefresh: () => void;
   canManage: boolean;
+  /** The page owns the panel chrome, so the manager can render just the list. */
+  hideHeader?: boolean;
+  /** Bump this number to open the create slide-over from the page header. */
+  openCreateSignal?: number;
 }
 
 export const ICON_OPTIONS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -122,7 +126,13 @@ export const COLOR_OPTIONS: Record<
   },
 };
 
-export function DomainClassifierManager({ domains, onRefresh, canManage }: Props) {
+export function DomainClassifierManager({
+  domains,
+  onRefresh,
+  canManage,
+  hideHeader = false,
+  openCreateSignal = 0,
+}: Props) {
   const [editingDomain, setEditingDomain] = useState<ClassifierDomainItem | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -184,6 +194,11 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
     setIsActive(true);
     setError(null);
   };
+
+  // The page header owns the "Add domain" button; it bumps openCreateSignal to open this form.
+  useEffect(() => {
+    if (openCreateSignal > 0) startCreate();
+  }, [openCreateSignal]);
 
   const startEdit = (d: ClassifierDomainItem) => {
     setEditingDomain(d);
@@ -281,7 +296,8 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
 
   return (
     <div className="space-y-4">
-      {/* Header bar */}
+      {/* Header bar — hidden when the page renders its own panel heading */}
+      {!hideHeader && (
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
         <div>
           <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Configured Routing Domains</h4>
@@ -300,6 +316,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
           </button>
         )}
       </div>
+      )}
 
       {/* Form (Create / Edit) — right-side slide-over */}
       <Dialog open={!!(isCreating || editingDomain)} onOpenChange={(o) => { if (!o) cancelForm(); }}>
