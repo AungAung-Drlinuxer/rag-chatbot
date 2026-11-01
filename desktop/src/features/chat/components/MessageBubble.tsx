@@ -5,6 +5,14 @@
  * accounting for ~410 of them: every UI change meant editing one very large file, and
  * this session produced two syntax errors doing exactly that. It is self-contained
  * (it defines its own copyText), so the move is mechanical.
+ *
+ * v1.0.2 — restyled to the reference answer card. The assistant reply is a bordered
+ * CARD with a header row (avatar · IT Assistant · provenance), the prose body, an
+ * optional sources list headed "Sources for this answer", the persisted RAG trace, a
+ * metadata line (time · confidence · tokens) and the "Was this helpful?" action row.
+ * Colours are the app's design tokens (--border, --accent, --primary) rather than the
+ * mockup's literal hexes, so the card follows both themes. Everything the card shows
+ * is a value the message already carries — no figure is invented to fill it out.
  */
 import { AlertTriangle, Bot, Check, CheckCircle2, Clock3, Copy, ExternalLink, Pencil, RotateCcw, Share2, ShieldAlert, Sparkles, Ticket, User, Zap } from "lucide-react";
 
@@ -55,6 +63,14 @@ function MessageBubble({
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(message.content);
 
+  const isLive = message.toolUsed === "mcp_infra";
+  /* The card header's one-line provenance. It describes where the answer came from and
+     never invents a domain, a score or a count — the mockup's subtitle names a support
+     area, but nothing in the message payload carries one. */
+  const provenance = isLive
+    ? "Live infrastructure · read-only MCP"
+    : "Grounded in your knowledge base";
+
   async function copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -78,31 +94,13 @@ function MessageBubble({
     window.setTimeout(() => setShared(false), 1600);
   }
 
-  return (
-    <div className={["group/msg flex gap-3", isUser ? "justify-end" : "justify-start"].join(" ")}>
-      {!isUser && (
-        <div className="grid size-9 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white shadow-sm">
-          <Bot className="size-5" />
-        </div>
-      )}
-
-      {/* The user turn stays a bubble; the ANSWER is no longer one. A bordered, shadowed
-          box at 88% of the column made the reply read as a card floating in the page and
-          cost ~40px of horizontal space on every line. Answers now fill the column as
-          plain prose (ChatGPT/Claude convention), which is what makes the text legible at
-          a normal reading size. `flex-1` rather than `w-full` because the row is a flex
-          container with a 36px avatar + gap — `w-full` would overflow it. */}
-      <div className={["min-w-0", isUser ? "max-w-[85%]" : "flex-1"].join(" ")}>
-        <div
-          className={[
-            "min-w-0 max-w-full overflow-hidden text-[13.5px] leading-[1.7]",
-            isUser
-              ? "rounded-2xl rounded-br-md bg-blue-600 px-5 py-3.5 text-white"
-              : "pt-1.5 text-slate-800 dark:text-slate-100",
-          ].join(" ")}
-        >
-          {isUser ? (
-            editing ? (
+  /* ---------------- the user turn: a bubble, as before ---------------- */
+  if (isUser) {
+    return (
+      <div className="group/msg flex justify-end gap-3">
+        <div className="min-w-0 max-w-[85%]">
+          <div className="min-w-0 max-w-full overflow-hidden rounded-2xl rounded-br-md bg-[var(--primary)] px-5 py-3.5 text-[13.5px] leading-[1.7] text-[var(--primary-foreground)]">
+            {editing ? (
               /* v1.3.1 — in-place edit (ChatGPT-style): textarea inside the bubble */
               <div className="flex flex-col gap-2">
                 <textarea
@@ -141,82 +139,133 @@ function MessageBubble({
                       }
                       setEditing(false);
                     }}
-                    className="rounded-lg bg-white px-2.5 py-1 text-2xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                    className="rounded-lg bg-white px-2.5 py-1 text-2xs font-semibold text-[var(--primary)] transition hover:bg-blue-50 disabled:opacity-50"
                   >
                     Save &amp; resend
                   </button>
                 </div>
               </div>
             ) : (
-            <div className="min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-              {message.content || "..."}
-            </div>
-            )
-          ) : (
-            <div className="contents">
-              {/* v1.6.55 — provenance. An answer built from a live cluster query is a
-                  different claim from one read out of documents, and a FAILED lookup
-                  must not look like a knowledge gap. */}
-              {message.role === "assistant" && message.toolUsed && (
-                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-2xs">
-                  {message.toolNote === "failed" || message.toolNote === "error" ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                      ⚠ infrastructure lookup failed — no live data
-                    </span>
-                  ) : message.toolNote === "not_permitted" ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      🔒 requires admin/agent role — answered from the knowledge base
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      ⚡ live infrastructure · read-only MCP
-                    </span>
-                  )}
-                </div>
-              )}
-              {message.content ? (
-                markdownRendering
-                  ? <MarkdownMessage content={message.content} />
-                  : <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</div>
-              ) : busy ? (
-                /* v1.6.45 — the animated agent indicator, restored after the markdown
-                   renderer was extracted into MarkdownMessage. */
-                <AgentActivity
-                  stage={stageFromText(liveStageText)}
-                  detail={liveStageText}
-                  elapsedMs={liveElapsedMs}
-                />
-              ) : (message as any).guardrail ? (
-                <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
-                  <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-                  <div className="flex flex-col gap-1">
-                    <div className="font-medium">Blocked by content security policy ({(message as any).guardrail}).</div>
-                    <p className="text-2xs text-muted-foreground">
-                      Your message triggered the input guardrail (v1.1.4). No data was sent to the AI
-                      provider. Rephrase your question — if you believe this is an error, contact IT.
-                    </p>
-                  </div>
-                </div>
+              <div className="min-w-0 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                {message.content || "..."}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+            <span className="flex items-center gap-1 text-2xs text-muted-foreground">
+              <Clock3 className="size-3" />
+              {message.timestamp}
+            </span>
+            {/* v1.1.2 — always-visible compact icons (hover-only hid them on touch devices):
+                Edit query / Copy query / Retry
+                S3.10 — icons were 14px with a ~21px hit area; 16px icons inside a
+                30px target meet the minimum comfortable touch/click size. */}
+            <span className="flex items-center gap-0.5">
+              <button type="button" title="Edit query — edit in place and resend"
+                aria-label="Edit query"
+                onClick={() => { setEditDraft(message.content); setEditing(true); }}
+                className="grid size-[30px] place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                <Pencil className="size-4" />
+              </button>
+              <button type="button" title="Copy query" aria-label="Copy query"
+                onClick={() => copyText(message.content)}
+                className="grid size-[30px] place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                {copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
+              </button>
+              <button type="button" title="Retry — re-run this question" aria-label="Retry question"
+                onClick={() => onRetryQuestion?.()}
+                className="grid size-[30px] place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                <RotateCcw className="size-4" />
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[var(--secondary)] text-[var(--secondary-foreground)]">
+          <User className="size-4" />
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- the assistant turn: the answer card ---------------- */
+  return (
+    <div className="group/msg flex justify-start gap-3">
+      <article className="min-w-0 flex-1 overflow-hidden rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+        {/* ---- card header: avatar · IT Assistant · provenance ---- */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-[var(--border)] px-4 py-3">
+          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
+            <Bot className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-foreground">IT Assistant</div>
+            <div className="text-2xs text-muted-foreground">{provenance}</div>
+          </div>
+          {/* v1.6.55 — provenance. An answer built from a live cluster query is a
+              different claim from one read out of documents, and a FAILED lookup
+              must not look like a knowledge gap. */}
+          {message.toolUsed && (
+            <div className="ml-auto flex flex-wrap items-center gap-1.5 text-2xs">
+              {message.toolNote === "failed" || message.toolNote === "error" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                  ⚠ infrastructure lookup failed — no live data
+                </span>
+              ) : message.toolNote === "not_permitted" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 font-medium text-muted-foreground">
+                  🔒 requires admin/agent role — answered from the knowledge base
+                </span>
               ) : (
-                <div className="flex flex-col gap-2 text-muted-foreground">
-                  <div className="font-medium text-rose-600">No answer received from the AI provider.</div>
-                  <p className="text-2xs">
-                    The pipeline ran (retrieval + generation) but the upstream model returned no
-                    content — this is usually a free-tier rate limit or invalid model name. Try
-                    again, or change the model in <strong>Settings → Integrations → Models Provider</strong>.
-                  </p>
-                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  ⚡ live infrastructure · read-only MCP
+                </span>
               )}
             </div>
           )}
+        </div>
 
-          {/* Inline Knowledge Base Sources in answer card */}
+        {/* ---- body ---- */}
+        <div className="px-4 py-3.5 text-[13.5px] leading-[1.7] text-foreground">
+          {message.content ? (
+            markdownRendering
+              ? <MarkdownMessage content={message.content} />
+              : <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</div>
+          ) : busy ? (
+            /* v1.6.45 — the animated agent indicator, restored after the markdown
+               renderer was extracted into MarkdownMessage. */
+            <AgentActivity
+              stage={stageFromText(liveStageText)}
+              detail={liveStageText}
+              elapsedMs={liveElapsedMs}
+            />
+          ) : (message as any).guardrail ? (
+            <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
+              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+              <div className="flex flex-col gap-1">
+                <div className="font-medium">Blocked by content security policy ({(message as any).guardrail}).</div>
+                <p className="text-2xs text-muted-foreground">
+                  Your message triggered the input guardrail (v1.1.4). No data was sent to the AI
+                  provider. Rephrase your question — if you believe this is an error, contact IT.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 text-muted-foreground">
+              <div className="font-medium text-rose-600">No answer received from the AI provider.</div>
+              <p className="text-2xs">
+                The pipeline ran (retrieval + generation) but the upstream model returned no
+                content — this is usually a free-tier rate limit or invalid model name. Try
+                again, or change the model in <strong>Settings → Integrations → Models Provider</strong>.
+              </p>
+            </div>
+          )}
+
           {/* v1.6.65 — act on the mode switch. A documents answer to an
               infrastructure-flavoured question is often not what was wanted; this
               re-asks the SAME question against the live estate in one click instead of
               making the user retype it and change the mode. Shown only when this answer
               did NOT come from the estate. */}
-          {!isUser && onAskLive && message.content && message.toolUsed !== "mcp_infra"
+          {onAskLive && message.content && !isLive
             && message.toolNote !== "not_permitted" && (
             <div className="mt-3">
               <button
@@ -234,7 +283,7 @@ function MessageBubble({
           {/* v1.6.65 — the live answer's evidence. A documents answer gets source
               cards; without this a cluster answer had NOTHING to show, so the user had
               to take live state on faith. */}
-          {!isUser && message.toolUsed === "mcp_infra" && (
+          {isLive && (
             <EvidenceCard
               evidence={message.evidence}
               calls={message.toolCalls}
@@ -248,33 +297,33 @@ function MessageBubble({
               cluster, and listing KB articles under it claims a provenance the answer
               does not have. The backend no longer sends them; this guard means a stale
               conversation or a cached payload cannot reintroduce them either. */}
-          {showSources && !isUser && message.toolUsed !== "mcp_infra" && (message.sources?.length ?? 0) > 0 && (
-            <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
-              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+          {showSources && !isLive && (message.sources?.length ?? 0) > 0 && (
+            <div className="mt-4 border-t border-[var(--border)] pt-3">
+              <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
                 <span className="flex items-center gap-1.5">
-                  <Sparkles className="size-3.5 text-blue-600 dark:text-blue-400" />
-                  Sources &amp; Referenced Documents
+                  <Sparkles className="size-3.5 text-[var(--primary)]" />
+                  Sources for this answer
                 </span>
-                <span className="text-2xs font-normal text-muted-foreground">
+                <span className="shrink-0 text-2xs font-normal text-muted-foreground">
                   {message.sources!.length} reference{message.sources!.length > 1 ? "s" : ""}
                 </span>
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <ol className="space-y-2">
                 {message.sources!.map((s, idx) => {
                   const content = (
-                    <div className="flex items-start gap-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 transition hover:border-blue-300 hover:bg-blue-50/40 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:border-blue-900 dark:hover:bg-blue-950/30">
-                      <div className="grid size-6 shrink-0 place-items-center rounded-lg bg-blue-100 text-2xs font-bold text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                    <div className="flex items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-2.5 transition hover:border-[var(--primary)]/40 hover:bg-[var(--accent-soft)]">
+                      <div className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--accent)] text-2xs font-bold text-[var(--accent-foreground)]">
                         {idx + 1}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-medium text-slate-900 dark:text-slate-100" title={s.title}>
+                        <div className="truncate text-xs font-medium text-foreground" title={s.title}>
                           {s.title}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
                           {s.space && <span className="capitalize">{s.space}</span>}
                           {s.relevance != null && (
                             <>
-                              <span>•</span>
+                              <span aria-hidden>•</span>
                               <span className="font-medium text-emerald-600 dark:text-emerald-400">
                                 {s.relevance}% match
                               </span>
@@ -282,27 +331,29 @@ function MessageBubble({
                           )}
                         </div>
                       </div>
-                      {s.url && <ExternalLink className="size-3 shrink-0 text-slate-400 group-hover:text-blue-600" />}
+                      {s.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
                     </div>
                   );
-                  return s.url ? (
-                    <a key={`${s.page_id}-${idx}`} href={s.url} target="_blank" rel="noreferrer" className="block text-left">
-                      {content}
-                    </a>
-                  ) : (
-                    <div key={`${s.page_id}-${idx}`} className="block text-left">
-                      {content}
-                    </div>
+                  return (
+                    <li key={`${s.page_id}-${idx}`}>
+                      {s.url ? (
+                        <a href={s.url} target="_blank" rel="noreferrer" className="block text-left">
+                          {content}
+                        </a>
+                      ) : (
+                        content
+                      )}
+                    </li>
                   );
                 })}
-              </div>
+              </ol>
             </div>
           )}
 
           {/* Persisted RAG Execution Pipeline Trace inside Assistant Message Bubble */}
-          {!isUser && message.ragTrace && (
-            <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800/80">
-              <RagPipelineStatus live={message.toolUsed === "mcp_infra"}
+          {message.ragTrace && (
+            <div className="mt-4 border-t border-[var(--border)] pt-3">
+              <RagPipelineStatus live={isLive}
                 active={false}
                 stage=""
                 telemetry={message.ragTrace.stages}
@@ -313,41 +364,13 @@ function MessageBubble({
           )}
         </div>
 
-        <div
-          className={[
-            "mt-2 flex flex-wrap items-center gap-2",
-            isUser ? "justify-end" : "justify-start",
-          ].join(" ")}
-        >
+        {/* ---- metadata line: time · confidence · tokens ---- */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2.5">
           <span className="flex items-center gap-1 text-2xs text-muted-foreground">
             <Clock3 className="size-3" />
             {message.timestamp}
           </span>
-          {isUser && (
-            // v1.1.2 — always-visible compact icons (hover-only hid them on touch devices):
-            // Edit query / Copy query / Retry
-            // S3.10 — icons were 14px with a ~21px hit area; 16px icons inside a
-            // 30px target meet the minimum comfortable touch/click size.
-            <span className="flex items-center gap-0.5">
-              <button type="button" title="Edit query — edit in place and resend"
-                aria-label="Edit query"
-                onClick={() => { setEditDraft(message.content); setEditing(true); }}
-                className="grid size-[30px] place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-                <Pencil className="size-4" />
-              </button>
-              <button type="button" title="Copy query" aria-label="Copy query"
-                onClick={() => copyText(message.content)}
-                className="grid size-[30px] place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-                {copied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
-              </button>
-              <button type="button" title="Retry — re-run this question" aria-label="Retry question"
-                onClick={() => onRetryQuestion?.()}
-                className="grid size-[30px] place-items-center rounded-lg text-slate-400 transition hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
-                <RotateCcw className="size-4" />
-              </button>
-            </span>
-          )}
-          {!isUser && message.content && !busy && (
+          {message.content && !busy && (
             <span className="flex items-center gap-1">
               <button type="button" title="Copy answer" aria-label="Copy answer"
                 onClick={() => copyText(message.content)}
@@ -368,10 +391,10 @@ function MessageBubble({
               nothing about a fact read off the cluster; the EvidenceCard carries the
               honest substitutes (scope, time, read-only). The backend already nulls
               the value — this guard keeps a stale/cached payload from showing it. */}
-          {!isUser && message.toolUsed !== "mcp_infra" && message.confidence != null && (
+          {!isLive && message.confidence != null && (
             <ConfidenceBadge confidence={message.confidence} />
           )}
-          {showTokenUsage && !isUser && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
+          {showTokenUsage && (message.usage?.input_tokens != null || message.usage?.output_tokens != null) && (
             <span
               className="flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-2xs font-medium text-[var(--muted-foreground)]"
               title={message.latencyMs ? `Generated in ${(message.latencyMs / 1000).toFixed(1)}s` : undefined}
@@ -379,10 +402,10 @@ function MessageBubble({
               <Zap className="size-3 text-amber-500" />
               {message.usage?.input_tokens ?? 0} in · {message.usage?.output_tokens ?? 0} out
               {(message.usage?.input_tokens || message.usage?.output_tokens) ? ` = ${((message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0)).toLocaleString()} tokens` : ""}
-              {message.latencyMs ? <span className="text-slate-400 dark:text-slate-500">· {(message.latencyMs / 1000).toFixed(0)}s</span> : null}
+              {message.latencyMs ? <span className="text-muted-foreground/70">· {(message.latencyMs / 1000).toFixed(0)}s</span> : null}
             </span>
           )}
-          {!isUser && caution && (
+          {caution && (
             <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               <AlertTriangle className="size-3" />
               caution — verify before proceeding
@@ -390,7 +413,7 @@ function MessageBubble({
           )}
         </div>
 
-        {!isUser && message.content && (
+        {message.content && (
           /* v1.0.1 — the reference mockup's answer footer: a "Was this helpful?" label
              over the feedback pair, then Copy / Regenerate / Create Jira Ticket. The
              feedback buttons used to sit unlabelled, which read as two more actions
@@ -398,8 +421,8 @@ function MessageBubble({
              header actions on purpose: by the time a reader reaches the end of a long
              answer that is where the eye already is, and the header copy has scrolled
              away. */
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800/60">
-            <span className="mr-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2.5">
+            <span className="mr-1 text-xs font-medium text-muted-foreground">
               Was this helpful?
             </span>
             <button
@@ -410,7 +433,7 @@ function MessageBubble({
                 "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 message.feedback === 1
                   ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
+                  : "border-[var(--border)] bg-card text-foreground hover:bg-muted",
               ].join(" ")}
             >
               <CheckCircle2 className="size-3.5 text-emerald-500" />
@@ -425,7 +448,7 @@ function MessageBubble({
                 "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 message.feedback === -1
                   ? "border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
-                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
+                  : "border-[var(--border)] bg-card text-foreground hover:bg-muted",
               ].join(" ")}
             >
               <AlertTriangle className="size-3.5 text-amber-500" />
@@ -433,14 +456,14 @@ function MessageBubble({
               {message.feedback === -1 && <Check aria-hidden className="size-3" />}
             </button>
 
-            <span aria-hidden className="mx-1 hidden h-4 w-px bg-slate-200 sm:block dark:bg-slate-700" />
+            <span aria-hidden className="mx-1 hidden h-4 w-px bg-[var(--border)] sm:block" />
 
             <button
               type="button"
               title="Copy answer"
               aria-label="Copy answer"
               onClick={() => copyText(message.content)}
-              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
             >
               {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
               {copied ? "Copied" : "Copy"}
@@ -451,7 +474,7 @@ function MessageBubble({
               aria-label="Regenerate answer"
               onClick={() => onRetryQuestion?.()}
               disabled={busy || !onRetryQuestion}
-              className="flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
             >
               <RotateCcw className="size-3.5" />
               Regenerate
@@ -465,13 +488,7 @@ function MessageBubble({
             </button>
           </div>
         )}
-      </div>
-
-      {isUser && (
-        <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[var(--secondary)] text-[var(--secondary-foreground)]">
-          <User className="size-4" />
-        </div>
-      )}
+      </article>
     </div>
   );
 }

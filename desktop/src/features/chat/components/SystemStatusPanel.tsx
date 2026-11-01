@@ -53,6 +53,9 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
   }, []);
 
   const rows = services ?? [];
+  /** The mockup's "System status - N healthy": N is the number of services the live
+   *  probe reported as Healthy. Nothing is counted that the endpoint did not report. */
+  const healthy = rows.filter((s) => s.status === "Healthy").length;
   const ask = (prompt: string) =>
     window.dispatchEvent(new CustomEvent("ith:ask", { detail: prompt }));
 
@@ -61,7 +64,9 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
       <div className="border-t border-[var(--border)] px-3 py-3" data-testid="system-status">
         <div className="mb-2 flex items-center gap-1.5">
           <Activity className="size-3.5 text-muted-foreground" />
-          <h3 className="text-xs font-semibold text-foreground">System Status</h3>
+          <h3 className="text-xs font-semibold text-foreground">
+            System status{healthy > 0 ? ` - ${healthy} healthy` : ""}
+          </h3>
         </div>
         {rows.length === 0 ? (
           <p className="text-2xs text-muted-foreground">
@@ -84,11 +89,11 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
       </div>
 
       <div className="border-t border-[var(--border)] px-3 py-3" data-testid="quick-actions">
-        <h3 className="mb-2 text-xs font-semibold text-foreground">Quick Actions</h3>
+        <h3 className="mb-2 text-xs font-semibold text-foreground">Quick actions</h3>
         <div className="flex flex-col gap-1.5">
           {[
-            { label: "Reset Password", icon: KeyRound, prompt: "How do I reset my password?" },
-            { label: "Check Service Status", icon: Activity, prompt: "Check the status of all services" },
+            { label: "Reset password", icon: KeyRound, prompt: "How do I reset my password?" },
+            { label: "Check service status", icon: Activity, prompt: "Check the status of all services" },
           ].map((a) => (
             <button
               key={a.label}
@@ -114,7 +119,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
             className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           >
             <Ticket className="size-3 shrink-0 text-muted-foreground" />
-            My Tickets
+            My tickets
           </button>
         </div>
       </div>

@@ -791,9 +791,10 @@ useEffect(() => {
               <Bot className="size-4" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold">IT Knowledge Assistant</h1>
-                {/* The single "Online" dot became four measured chips (StatusChips),
-                    so the subtitle carries the mockup's line instead of repeating state. */}
+              <h1 className="truncate text-sm font-semibold">IT Assistant</h1>
+                {/* The page identity is the assistant's own name, matching the
+                    reference answer card's "IT Assistant". The subtitle keeps the
+                    mockup's line; the four measured chips (StatusChips) carry state. */}
                 <p className="mt-0.5 hidden truncate text-2xs text-muted-foreground sm:block">
                   Get help from enterprise knowledge and IT experts
                 </p>
@@ -803,13 +804,12 @@ useEffect(() => {
             {/* S2.8 — "Hybrid RAG + rerank" moved to the retrieval panel (it was
                 static text here) and the chip is slimmer so the header reads as one
                 line of chrome instead of a second title bar. */}
-                          <StatusChips className="hidden lg:flex" />
-              <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-2xs sm:flex">
+            <StatusChips className="hidden lg:flex" />
+            <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-2xs sm:flex">
               <Shield className="size-3 text-emerald-600" />
               RBAC protected
             </div>
-          </div>
-        
+
             {/* v1.6.68 — on small screens the answer-source selector lives here, not
                 under the composer: it is a session-level setting, and the composer
                 keeps only attach / mic / send. Visible below sm, where the composer
@@ -844,6 +844,7 @@ useEffect(() => {
             >
               <Info className="size-4" />
             </button>
+          </div>
         </header>
 
         {/* v1.6.65 — inline (not a floating sheet) so it can never cover the composer,
@@ -865,7 +866,7 @@ useEffect(() => {
                 <EmptyChat userName={userName} onSuggestion={(q) => { setInput(q); window.setTimeout(() => { const form = document.querySelector<HTMLFormElement>("form"); form?.requestSubmit(); }, 60); }} />
               </div>
             ) : (
-              <div className="space-y-7">
+              <div className="space-y-5">
                 {messages.map((m) => (
                   <MessageBubble
                     key={m.id}
@@ -901,7 +902,7 @@ useEffect(() => {
                   </div>
                 )}
                 {chatNote && (
-                  <div className="mx-auto w-fit rounded-full border bg-white px-3 py-1.5 text-2xs font-medium shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <div className="mx-auto w-fit rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-2xs font-medium shadow-sm">
                     {chatNote}
                   </div>
                 )}
@@ -917,7 +918,7 @@ useEffect(() => {
             duplicate ticket). Admins keep the notification bell for awareness. */}
 
         {/* Composer — compact single-row */}
-        <div className="shrink-0 border-t border-slate-200 bg-white/95 backdrop-blur-xs dark:border-slate-800/80 dark:bg-[#070B14]/95">
+        <div className="shrink-0 border-t border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-xs">
           <div className="mx-auto max-w-[900px] px-4 py-2 sm:px-6 sm:py-2.5">
             <form onSubmit={sendMessage} className="relative">
               {pendingFiles.length > 0 && (
@@ -954,6 +955,7 @@ useEffect(() => {
                 onStop={stopGeneration}
                 hint
                 multiline
+                placeholder="Ask a follow-up IT question..."
                 attaching={uploading}
                 attachAccept="image/*,.pdf,.txt,.md,.doc,.docx,.xlsx,.csv"
                 inputRef={composerRef}
@@ -1006,7 +1008,7 @@ useEffect(() => {
 
             {/* S3.11 — 9.5px slate-500 on the page background failed comfortable
                 reading; 11px at slate-500/400 clears the contrast floor. */}
-            <div className="mt-1.5 flex items-center justify-center gap-3 text-xs leading-snug text-slate-500 dark:text-slate-400">
+            <div className="mt-1.5 flex items-center justify-center gap-3 text-xs leading-snug text-muted-foreground">
               <span className="text-center">
                 Answers are AI-generated — verify before acting. Access is RBAC-protected.
               </span>

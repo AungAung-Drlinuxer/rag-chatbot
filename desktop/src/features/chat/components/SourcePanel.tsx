@@ -120,8 +120,13 @@ export default function SourcePanel({
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4">
         <div className="min-w-0">
           <h2 className="text-xs font-semibold leading-tight">Knowledge sources</h2>
+          {/* The mockup heads this panel with the retrieval summary — how many
+              references arrived and how many distinct titles they collapse to. Both
+              figures come from the sources already in hand. */}
           <p className="text-2xs leading-tight text-muted-foreground">
-            Retrieved for this answer
+            {sources.length === 0
+              ? "Retrieved for this answer"
+              : `${sources.length} reference${sources.length === 1 ? "" : "s"} grouped into ${groups.length} title${groups.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -254,7 +259,16 @@ export default function SourcePanel({
         )}
       </div>
 
-      {/* v1.0.1 — the mockup\'s two closing blocks. Outside the scrollable source
+      {/* v1.0.1 — the mockup's note under the source list. A retrieval match score and
+          the answer's confidence are different measurements; saying so stops a high
+          match % from being read as an answer-quality score. */}
+      {sources.length > 0 && (
+        <p className="shrink-0 border-t border-[var(--border)] px-4 py-2 text-2xs leading-snug text-muted-foreground">
+          Retrieval match scores are separate from the answer&apos;s confidence score.
+        </p>
+      )}
+
+      {/* v1.0.1 — the mockup's two closing blocks. Outside the scrollable source
           list so they stay reachable however many sources were retrieved. */}
       <SystemStatus onNavigate={onNavigate} />
     </aside>

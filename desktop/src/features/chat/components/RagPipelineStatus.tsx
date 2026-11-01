@@ -304,7 +304,7 @@ export default function RagPipelineStatus({
   return (
     <div
       data-testid="rag-pipeline-tracker"
-      className="overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 text-slate-800 dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100"
+      className="overflow-hidden rounded-xl border border-[var(--border)] bg-card text-card-foreground"
     >
       {/* ---- header ---- */}
       <div className="flex items-center justify-between gap-3 px-4 py-2.5">
@@ -320,10 +320,14 @@ export default function RagPipelineStatus({
               <Check aria-hidden className="size-3.5" />
             )}
           </span>
-          <span className="truncate text-xs font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <span className="truncate text-xs font-semibold tracking-tight text-foreground">
             {/* Name the pipeline that is actually running: calling a cluster lookup
-                "RAG Pipeline" described retrieval that never happened. */}
-            {isLive ? "Infrastructure query" : "RAG Pipeline"}
+                "RAG Pipeline" described retrieval that never happened. Once it has
+                finished the strip reads "… completed" — the reference mockup's
+                "Retrieval pipeline completed" line. */}
+            {active
+              ? (isLive ? "Infrastructure query" : "RAG Pipeline")
+              : (isLive ? "Infrastructure query completed" : "Retrieval pipeline completed")}
           </span>
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-3xs font-medium ${
@@ -338,7 +342,7 @@ export default function RagPipelineStatus({
         {elapsedMs > 0 && (
           <span
             data-testid="rag-pipeline-elapsed"
-            className="flex shrink-0 items-center gap-1 font-mono text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300"
+            className="flex shrink-0 items-center gap-1 font-mono text-xs font-semibold tabular-nums text-muted-foreground"
           >
             <Timer aria-hidden className="size-3.5" />
             {(elapsedMs / 1000).toFixed(1)}s
@@ -353,7 +357,7 @@ export default function RagPipelineStatus({
           badge stay legible at a size where the glyph reads as an icon rather than a smudge. */}
       <div
         data-testid="rag-pipeline-stages"
-        className="flex flex-wrap items-start gap-x-1 gap-y-3 border-t border-slate-100 px-4 py-3 dark:border-slate-800/70"
+        className="flex flex-wrap items-start gap-x-1 gap-y-3 border-t border-[var(--border)] px-4 py-3"
       >
         {steps.map((step, idx) => {
           const isActive = active && idx === activeIdx;
@@ -365,7 +369,7 @@ export default function RagPipelineStatus({
                 <span
                   aria-hidden
                   className={`mt-4 h-0.5 w-6 shrink-0 rounded-full sm:w-10 ${
-                    isDone || isActive ? "bg-blue-500/60" : "bg-slate-200 dark:bg-slate-700"
+                    isDone || isActive ? "bg-blue-500/60" : "bg-[var(--border)]"
                   }`}
                 />
               )}
@@ -384,7 +388,7 @@ export default function RagPipelineStatus({
                 <span
                   className={`grid size-8 shrink-0 place-items-center rounded-full shadow-sm ${
                     !isActive && !isDone
-                      ? "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+                      ? "bg-muted text-muted-foreground"
                       : idx % 2 === 0
                         ? "bg-blue-600 text-white"
                         : "bg-emerald-500 text-white"
@@ -395,10 +399,10 @@ export default function RagPipelineStatus({
                 <span
                   className={`text-center text-2xs font-medium leading-tight ${
                     isActive
-                      ? "text-blue-700 dark:text-blue-300"
+                      ? "text-[var(--accent-foreground)]"
                       : isDone
-                        ? "text-slate-700 dark:text-slate-200"
-                        : "text-slate-400 dark:text-slate-500"
+                        ? "text-foreground"
+                        : "text-muted-foreground"
                   }`}
                 >
                   {idx + 1}. {step.label}
@@ -406,10 +410,10 @@ export default function RagPipelineStatus({
                 <span
                   className={`flex items-center gap-1 font-mono text-2xs tabular-nums ${
                     isActive
-                      ? "text-blue-600 dark:text-blue-400"
+                      ? "text-[var(--accent-foreground)]"
                       : ms != null
-                        ? "text-slate-500 dark:text-slate-400"
-                        : "text-slate-300 dark:text-slate-600"
+                        ? "text-muted-foreground"
+                        : "text-muted-foreground/60"
                   }`}
                 >
                   {isActive ? (
@@ -441,12 +445,12 @@ export default function RagPipelineStatus({
         data-testid="rag-pipeline-details-toggle"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between border-t border-slate-100 px-4 py-2 text-left transition hover:bg-slate-50/80 dark:border-slate-800/70 dark:hover:bg-slate-800/40"
+        className="flex w-full items-center justify-between border-t border-[var(--border)] px-4 py-2 text-left transition hover:bg-muted/60"
       >
-        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+        <span className="text-xs font-semibold text-foreground">
           Execution Details
         </span>
-        <span className="flex items-center gap-2 text-2xs text-slate-400 dark:text-slate-500">
+        <span className="flex items-center gap-2 text-2xs text-muted-foreground">
           {doneCount}/{steps.length} completed
           {open ? (
             <ChevronUp aria-hidden className="size-3.5" />
@@ -457,8 +461,8 @@ export default function RagPipelineStatus({
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 px-3 py-1 dark:border-slate-800/70">
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800/60">
+        <div className="border-t border-[var(--border)] px-3 py-1">
+          <ul className="divide-y divide-[var(--border)]">
             {steps.map((step, idx) => {
               const isActive = active && idx === activeIdx;
               const isDone = active ? activeIdx > idx : telemetry?.[step.key] != null || idx <= lastMeasured;
@@ -476,13 +480,13 @@ export default function RagPipelineStatus({
                   >
                     <step.icon aria-hidden className="size-3" />
                   </span>
-                  <span className="w-24 shrink-0 font-medium text-slate-800 dark:text-slate-200">
+                  <span className="w-24 shrink-0 font-medium text-foreground">
                     {step.label}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-2xs text-slate-400 dark:text-slate-500">
+                  <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
                     {step.description}
                   </span>
-                  <span className="w-14 shrink-0 text-right font-mono text-2xs tabular-nums text-slate-600 dark:text-slate-300">
+                  <span className="w-14 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground">
                     {ms != null ? `${ms}ms` : "\u2014"}
                   </span>
                   <span

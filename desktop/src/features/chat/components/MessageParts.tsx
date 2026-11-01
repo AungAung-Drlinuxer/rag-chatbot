@@ -124,19 +124,18 @@ export function SourceCard({
 
   return (
     <article className="group mb-2.5 rounded-xl bg-card p-3 shadow-xs ring-1 ring-[var(--border)] transition duration-150 hover:-translate-y-px hover:shadow-sm">
-      {/* --- line 1: rank · provider · chunks · score --------------------------- */}
+      {/* --- line 1: provider + rank ("KB - 1") · chunks · score ------------- */}
       <div className="flex items-center gap-1.5">
+        {/* The mockup's chip is the source collection AND its rank in one label —
+            "KB - 1" — so the eye reads which article this is before the title. */}
         <span
           className={[
-            "grid size-5 shrink-0 place-items-center rounded-md text-2xs font-semibold tabular-nums",
+            "shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-semibold capitalize tabular-nums",
             top ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
           ].join(" ")}
           title={`Rank ${index} of this answer's sources`}
         >
-          {index}
-        </span>
-        <span className="truncate rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium capitalize text-muted-foreground">
-          {provider}
+          {provider} - {index}
         </span>
         {chunks > 1 && (
           <span
