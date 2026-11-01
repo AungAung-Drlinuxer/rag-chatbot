@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowUpDown,
   BookOpen,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Clock3,
   Database,
@@ -39,8 +41,22 @@ import { providerOf, allProviders } from "@/lib/kbProvider";
 import ReclassifyPanel from "../components/ReclassifyPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+
+/**
+ * Knowledge — the KB article browser, restyled to the workspace mockup.
+ *
+ * Layout follows the mockup: a Workspace / Knowledge breadcrumb under an ADMINISTRATION
+ * eyebrow, one heading row whose actions are a sync indicator and the page's single
+ * primary button, a row of four equal figures, an amber review band (only when the data
+ * supports it), then ONE panel that owns its own heading, toolbar, domain chips, bulk bar,
+ * table and range footer.
+ *
+ * Colours are the app's design tokens (--primary, --border, --muted-foreground) rather
+ * than the mockup's literal hexes: the mockup is dark-only, this page must work in both
+ * themes. Every figure is counted from a value the component already holds — nothing here
+ * invents a number.
+ */
 
 type Props = {
   role?: string;
@@ -211,10 +227,84 @@ function relTime(iso?: string | null) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-export default function Knowledge({
-  role,
-  onToast,
-}: Props) {
+/**
+ * The mockup renders "Last sync" as a big duration ("28m") with a small "ago" beside it,
+ * so the number and the unit are split rather than baked into one string.
+ */
+function relDuration(iso?: string | null): { value: string; suffix: string } {
+  if (!iso) return { value: "never", suffix: "" };
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return { value: "never", suffix: "" };
+  const mins = Math.max(0, Math.round((Date.now() - d) / 60000));
+  if (mins < 1) return { value: "just now", suffix: "" };
+  if (mins < 60) return { value: `${mins}m`, suffix: "ago" };
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return { value: `${hours}h`, suffix: "ago" };
+  return { value: `${Math.round(hours / 24)}d`, suffix: "ago" };
+}
+
+/** One figure per card — label left, icon right, big number, muted caption. */
+function StatCard({
+  icon,
+  label,
+  value,
+  suffix,
+  caption,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  suffix?: string;
+  caption: string;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-[var(--border)] bg-card p-5 shadow-xs">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-[var(--primary)]">{icon}</span>
+      </div>
+      <div className="mt-2.5 flex items-baseline gap-1 text-3xl font-semibold tracking-tight text-foreground">
+        {value}
+        {suffix && <span className="text-sm font-medium text-muted-foreground">{suffix}</span>}
+      </div>
+      <p className="mt-1.5 text-2xs leading-tight text-muted-foreground">{caption}</p>
+    </div>
+  );
+}
+
+/**
+ * The header checkbox selects the rows on the CURRENT page, so it needs a third visual
+ * state (indeterminate) that a plain `checked` boolean cannot express — a partly-selected
+ * page must not read as fully selected.
+ */
+function PageCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
+    />
+  );
+}
+
+export default function Knowledge({ role, onToast }: Props) {
   // v1.1.1 — domain_manager merged into knowledge (single Knowledge Manager role)
   const canManage = role === "admin" || role === "agent" || role === "knowledge" || role === "domain_manager";
   const canManageDomains = role === "admin" || role === "knowledge" || role === "domain_manager";
@@ -317,6 +407,12 @@ export default function Knowledge({
   const [listError, setListError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
+
+  // Row → details dialog. Opens the real fields the list row already carries.
+  const [detail, setDetail] = useState<ListItem | null>(null);
+
+  // The amber band's "Review General IT" action scrolls the chip row into view.
+  const chipsRef = useRef<HTMLDivElement>(null);
 
   /** True when anything is narrowing the list — drives the filter summary row. */
   const hasFilters = chip !== "all" || providerFilter !== "all" || query.trim().length > 0;
@@ -433,18 +529,34 @@ export default function Knowledge({
     return list;
   }, [domains, classifierDomains]);
 
+  /** Reset every control that narrows the list, and reload from the top. */
+  function resetAll() {
+    setProviderFilter("all");
+    setChip("all");
+    setQuery("");
+    setSelected(new Set());
+    void loadList("all", "", 0);
+  }
+
+  const lastSync = relDuration(status?.last_run?.at);
+  const total = kbTotal ?? items?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil((kbTotal ?? 0) / pageSize));
+
   return (
     <PageShell>
       <PageHeader
+        breadcrumbs={["Workspace", "Knowledge"]}
+        eyebrow="Administration"
         icon={<BookOpen className="size-5" />}
         badge={role === "admin" ? "Administrator" : role === "agent" ? "IT Support" : role === "knowledge" ? "Knowledge Manager" : "User"}
-        title="Knowledge Base Articles"
-        description="Search, review, and synchronize the Confluence KB articles the assistant answers from"
+        title="Knowledge base"
+        description="Keep your assistant's knowledge organized, searchable, and up to date."
         actions={
           <div className="flex items-center gap-3">
+            {/* Small live indicator — the same two states the page always reported. */}
             <div
               className={[
-                "hidden items-center gap-2 rounded-xl border px-3 py-1.5 sm:flex text-xs",
+                "hidden items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:flex",
                 status?.healthy
                   ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
                   : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
@@ -456,49 +568,150 @@ export default function Knowledge({
                   status?.healthy ? "bg-emerald-500" : "bg-amber-500",
                 ].join(" ")}
               />
-              <div>
-                <span className="font-semibold text-foreground">
-                  {status?.healthy ? "KB Synced" : "Sync Pending"}
-                </span>
-                <span className="text-2xs text-muted-foreground ml-1.5">
-                  {status?.last_run ? `(${relTime(status.last_run.at)})` : ""}
-                </span>
-              </div>
+              <span className="font-semibold text-foreground">
+                {status?.healthy ? "KB Synced" : "Sync Pending"}
+              </span>
+              <span className="text-2xs text-muted-foreground">
+                {status?.last_run ? `(${relTime(status.last_run.at)})` : ""}
+              </span>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl h-9"
+            {/* Primary: syncing is the page's one "do something" action. */}
+            <button
+              type="button"
               disabled={busy}
               onClick={handleSync}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90 disabled:opacity-50"
             >
-              <RefreshCw className={["mr-1.5 size-3.5", busy ? "animate-spin" : ""].join(" ")} />
+              <RefreshCw className={["size-3.5", busy ? "animate-spin" : ""].join(" ")} />
               Sync now
-            </Button>
+            </button>
           </div>
         }
       />
 
       <main className="space-y-5">
-          {/* ---------------------------------------------------------------
-              TOOLBAR
+        {/* FOUR EQUAL FIGURES
+            Each value is counted from a value the page already holds: the KB size from
+            the API's COUNT(*), the domain count from the domain list, the source count
+            from the provider table, and the sync age from /sync-status. */}
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            icon={<BookOpen className="size-4" />}
+            label="Articles"
+            value={kbTotal != null ? kbTotal.toLocaleString() : "—"}
+            caption="In your knowledge base"
+          />
+          <StatCard
+            icon={<Layers className="size-4" />}
+            label="Domains"
+            value={domains ? domains.length.toLocaleString() : "—"}
+            caption="Organized by expertise"
+          />
+          <StatCard
+            icon={<Database className="size-4" />}
+            label="Sources"
+            value={allProviders().length.toLocaleString()}
+            caption="Connected content sources"
+          />
+          <StatCard
+            icon={<Clock3 className="size-4" />}
+            label="Last sync"
+            value={lastSync.value}
+            suffix={lastSync.suffix}
+            caption={`Runs every ${status?.beat_interval_minutes ?? 30} min`}
+          />
+        </section>
 
-              Was: a blue→indigo gradient panel containing TWO separately
-              labelled chip bands (domain and source), each with its own
-              "active" treatment — blue for one, near-black for the other —
-              for the same kind of control. Three problems: the gradient was
-              the only one in the app, two full bands of vertical space went
-              to filters, and the same interaction was styled two ways.
+        {/* REVIEW BAND
+            P1#10 — surface the articles no domain claimed. After the LLM pass this is
+            small, but it is exactly the set that silently goes missing from every domain
+            browse view. Domains with no description cannot be chosen by the classifier
+            either, so both are reported here. Rendered ONLY when the data supports it. */}
+        {!listing && items && (() => {
+          const apiGen = domains?.find((d) => d.domain === "general")?.pages;
+          const gen = typeof apiGen === "number" ? apiGen : (domainCardMap.get("general")?.pages ?? 0);
+          const noDesc = (domains ?? []).filter((d) => !d.description || d.description.trim().length < 25);
+          if (gen === 0 && noDesc.length === 0) return null;
+          return (
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-2xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  Needs review
+                </div>
+                <p className="mt-0.5 font-semibold">A little organization goes a long way</p>
+                <p className="mt-0.5 leading-relaxed">
+                  {gen > 0 && (
+                    <>{gen} article{gen === 1 ? "" : "s"} still in General IT.</>
+                  )}
+                  {gen > 0 && noDesc.length > 0 && " "}
+                  {noDesc.length > 0 && (
+                    <>{noDesc.length} domain{noDesc.length === 1 ? "" : "s"} have no description and cannot be used by the classifier.</>
+                  )}
+                </p>
+              </div>
+              {gen > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChip("general");
+                    setPage(1);
+                    setSelected(new Set());
+                    void loadList("general", query, 0);
+                    chipsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+                  }}
+                  className="shrink-0 rounded-lg border border-amber-300/70 bg-white/60 px-3 py-1.5 font-medium transition hover:bg-white/90 dark:border-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+                >
+                  Review General IT →
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
-              Now: one flat surface on the standard card token. Search is the
-              primary action, the source filter is a refinement so it lives in
-              the toolbar, and the domain chips stay as chips because domain is
-              the primary browse axis and the counts are worth seeing.
-              --------------------------------------------------------------- */}
-          <section className="rounded-xl border border-[var(--border)] bg-card p-4 shadow-xs">
-            <form onSubmit={handleSearch} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+        {/* P3c — LLM re-classification audit. Gated on manage_domains, since this changes
+            domain assignment (the same capability as the Domains & Routing engine). */}
+        {canManageDomains && (
+          <ReclassifyPanel onApplied={() => { void loadList(chip, query); void loadBrowse(); }} />
+        )}
+
+        {/* THE PANEL — heading, toolbar, domain chips, bulk bar, table and footer all live
+            in one surface so the whole article library reads as a single unit. */}
+        <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-xs">
+          {/* 1. heading row: h2 + count badge, right-aligned muted note */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4">
+            <h2 className="text-sm font-semibold text-foreground">
+              Article library
+              <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-2xs font-normal text-muted-foreground">
+                {total}
+              </span>
+            </h2>
+            <span className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground">
+              Sorted by {SORT_LABELS[sortKey]}
+              {sortDir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
+            </span>
+          </div>
+
+          {/* Result count is a live region so a filter change is announced, not silent. */}
+          <p role="status" aria-live="polite" className="px-5 pb-3 pt-1 text-xs text-muted-foreground">
+            {listing ? (
+              "Loading articles…"
+            ) : listError ? (
+              "Could not load articles"
+            ) : (
+              <>
+                <span className="font-semibold text-foreground">{total}</span>{" "}
+                article{total === 1 ? "" : "s"}
+                {hasFilters ? " matching the current filters" : " in the knowledge base"}
+              </>
+            )}
+          </p>
+
+          {/* 2. toolbar: search (flex 1) + source + sort + Reset */}
+          <div className="flex flex-wrap items-center gap-2.5 border-y border-[var(--border)] px-5 py-4">
+            <form onSubmit={handleSearch} className="flex min-w-[120px] flex-1 items-center gap-2.5">
+              <div className="relative min-w-[120px] flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={query}
@@ -521,475 +734,474 @@ export default function Knowledge({
                 <option value="body">Body only</option>
               </select>
 
-              {/* Source was a second chip band. It is a refinement, not a browse
-                  axis, so a select communicates the same thing in one row. */}
-              <select
-                value={providerFilter}
-                onChange={(e) => { setProviderFilter(e.target.value); setSelected(new Set()); void loadList(chip, query, 0); }}
-                title="Filter by knowledge source"
-                aria-label="Filter by knowledge source"
-                className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
-              >
-                <option value="all">All sources</option>
-                {allProviders().map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-              </select>
-
-              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-9 rounded-lg px-5 text-xs">
+              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-9 rounded-lg px-4 text-xs">
                 Search
               </Button>
             </form>
 
-            {/* Domain chips — the primary browse axis, with real per-domain counts. */}
-            <div className="mt-3 flex items-center gap-1.5 overflow-x-auto border-t border-[var(--border)]/60 pt-3 [scrollbar-width:thin]">
-              <Layers className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              {chips.map((domain) => {
-                const active = domain === chip;
-                const meta = domain === "all" ? null : metaFor(domain);
-                const label = domain === "all" ? "All Domains" : meta!.label;
-                const apiCount = domains?.find((d) => d.domain === domain)?.pages;
-                const count = typeof apiCount === "number" ? apiCount : domainCardMap.get(domain)?.pages;
-                const desc = meta?.description;
-                return (
-                  <button
-                    key={domain}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => {
-                      setChip(domain);
-                      setPage(1);
-                      setSelected(new Set());
-                      void loadList(domain, query, 0);
-                    }}
-                    /* P0#1 — the per-domain colour and wording come from the DB, so a
-                       domain whose display_name is wrong is visible at a glance instead
-                       of silently reading like its neighbour. */
-                    title={desc ? `${label} — ${desc}` : label}
-                    className={[
-                      "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
-                      active
-                        ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs"
-                        : "border-[var(--border)] bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    {meta && <meta.icon className={`size-3 ${active ? "text-[var(--primary-foreground)]" : meta.iconClass}`} />}
-                    {label}
-                    {typeof count === "number" && (
-                      <span className={active ? "text-[var(--primary-foreground)]/70" : "text-muted-foreground"}>{count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {/* Source was a second chip band. It is a refinement, not a browse axis, so a
+                select communicates the same thing in one row. */}
+            <select
+              value={providerFilter}
+              onChange={(e) => { setProviderFilter(e.target.value); setSelected(new Set()); void loadList(chip, query, 0); }}
+              title="Filter by knowledge source"
+              aria-label="Filter by knowledge source"
+              className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+            >
+              <option value="all">All sources</option>
+              {allProviders().map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
 
-            {/* One summary of what is narrowing the list, with one way out. The old
-                layout offered "Clear filters" only inside the source band, so a user
-                who had filtered by domain had no visible way to reset it. */}
-            {hasFilters && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)]/60 pt-3 text-xs">
-                <span className="text-muted-foreground">Filtered by</span>
-                {query.trim() && <FilterPill label={`"${query.trim()}"`} onClear={() => { setQuery(""); void loadList(chip, "", 0); }} />}
-                {chip !== "all" && <FilterPill label={metaFor(chip).label} onClear={() => { setChip("all"); void loadList("all", query, 0); }} />}
-                {providerFilter !== "all" && (
-                  <FilterPill label={allProviders().find((p) => p.key === providerFilter)?.label ?? providerFilter} onClear={() => { setProviderFilter("all"); void loadList(chip, query, 0); }} />
-                )}
-                <button
-                  type="button"
-                  onClick={() => { setProviderFilter("all"); setChip("all"); setQuery(""); setSelected(new Set()); void loadList("all", "", 0); }}
-                  className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-soft)]"
-                >
-                  <X className="size-3" /> Clear all
-                </button>
-              </div>
-            )}
-          </section>
+            {/* Sorting is server-side: the select re-sorts the whole KB, not the loaded page. */}
+            <select
+              value={`${sortKey}:${sortDir}`}
+              onChange={(e) => {
+                const [k, d] = e.target.value.split(":") as [typeof sortKey, "asc" | "desc"];
+                setSortKey(k);
+                setSortDir(d);
+                void loadList(chip, query, 0);
+              }}
+              title="Sort order"
+              aria-label="Sort order"
+              className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+            >
+              <option value="last_synced:desc">Newest first</option>
+              <option value="last_synced:asc">Oldest first</option>
+              <option value="title:asc">Title A–Z</option>
+              <option value="title:desc">Title Z–A</option>
+              <option value="domain:asc">Domain A–Z</option>
+              <option value="domain:desc">Domain Z–A</option>
+            </select>
 
-            {/* P1#10 — surface the articles no domain claimed. After the LLM pass this
-                is small, but it is exactly the set that silently goes missing from
-                every domain browse view. Domains with no description cannot be chosen
-                by the classifier either, so both are reported here. */}
-            {!listing && items && (() => {
-              const apiGen = domains?.find((d) => d.domain === "general")?.pages;
-              const gen = typeof apiGen === "number" ? apiGen : (domainCardMap.get("general")?.pages ?? 0);
-              const noDesc = (domains ?? []).filter((d) => !d.description || d.description.trim().length < 25);
-              if (gen === 0 && noDesc.length === 0) return null;
+            <button
+              type="button"
+              onClick={resetAll}
+              disabled={!hasFilters}
+              className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-card px-3.5 text-xs font-semibold transition hover:bg-muted disabled:opacity-40"
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* 3. domain chips — the primary browse axis, with real per-domain counts. */}
+          <div
+            ref={chipsRef}
+            className="flex items-center gap-1.5 overflow-x-auto border-b border-[var(--border)] px-5 py-3 [scrollbar-width:thin]"
+          >
+            <Layers className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            {chips.map((domain) => {
+              const active = domain === chip;
+              const meta = domain === "all" ? null : metaFor(domain);
+              const label = domain === "all" ? "All domains" : meta!.label;
+              const apiCount = domains?.find((d) => d.domain === domain)?.pages;
+              const count = domain === "all"
+                ? (kbTotal ?? items?.length)
+                : (typeof apiCount === "number" ? apiCount : domainCardMap.get(domain)?.pages);
+              const desc = meta?.description;
               return (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200">
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    <AlertTriangle className="size-3.5" /> Needs review
-                  </span>
-                  {gen > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => { setChip("general"); void loadList("general", "", 0); }}
-                      className="rounded-md border border-amber-300/70 bg-white/50 px-2 py-0.5 font-medium underline-offset-2 transition hover:bg-white/80 hover:underline dark:border-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
-                    >
-                      {gen} article{gen === 1 ? "" : "s"} still in General IT
-                    </button>
-                  )}
-                  {noDesc.length > 0 && (
-                    <span title={noDesc.map((d) => d.display_name).join(", ")}>
-                      {noDesc.length} domain{noDesc.length === 1 ? "" : "s"} have no description — the AI classifier cannot route to them
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* P1#7 — bulk actions. Appears only when rows are selected. */}
-            {selected.size > 0 && (
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--primary)]/30 bg-[var(--accent-soft)] px-3 py-2">
-                <span className="text-xs font-semibold text-[var(--accent-foreground)]">
-                  {selected.size} selected
-                </span>
-                <select
-                  value={bulkDomain}
-                  onChange={(e) => setBulkDomain(e.target.value)}
-                  className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]" aria-label="{selected.size} selected">
-                  <option value="">Move to domain…</option>
-                  {chips.filter((c) => c !== "all").map((c) => (
-                    <option key={c} value={c}>{metaFor(c).label}</option>
-                  ))}
-                </select>
-                <Button
-                  size="sm"
-                  className="h-8 rounded-lg text-xs"
-                  disabled={!bulkDomain || bulkBusy}
-                  onClick={async () => {
-                    setBulkBusy(true);
-                    try {
-                      const res = await bulkMoveArticles([...selected], bulkDomain);
-                      const d = res.data as { moved?: number };
-                      onToast(`Moved ${d.moved ?? 0} article(s) to ${metaFor(bulkDomain).label}`);
-                      setSelected(new Set()); setBulkDomain(""); reload();
-                    } catch { onToast("Bulk move failed", "err"); }
-                    finally { setBulkBusy(false); }
-                  }}
-                >
-                  <FolderInput className="size-3" /> Move
-                </Button>
                 <button
+                  key={domain}
                   type="button"
-                  onClick={() => setSelected(new Set())}
-                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setChip(domain);
+                    setPage(1);
+                    setSelected(new Set());
+                    void loadList(domain, query, 0);
+                  }}
+                  /* P0#1 — the per-domain colour and wording come from the DB, so a
+                     domain whose display_name is wrong is visible at a glance instead
+                     of silently reading like its neighbour. */
+                  title={desc ? `${label} — ${desc}` : label}
+                  className={[
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                    active
+                      ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs"
+                      : "border-[var(--border)] bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  ].join(" ")}
                 >
-                  Clear selection
-                </button>
-              </div>
-            )}
-
-            {/* RESULTS
-                This heading used to repeat "Knowledge Base Articles" — the exact string the
-                PageHeader already shows two inches above it. It now reports the RESULT SET
-                instead: how many articles matched, and what the list is sorted by. The count
-                is a live region so a filter change is announced rather than silent. */}
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1">
-                <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
-                  {listing ? (
-                    "Loading articles…"
-                  ) : listError ? (
-                    "Could not load articles"
-                  ) : (
-                    <>
-                      <span className="font-semibold text-foreground">{kbTotal ?? items?.length ?? 0}</span>{" "}
-                      article{(kbTotal ?? items?.length ?? 0) === 1 ? "" : "s"}
-                      {hasFilters ? " matching the current filters" : " in the knowledge base"}
-                    </>
+                  {meta && <meta.icon className={`size-3 ${active ? "text-[var(--primary-foreground)]" : meta.iconClass}`} />}
+                  {label}
+                  {typeof count === "number" && (
+                    <span className={active ? "text-[var(--primary-foreground)]/70" : "text-muted-foreground"}>{count}</span>
                   )}
-                </p>
-                <p className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground">
-                  Sorted by {SORT_LABELS[sortKey]}
-                  {sortDir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
-                </p>
-              </div>
+                </button>
+              );
+            })}
+          </div>
 
-              {/* P3c — LLM re-classification audit. Gated on manage_domains, since
-                  this changes domain assignment (the same capability as the
-                  Domains & Routing engine). */}
-              {canManageDomains && (
-                <ReclassifyPanel onApplied={() => { void loadList(chip, query); void loadBrowse(); }} />
+          {/* One summary of what is narrowing the list, with one way out. The old layout
+              offered "Clear filters" only inside the source band, so a user who had
+              filtered by domain had no visible way to reset it. */}
+          {hasFilters && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-5 py-2.5 text-xs">
+              <span className="text-muted-foreground">Filtered by</span>
+              {query.trim() && <FilterPill label={`"${query.trim()}"`} onClear={() => { setQuery(""); void loadList(chip, "", 0); }} />}
+              {chip !== "all" && <FilterPill label={metaFor(chip).label} onClear={() => { setChip("all"); void loadList("all", query, 0); }} />}
+              {providerFilter !== "all" && (
+                <FilterPill label={allProviders().find((p) => p.key === providerFilter)?.label ?? providerFilter} onClear={() => { setProviderFilter("all"); void loadList(chip, query, 0); }} />
               )}
+              <button
+                type="button"
+                onClick={resetAll}
+                className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-soft)]"
+              >
+                <X className="size-3" /> Clear all
+              </button>
+            </div>
+          )}
 
-              <Card className="rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[860px] text-xs">
-                    {/* Sticky: the list is long and paging scrolls the header out of
-                        view, so the column names — and the sort control inside them —
-                        have to stay reachable. */}
-                    <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm border-b border-[var(--border)]">
-                      <tr className="text-left text-muted-foreground">
-                        <th className="w-9 px-3 py-3.5">
-                          {canManage && items && items.length > 0 && (
+          {/* 4. bulk bar — appears only when rows are selected. */}
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--accent-soft)] px-5 py-2.5">
+              <span className="text-xs font-semibold text-[var(--accent-foreground)]">
+                {selected.size} selected across pages
+              </span>
+              <select
+                value={bulkDomain}
+                onChange={(e) => setBulkDomain(e.target.value)}
+                className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]" aria-label="{selected.size} selected">
+                <option value="">Move to domain…</option>
+                {chips.filter((c) => c !== "all").map((c) => (
+                  <option key={c} value={c}>{metaFor(c).label}</option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                className="h-8 rounded-lg text-xs"
+                disabled={!bulkDomain || bulkBusy}
+                onClick={async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkMoveArticles([...selected], bulkDomain);
+                    const d = res.data as { moved?: number };
+                    onToast(`Moved ${d.moved ?? 0} article(s) to ${metaFor(bulkDomain).label}`);
+                    setSelected(new Set()); setBulkDomain(""); reload();
+                  } catch { onToast("Bulk move failed", "err"); }
+                  finally { setBulkBusy(false); }
+                }}
+              >
+                <FolderInput className="size-3" /> Move
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
+          {/* 5. the table — scrolls horizontally on narrow screens. */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-xs">
+              {/* Sticky: the list is long and paging scrolls the header out of view, so the
+                  column names — and the sort control inside them — have to stay reachable. */}
+              <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-muted/60 backdrop-blur-sm">
+                <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
+                  <th className="w-9 px-3 py-3.5">
+                    {canManage && items && items.length > 0 && (
+                      <PageCheckbox
+                        label="Select all rows on this page"
+                        checked={items.every((a) => selected.has(a.page_id))}
+                        indeterminate={items.some((a) => selected.has(a.page_id)) && !items.every((a) => selected.has(a.page_id))}
+                        onChange={(checked) => {
+                          const next = new Set(selected);
+                          items.forEach((a) => (checked ? next.add(a.page_id) : next.delete(a.page_id)));
+                          setSelected(next);
+                        }}
+                      />
+                    )}
+                  </th>
+                  {([
+                    { k: "title", l: "Article title", cls: "px-5 py-3.5 font-semibold" },
+                    { k: null, l: "Source", cls: "px-4 py-3.5 font-semibold" },
+                    { k: "domain", l: "Domain", cls: "px-4 py-3.5 font-semibold" },
+                    { k: "last_synced", l: "Last sync", cls: "px-4 py-3.5 font-semibold" },
+                  ] as const).map((h) => (
+                    <th key={h.l} className={h.cls}>
+                      {h.k ? (
+                        /* Sorting is server-side: clicking sorts the whole KB,
+                           not just the rows currently loaded. */
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextDir = sortKey === h.k && sortDir === "desc" ? "asc" : "desc";
+                            setSortKey(h.k as typeof sortKey);
+                            setSortDir(nextDir);
+                            void loadList(chip, query, 0);
+                          }}
+                          className="inline-flex items-center gap-1 transition hover:text-foreground"
+                          aria-label={`Sort by ${h.l}`}
+                          title={`Sort by ${h.l}`}
+                        >
+                          {h.l}
+                          {sortKey === h.k ? (
+                            sortDir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />
+                          ) : (
+                            <ArrowUpDown className="size-3 opacity-30" />
+                          )}
+                        </button>
+                      ) : (
+                        h.l
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {listing ? (
+                  <tr>
+                    <td colSpan={5} className="p-4">
+                      <Skeleton className="h-9 w-full rounded-lg" />
+                    </td>
+                  </tr>
+                ) : listError ? (
+                  <tr>
+                    <td colSpan={5}>
+                      <ErrorState
+                        compact
+                        title="Could not load the knowledge base"
+                        detail={listError}
+                        onRetry={() => void loadList(chip, query, (page - 1) * pageSize)}
+                      />
+                    </td>
+                  </tr>
+                ) : !items || items.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>
+                      {/* "Nothing here yet" and "nothing matches" need different words:
+                          only the second is something the user caused and can undo, so
+                          only it gets the clear-filters action. */}
+                      {(kbTotal ?? 0) === 0 && !query && chip === "all" && providerFilter === "all" ? (
+                        <EmptyState
+                          icon={<BookOpen className="size-5" />}
+                          title="No articles yet"
+                          description="Articles arrive from your knowledge sources and from the sync jobs. Connect a source in Settings → Integrations, or create one manually."
+                        />
+                      ) : (
+                        <EmptyState
+                          icon={<SearchX className="size-5" />}
+                          title="No articles match this filter"
+                          description={kbTotal && kbTotal > 0 ? `${kbTotal} article${kbTotal === 1 ? "" : "s"} in the knowledge base, but none match the current filters.` : "No articles match the current filters."}
+                          actionLabel="Clear filters"
+                          onAction={() => { setChip("all"); setProviderFilter("all"); setQuery(""); void loadList("all", "", 0); }}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((article) => {
+                    const meta = metaFor(article.domain);
+                    return (
+                      <tr
+                        key={article.page_id}
+                        className={[
+                          "border-t border-[var(--border)]/60 transition",
+                          selected.has(article.page_id)
+                            ? "bg-[var(--accent-soft)]"
+                            : "hover:bg-muted/40",
+                        ].join(" ")}
+                      >
+                        <td className="px-3 py-3 align-middle">
+                          {canManage && (
                             <input
                               type="checkbox"
-                              aria-label="Select all rows on this page"
-                              checked={items.every((a) => selected.has(a.page_id))}
+                              aria-label={`Select ${article.title || article.page_id}`}
+                              checked={selected.has(article.page_id)}
                               onChange={(e) => {
                                 const next = new Set(selected);
-                                items.forEach((a) => (e.target.checked ? next.add(a.page_id) : next.delete(a.page_id)));
+                                if (e.target.checked) next.add(article.page_id); else next.delete(article.page_id);
                                 setSelected(next);
                               }}
                               className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
                             />
                           )}
-                        </th>
-                        {([
-                          { k: "title", l: "Article Title", cls: "px-5 py-3.5 font-semibold" },
-                          { k: null, l: "Source", cls: "px-4 py-3.5 font-semibold" },
-                          { k: "domain", l: "Domain", cls: "px-4 py-3.5 font-semibold" },
-                          { k: "last_synced", l: "Synced", cls: "px-4 py-3.5 font-semibold" },
-                        ] as const).map((h) => (
-                          <th key={h.l} className={h.cls}>
-                            {h.k ? (
-                              /* Sorting is server-side: clicking sorts the whole KB,
-                                 not just the rows currently loaded. */
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const nextDir = sortKey === h.k && sortDir === "desc" ? "asc" : "desc";
-                                  setSortKey(h.k as typeof sortKey);
-                                  setSortDir(nextDir);
-                                  void loadList(chip, query, 0);
-                                }}
-                                className="inline-flex items-center gap-1 transition hover:text-foreground"
-                                aria-label={`Sort by ${h.l}`}
-                                title={`Sort by ${h.l}`}
-                              >
-                                {h.l}
-                                {sortKey === h.k ? (
-                                  sortDir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />
-                                ) : (
-                                  <ArrowUpDown className="size-3 opacity-30" />
-                                )}
-                              </button>
-                            ) : (
-                              h.l
-                            )}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listing ? (
-                        <tr>
-                          <td colSpan={5} className="p-4">
-                            <Skeleton className="h-9 w-full rounded-lg" />
-                          </td>
-                        </tr>
-                      ) : listError ? (
-                        <tr>
-                          <td colSpan={5}>
-                            <ErrorState
-                              compact
-                              title="Could not load the knowledge base"
-                              detail={listError}
-                              onRetry={() => void loadList(chip, query, (page - 1) * pageSize)}
-                            />
-                          </td>
-                        </tr>
-                      ) : !items || items.length === 0 ? (
-                        <tr>
-                          <td colSpan={5}>
-                            {/* "Nothing here yet" and "nothing matches" need different
-                                words: only the second is something the user caused and can
-                                undo, so only it gets the clear-filters action. */}
-                            {(kbTotal ?? 0) === 0 && !query && chip === "all" && providerFilter === "all" ? (
-                              <EmptyState
-                                icon={<BookOpen className="size-5" />}
-                                title="No articles yet"
-                                description="Articles arrive from your knowledge sources and from the sync jobs. Connect a source in Settings → Integrations, or create one manually."
-                              />
-                            ) : (
-                              <EmptyState
-                                icon={<SearchX className="size-5" />}
-                                title="No articles match this filter"
-                                description={kbTotal && kbTotal > 0 ? `${kbTotal} article${kbTotal === 1 ? "" : "s"} in the knowledge base, but none match the current filters.` : "No articles match the current filters."}
-                                actionLabel="Clear filters"
-                                onAction={() => { setChip("all"); setProviderFilter("all"); setQuery(""); void loadList("all", "", 0); }}
-                              />
-                            )}
-                          </td>
-                        </tr>
-                      ) : (
-                        items.map((article) => {
-                          const meta = metaFor(article.domain);
-                          return (
-                            <tr
-                              key={article.page_id}
-                              className={[
-                                "border-t border-[var(--border)]/60 transition",
-                                selected.has(article.page_id)
-                                  ? "bg-[var(--accent-soft)]"
-                                  : "hover:bg-muted/40",
-                              ].join(" ")}
+                        </td>
+                        {/* Was `truncate` on a fixed max-width, which cut long article
+                            titles with no way to read the rest. Two lines, then ellipsis,
+                            plus the full text in the tooltip. The cell is a button now:
+                            it opens the row's details dialog. */}
+                        <td className="max-w-[400px] px-5 py-3">
+                          <button
+                            type="button"
+                            onClick={() => setDetail(article)}
+                            title={article.title}
+                            className="block max-w-full text-left font-medium text-foreground underline-offset-2 transition hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                          >
+                            <span className="line-clamp-2">
+                              {/* P1#8 — show WHERE the search text matched so the
+                                  result does not look arbitrary. */}
+                              {query.trim() ? highlight(article.title, query) : article.title}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          {/* The badge IS the link to the source. Previously a separate
+                              "Actions" column held a lone external-link icon pointing at
+                              the same URL. */}
+                          {article.source_url ? (
+                            <a
+                              href={article.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={`Open source: ${article.source_url}`}
+                              className="inline-flex items-center gap-1 rounded-md transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                             >
-                              <td className="px-3 py-3 align-middle">
-                                {canManage && (
-                                  <input
-                                    type="checkbox"
-                                    aria-label={`Select ${article.title || article.page_id}`}
-                                    checked={selected.has(article.page_id)}
-                                    onChange={(e) => {
-                                      const next = new Set(selected);
-                                      if (e.target.checked) next.add(article.page_id); else next.delete(article.page_id);
-                                      setSelected(next);
-                                    }}
-                                    className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
-                                  />
-                                )}
-                              </td>
-                              {/* Was `truncate` on a fixed max-width, which cut long
-                                  article titles with no way to read the rest — the title
-                                  is the whole point of the row. Two lines, then ellipsis,
-                                  plus the full text in the tooltip. */}
-                              <td className="max-w-[400px] px-5 py-3 font-medium text-foreground">
-                                <span className="line-clamp-2" title={article.title}>
-                                  {/* P1#8 — show WHERE the search text matched so the
-                                      result does not look arbitrary. */}
-                                  {query.trim() ? highlight(article.title, query) : article.title}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                {/* The badge IS the link to the source. Previously a
-                                    separate "Actions" column held a lone external-link icon
-                                    pointing at the same URL. */}
-                                {article.source_url ? (
-                                  <a
-                                    href={article.source_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    title={`Open source: ${article.source_url}`}
-                                    className="inline-flex items-center gap-1 rounded-md transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-                                  >
-                                    <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
-                                      {providerOf(article).label}
-                                    </Badge>
-                                    <ExternalLink className="size-2.5 text-muted-foreground" />
-                                  </a>
-                                ) : (
-                                  <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
-                                    {providerOf(article).label}
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                <Badge variant="outline" className="text-2xs capitalize bg-muted/60">
-                                  {meta.label}
-                                </Badge>
-                              </td>
-                              <td
-                                className="px-4 py-3 text-muted-foreground text-xs"
-                                title={article.last_synced ? new Date(article.last_synced).toLocaleString() : "never synced"}
-                              >
-                                {relTime(article.last_synced)}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* P1#9 — server-side pagination. `total` is COUNT(*) over the whole
-                    filtered KB and the page size is selectable, so "1-N of TOTAL" is a
-                    real statement. The table previously hardcoded 8 rows per page while
-                    the API returned 50. */}
-                {items && kbTotal != null && kbTotal > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] bg-muted/20 px-5 py-3">
-                    <p className="text-xs text-muted-foreground">
-                      Showing {(page - 1) * pageSize + 1}–{Math.min((page - 1) * pageSize + items.length, kbTotal)} of {kbTotal}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={pageSize}
-                        onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
-                        className="h-7 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
-                        title="Rows per page" aria-label="Rows per page">
-                        {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
-                      </select>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline" size="sm" className="h-7 w-7 p-0 text-xs rounded-lg"
-                          disabled={page <= 1 || listing}
-                          onClick={() => { setSelected(new Set()); void loadList(chip, query, (page - 2) * pageSize); }}
+                              <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
+                                {providerOf(article).label}
+                              </Badge>
+                              <ExternalLink className="size-2.5 text-muted-foreground" />
+                            </a>
+                          ) : (
+                            <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
+                              {providerOf(article).label}
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline" className={`text-2xs ${meta.bgClass} ${meta.iconClass}`}>
+                            {meta.label}
+                          </Badge>
+                        </td>
+                        <td
+                          className="px-4 py-3 text-xs text-muted-foreground"
+                          title={article.last_synced ? new Date(article.last_synced).toLocaleString() : "never synced"}
                         >
-                          ‹
-                        </Button>
-                        {(() => {
-                          const totalPages = Math.max(1, Math.ceil(kbTotal / pageSize));
-                          const nums: (number | "…")[] = [];
-                          if (totalPages <= 7) {
-                            for (let i = 1; i <= totalPages; i++) nums.push(i);
-                          } else {
-                            nums.push(1);
-                            if (page > 3) nums.push("…");
-                            for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) nums.push(i);
-                            if (page < totalPages - 2) nums.push("…");
-                            nums.push(totalPages);
-                          }
-                          return nums.map((n, idx) =>
-                            n === "…" ? (
-                              <span key={`e${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
-                            ) : (
-                              <Button
-                                key={n}
-                                variant={n === page ? "default" : "outline"}
-                                size="sm"
-                                className="h-7 min-w-7 px-2 text-xs rounded-lg"
-                                disabled={listing}
-                                onClick={() => { setSelected(new Set()); void loadList(chip, query, (Number(n) - 1) * pageSize); }}
-                              >
-                                {n}
-                              </Button>
-                            ),
-                          );
-                        })()}
-                        <Button
-                          variant="outline" size="sm" className="h-7 w-7 p-0 text-xs rounded-lg"
-                          disabled={page >= Math.ceil(kbTotal / pageSize) || listing}
-                          onClick={() => { setSelected(new Set()); void loadList(chip, query, page * pageSize); }}
-                        >
-                          ›
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                          {relTime(article.last_synced)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
-              </Card>
-            </div>
+              </tbody>
+            </table>
+          </div>
 
-            {/* FACTS
-                These two cards held fixed prose — "runs every 30 minutes via Celery
-                worker", "synced with LangGraph hybrid retrieval". Nothing in them changed
-                with the data, so they occupied the bottom of the page telling the reader
-                what the system is instead of what it currently holds. They are now four
-                measured figures. */}
-            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[
-                { icon: BookOpen, label: "Articles", value: kbTotal != null ? kbTotal.toLocaleString() : "—" },
-                { icon: Layers, label: "Domains", value: domains ? domains.length.toLocaleString() : "—" },
-                { icon: Database, label: "Sources", value: allProviders().length.toLocaleString() },
-                {
-                  icon: Clock3,
-                  label: "Last sync",
-                  value: status?.last_run?.at ? relTime(status.last_run.at) : "never",
-                  hint: `Runs every ${status?.beat_interval_minutes ?? 30} min`,
-                },
-              ].map((s) => (
-                <div key={s.label} className="rounded-xl border border-[var(--border)] bg-card p-3.5 shadow-xs">
-                  <div className="flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
-                    <s.icon className="size-3" aria-hidden />
-                    {s.label}
-                  </div>
-                  <div className="mt-1 text-lg font-semibold tracking-tight text-foreground">{s.value}</div>
-                  {s.hint && <div className="mt-0.5 text-3xs text-muted-foreground">{s.hint}</div>}
+          {/* 6. footer — range on the left, rows-per-page + pager on the right. */}
+          {items && kbTotal != null && kbTotal > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3.5">
+              <p className="text-xs text-muted-foreground">
+                Showing {(page - 1) * pageSize + 1}–{Math.min((page - 1) * pageSize + items.length, kbTotal)} of {kbTotal}
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
+                  className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
+                  title="Rows per page" aria-label="Rows per page">
+                  {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
+                </select>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
+                    disabled={page <= 1 || listing}
+                    onClick={() => { setSelected(new Set()); void loadList(chip, query, (page - 2) * pageSize); }}
+                    className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </button>
+                  <span className="px-1 text-xs text-muted-foreground">{page} / {totalPages}</span>
+                  <button
+                    type="button"
+                    aria-label="Next page"
+                    disabled={page >= totalPages || listing}
+                    onClick={() => { setSelected(new Set()); void loadList(chip, query, page * pageSize); }}
+                    className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </button>
                 </div>
-              ))}
-            </section>
+              </div>
+            </div>
+          )}
+        </section>
 
+        {/* Where the numbers above come from. Stated plainly so a count is never read as a
+            guess: the total is the API's COUNT(*), not the rows on this page. */}
+        <p className="text-2xs leading-relaxed text-muted-foreground">
+          Counts are read from the Knowledge Base Articles index — the total is a COUNT(*)
+          over the whole filtered set, not just the rows on this page. Domain counts come
+          from each domain's article list, and the source options come from the connected
+          content providers.
+        </p>
       </main>
 
+      {/* Details dialog — the title cell opens it. It shows only the fields the list row
+          already carries, so nothing here is invented. */}
+      {detail && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Article details: ${detail.title}`}
+          onClick={(e) => { if (e.target === e.currentTarget) setDetail(null); }}
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-card p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-base font-semibold">{detail.title}</h2>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setDetail(null)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/10"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <dl className="mt-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Domain</dt>
+                <dd>
+                  <Badge variant="outline" className={`text-2xs ${metaFor(detail.domain).bgClass} ${metaFor(detail.domain).iconClass}`}>
+                    {metaFor(detail.domain).label}
+                  </Badge>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Source</dt>
+                <dd>
+                  <Badge variant="outline" className={`text-2xs ${providerOf(detail).className}`}>
+                    {providerOf(detail).label}
+                  </Badge>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Last sync</dt>
+                <dd className="text-foreground">
+                  {detail.last_synced
+                    ? `${relTime(detail.last_synced)} · ${new Date(detail.last_synced).toLocaleString()}`
+                    : "never"}
+                </dd>
+              </div>
+              {detail.updated_by && (
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Updated by</dt>
+                  <dd className="text-foreground">{detail.updated_by}</dd>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Page ID</dt>
+                <dd className="font-mono text-2xs text-foreground">{detail.page_id}</dd>
+              </div>
+            </dl>
+
+            {detail.source_url && (
+              <a
+                href={detail.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+              >
+                Open source <ExternalLink className="size-3" />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }
