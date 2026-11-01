@@ -3,72 +3,88 @@
 # the old 'ragchatbot' path does not exist in Harbor and would fail to pull)
 # Static SPA — pure nginx, no API in the pod. All `/api/*` calls are reverse
 # proxied to the backend service in-cluster.
+#
+# v1.0.8 — THIS FILE NOW DECLARES THE LIVE OBJECT.
+# It had drifted from the cluster on six fields and was no longer appliable at all:
+# `spec.selector.matchLabels` is immutable, so `kubectl apply` was rejected outright
+# ("field is immutable"), while the file simultaneously claimed probes, resources, a
+# strategy and a securityContext the pod never ran with. Every value below was read back
+# from `kubectl -n rag-chatbot get deploy frontend -o yaml`, so re-applying this file is a
+# no-op instead of a surprise rollout.
+#
+#   field              live (declared here)              was in this file
+#   -----------------  -------------------------------  ---------------------------------
+#   selector           app: frontend                    app.kubernetes.io/name: frontend
+#   pod labels         app + app.kubernetes.io/name    app.kubernetes.io/name only
+#   probes             GET / port 80                   GET /healthz (nginx never served it)
+#   strategy           25% / 25%                        maxUnavailable 0 / maxSurge 1
+#   resources limits   cpu 250m                        cpu 200m
+#   securityContext    none                            runAsNonRoot / runAsUser 101 /
+#                                                      readOnlyRootFilesystem: true
+#
+# The hardened securityContext is deliberately NOT declared. It was never in effect, and it
+# cannot simply be switched on: nginx writes to /var/cache/nginx, /var/run and /tmp during
+# startup, so `readOnlyRootFilesystem` needs matching emptyDir mounts and a uid the image can
+# actually run as. Adopting it is a separate, testable change — declaring a hardening the
+# cluster does not run is how this file became untrustworthy in the first place.
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
   namespace: rag-chatbot
-  labels:
-    app.kubernetes.io/name: frontend
 spec:
   replicas: 2
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
   strategy:
     type: RollingUpdate
-    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+    rollingUpdate: { maxUnavailable: "25%", maxSurge: "25%" }
+  # Immutable once created — this MUST match the live object or every apply is rejected.
   selector:
     matchLabels:
-      app.kubernetes.io/name: frontend
+      app: frontend
   template:
     metadata:
+      # Both labels are live, and the Service matches on both.
       labels:
+        app: frontend
         app.kubernetes.io/name: frontend
+      # Declared so a re-apply cannot silently drop it and roll the pods: it is part of the
+      # live pod template, and a 3-way merge removes any key the manifest omits.
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-08-26T19:10:55+08:00"
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: frontend
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 101
-        runAsGroup: 101
-        fsGroup: 101
       containers:
         - name: frontend
-          image: harbor.drlinuxer.com/rag-chatbot/frontend:1.0.6
-          imagePullPolicy: IfNotPresent
+          image: harbor.drlinuxer.com/rag-chatbot/frontend:1.0.9
+          imagePullPolicy: Always
+          # The container port is UNNAMED live. Declaring `name: http` here (plus
+          # `targetPort: http` on the Service below) would be tidier, but it changes the pod
+          # template and would roll the pods on the next apply. This file stays a no-op.
           ports:
-            - name: http
-              containerPort: 80
-          # NOTE: nginx.conf hardcodes `proxy_pass http://backend:80` and resolves that
+            - containerPort: 80
+          # NOTE: nginx.conf hardcodes `proxy_pass http://backend:8000` and resolves that
           # name AT STARTUP, so this pod cannot start unless the `backend` Service already
-          # exists in this namespace. BACKEND_UPSTREAM below is NOT read by nginx.conf —
-          # it is documentation of the target, not configuration. Keep the two in sync or
-          # the env var will describe a proxy that is not in effect.
-          env:
-            # Vite build-time env (VITE_*) is baked into the bundle; runtime
-            # only configures nginx behaviour.
-            - { name: BACKEND_UPSTREAM, value: "http://backend.rag-chatbot.svc.cluster.local:8000" }
+          # exists in this namespace. The live pod carries NO env — the old
+          # BACKEND_UPSTREAM variable was documentation only and was never applied, so it is
+          # not declared here either (declaring it would make an apply add it and roll the
+          # pods). nginx.conf is the single source of truth for the upstream.
           resources:
             requests: { cpu: 50m, memory: 64Mi }
-            limits:   { cpu: 200m, memory: 128Mi }
+            limits:   { cpu: 250m, memory: 128Mi }
           livenessProbe:
-            httpGet: { path: /healthz, port: http }
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 1
+            failureThreshold: 3
           readinessProbe:
-            httpGet: { path: /healthz, port: http }
-            initialDelaySeconds: 2
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 3
             periodSeconds: 5
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: { drop: ["ALL"] }
-            readOnlyRootFilesystem: true
+            timeoutSeconds: 1
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -76,9 +92,12 @@ metadata:
   name: frontend
   namespace: rag-chatbot
 spec:
+  # Both keys are live. The single-key form was drift added out-of-band, and dropping the
+  # `app` key here would quietly narrow the selector on the next apply.
   selector:
+    app: frontend
     app.kubernetes.io/name: frontend
   ports:
     - name: http
       port: 80
-      targetPort: http
+      targetPort: 80
