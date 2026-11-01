@@ -10,7 +10,8 @@ Graph topology:
                                   ↓
                                context → tools
                                               │
-                              ticket intent + weak conf?
+                    ticket intent, or caution + the
+                    user's auto-escalate preference?
                                     │              │
                                    YES            NO
                                     ▼              ▼
@@ -147,6 +148,7 @@ def _node_tools(state: RAGState) -> dict:
       retrieval confidence is weak.
     The old single-intent check let "what is the status of my ticket" fall into
     the approval interrupt path — that conflict is what this split fixes."""
+    from app.rag.gate import DECISION_CAUTION
     from app.tools.ticket_tool import (
         detect_ticket_create_intent,
         detect_ticket_status_intent,
@@ -260,7 +262,49 @@ def _node_tools(state: RAGState) -> dict:
     # "Call Tool node only after approval"). The old `intent and weak` condition let a
     # confident KB answer silently swallow the escalation.
     out["needs_approval"] = bool(intent)
+
+    # v0.21.96 — `auto_escalate_on_caution` finally does something.
+    #
+    # It was stored on `user_settings`, served by /api/settings and typed in the
+    # frontend, and read by NO logic — so a below-threshold answer showed the caution
+    # banner and stopped there, and the human the setting promises never saw it. The
+    # gate already reached its verdict upstream in `_node_gate`; use that verdict as
+    # the trigger instead of inventing a second confidence test here.
+    #
+    # It is a PER-USER preference, not a runtime KV: read the user's own row, so a
+    # toggle in Settings takes effect on their next question. Off by default, and off
+    # for an anonymous turn — nobody is escalated on behalf of a user who never asked.
+    if not intent and state.get("decision") == DECISION_CAUTION and _auto_escalate(user):
+        out["needs_approval"] = True
+        out["tool_used"] = "escalation"
+        logger.info("auto-escalating a caution answer for %r (confidence=%s)",
+                    q[:40], state.get("confidence"))
     return out
+
+
+def _auto_escalate(username: str | None) -> bool:
+    """The caller's `auto_escalate_on_caution` preference. Default False.
+
+    Read at request time from the user's own `user_settings` row, so toggling it in
+    Settings applies to the next question with no restart. No row (the user has never
+    opened Settings) and no username both mean False: escalation is a side effect with
+    a real-world cost — a Jira ticket and an admin's attention — so it must never fire
+    for someone who did not ask for it.
+    """
+    if not username:
+        return False
+    from app.persistence.database import SessionLocal
+    from app.persistence.models import UserSettings
+
+    s = SessionLocal()
+    try:
+        row = s.get(UserSettings, username)
+        return bool(row.auto_escalate_on_caution) if row else False
+    except Exception as exc:  # noqa: BLE001 — a preference lookup must not break the turn
+        logger.warning("auto_escalate_on_caution lookup failed for %r: %s", username, exc)
+        return False
+    finally:
+        s.close()
 
 
 def _node_approval(state: RAGState) -> dict:
@@ -272,11 +316,16 @@ def _node_approval(state: RAGState) -> dict:
     from langgraph.types import interrupt
 
     # First execution: pauses here and surfaces the payload to the operator.
+    # `reason` distinguishes the two ways a turn reaches this node, because they need
+    # different decisions from the admin: a user ASKED for a ticket, versus the gate
+    # was not confident and the user's `auto_escalate_on_caution` raised it.
     decision = interrupt({
         "question": "Escalation approval requested",
         "details": state["question"],
         "user": state.get("user"),
         "confidence": state["confidence"],
+        "reason": ("auto_caution" if state.get("tool_used") == "escalation"
+                   else "ticket_request"),
     })
     # Resumed: `decision` is the Command(resume=...) payload.
     approved = bool(decision.get("approved", False))
