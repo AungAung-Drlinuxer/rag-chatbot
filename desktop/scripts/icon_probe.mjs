@@ -16,7 +16,8 @@ import { existsSync, mkdirSync } from "node:fs";
 
 const PORT = 5235;
 const BASE = `http://localhost:${PORT}/chat-layout-harness.html`;
-const OUT = "docs/qa";
+// Absolute, so the shots always land in the repo's docs/qa regardless of cwd.
+const OUT = "/home/aungaung/Documents/rag-chatbot/docs/qa";
 const CHROME =
   process.env.CHROME_PATH ||
   "/usr/bin/google-chrome";
@@ -75,7 +76,9 @@ try {
 
     if (strip) {
       // Every step disc: an <svg> (the stage glyph) or a bare digit?
-      for (const disc of strip.querySelectorAll("span.rounded-full")) {
+      // The connector bars between steps are also rounded-full — select the badge by
+      // its data-step attribute so only real step discs are counted.
+      for (const disc of strip.querySelectorAll("[data-step] > span:first-child")) {
         const svg = disc.querySelector("svg");
         const txt = (disc.textContent || "").trim();
         out.discs.push({

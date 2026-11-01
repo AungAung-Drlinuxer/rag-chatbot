@@ -73,7 +73,7 @@ const STEPS: StepDef[] = [
   },
   {
     key: "rewrite",
-    label: "Query rewrite",
+    label: "Rewrite",
     icon: WandSparkles,
     description:
       "Filler words are stripped and follow-up context is merged so the " +
@@ -81,7 +81,7 @@ const STEPS: StepDef[] = [
   },
   {
     key: "retrieve",
-    label: "Retrieval",
+    label: "Retrieve",
     icon: Search,
     description:
       "Hybrid search: pgvector HNSW (semantic) + BM25 keyword arm, fused " +
@@ -97,7 +97,7 @@ const STEPS: StepDef[] = [
   },
   {
     key: "generate",
-    label: "Generating",
+    label: "Generate",
     icon: PenLine,
     description:
       "Context chunks + system prompt go to the primary LLM (OpenRouter) " +
@@ -346,10 +346,14 @@ export default function RagPipelineStatus({
         )}
       </div>
 
-      {/* ---- stage strip: always on screen ---- */}
+      {/* ---- stage strip: always on screen ----
+          Each step is a vertical stack, not an inline row: a circular badge carrying the
+          stage glyph, then its numbered label, then the measured ms (or "Running" while
+          the step is still in flight). The reference lays it out this way, and it lets the
+          badge stay legible at a size where the glyph reads as an icon rather than a smudge. */}
       <div
         data-testid="rag-pipeline-stages"
-        className="flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-slate-100 px-4 py-2.5 dark:border-slate-800/70"
+        className="flex flex-wrap items-start gap-x-1 gap-y-3 border-t border-slate-100 px-4 py-3 dark:border-slate-800/70"
       >
         {steps.map((step, idx) => {
           const isActive = active && idx === activeIdx;
@@ -360,19 +364,19 @@ export default function RagPipelineStatus({
               {idx > 0 && (
                 <span
                   aria-hidden
-                  className={`h-px w-3 shrink-0 ${
+                  className={`mt-4 h-0.5 w-6 shrink-0 rounded-full sm:w-10 ${
                     isDone || isActive ? "bg-blue-500/60" : "bg-slate-200 dark:bg-slate-700"
                   }`}
                 />
               )}
               <span
                 title={step.description}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-1.5 py-1 ${
-                  isActive ? "bg-blue-50 dark:bg-blue-950/50" : ""
-                }`}
+                data-step={step.key}
+                data-state={isActive ? "running" : isDone ? "done" : "pending"}
+                className="flex w-[5.5rem] shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1"
               >
                 <span
-                  className={`grid size-4 shrink-0 place-items-center rounded-full ${
+                  className={`grid size-8 shrink-0 place-items-center rounded-full shadow-sm ${
                     isActive
                       ? "animate-pulse bg-blue-600 text-white"
                       : isDone
@@ -380,10 +384,10 @@ export default function RagPipelineStatus({
                         : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
                   }`}
                 >
-                  <step.icon aria-hidden className="size-2.5" />
+                  <step.icon aria-hidden className="size-4" />
                 </span>
                 <span
-                  className={`text-xs font-medium ${
+                  className={`text-center text-2xs font-medium leading-tight ${
                     isActive
                       ? "text-blue-700 dark:text-blue-300"
                       : isDone
@@ -391,32 +395,32 @@ export default function RagPipelineStatus({
                         : "text-slate-400 dark:text-slate-500"
                   }`}
                 >
-                  {step.label}
+                  {idx + 1}. {step.label}
                 </span>
                 <span
-                  className={`font-mono text-2xs tabular-nums ${
-                    ms != null ? "text-slate-500 dark:text-slate-400" : "text-slate-300 dark:text-slate-600"
-                  }`}
-                >
-                  {ms != null ? `${ms}ms` : "\u2014"}
-                </span>
-                <span
-                  role="img"
-                  aria-label={isActive ? "running" : isDone ? "done" : "pending"}
-                  className={`grid place-items-center ${
+                  className={`flex items-center gap-1 font-mono text-2xs tabular-nums ${
                     isActive
                       ? "text-blue-600 dark:text-blue-400"
-                      : isDone
-                        ? "text-emerald-600 dark:text-emerald-400"
+                      : ms != null
+                        ? "text-slate-500 dark:text-slate-400"
                         : "text-slate-300 dark:text-slate-600"
                   }`}
                 >
                   {isActive ? (
-                    <Loader2 aria-hidden className="size-3 animate-spin" />
+                    <>
+                      <Loader2 aria-hidden className="size-3 animate-spin" />
+                      Running
+                    </>
                   ) : isDone ? (
-                    <Check aria-hidden className="size-3" />
+                    <>
+                      <Check aria-hidden className="size-3 text-emerald-600 dark:text-emerald-400" />
+                      {ms != null ? `${ms}ms` : "done"}
+                    </>
                   ) : (
-                    <Circle aria-hidden className="size-2.5" />
+                    <>
+                      <Circle aria-hidden className="size-2.5" />
+                      pending
+                    </>
                   )}
                 </span>
               </span>
