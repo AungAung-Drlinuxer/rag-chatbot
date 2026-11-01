@@ -337,7 +337,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 placeholder="e.g. help_desk, inventory, hr"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
                 required
-              />
+               aria-label="Rename — cascades to KB & vectors"/>
               {!isCreating && (
                 <p className="text-2xs text-muted-foreground mt-1">
                   Editing the key renames it across the classifier engine, KB pages, and stored vector metadata in one atomic transaction.
@@ -357,7 +357,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 placeholder="e.g. Help Desk & End-User Support"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 required
-              />
+               aria-label="Display Name"/>
             </div>
           </div>
 
@@ -372,8 +372,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                   disabled={!!customIcon}
                   value={selectedIcon}
                   onChange={(e) => setSelectedIcon(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-slate-900 dark:text-white outline-none disabled:opacity-50"
-                >
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-slate-900 dark:text-white outline-none disabled:opacity-50" aria-label="Built-in Icon">
                   {Object.entries(ICON_OPTIONS).map(([key, opt]) => (
                     <option key={key} value={key}>
                       {opt.label}
@@ -476,7 +475,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
                 onChange={(e) => setJiraProject(e.target.value)}
                 placeholder="e.g. ITHD (leave blank if unused)"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-              />
+               aria-label="Jira project key"/>
               <p className="text-2xs text-muted-foreground mt-1">
                 Target Jira Project code for team escalation when the question cannot be answered from Confluence KB.
               </p>
@@ -508,7 +507,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief summary of issues routed to this domain"
               className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-            />
+             aria-label="Description / Scope"/>
           </div>
 
           <div>
@@ -521,7 +520,7 @@ export function DomainClassifierManager({ domains, onRefresh, canManage }: Props
               onChange={(e) => setKeywordsText(e.target.value)}
               placeholder="e.g. payroll, leave request, onboarding, tax deduction"
               className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-            />
+             aria-label="Keywords and phrases"/>
             <p className="text-2xs text-muted-foreground mt-1">
               Any user prompt containing these phrases will score towards this domain.
             </p>

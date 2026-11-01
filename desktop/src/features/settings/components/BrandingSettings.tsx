@@ -186,7 +186,7 @@ export function BrandingSettings({ onChanged }: { onChanged?: (b: Branding) => v
             onChange={(e) => { setAppName(e.target.value); setNameDirty(true); }}
             placeholder="IT Help Chatbot"
             className="h-10 w-full sm:w-64 rounded-xl border border-[var(--border)] bg-background px-3 text-xs outline-none focus:border-blue-500 transition"
-          />
+           aria-label="Brand name (optional)"/>
           <button
             type="button"
             onClick={saveName}

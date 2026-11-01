@@ -279,7 +279,7 @@ export default function ConnectorsGallery() {
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search all connectors"
             className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-sky-400 dark:border-slate-700 dark:bg-slate-900"
-          />
+           aria-label="Search connectors"/>
         </div>
         {(["all", "connected", "available"] as const).map((f) => (
           <button

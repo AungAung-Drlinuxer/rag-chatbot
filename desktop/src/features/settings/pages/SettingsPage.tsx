@@ -69,7 +69,7 @@ function SelectRow({ label, description, value, onChange, options, width = "w-52
         <p className="text-xs font-semibold text-slate-900 dark:text-white">{label}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
-      <select value={value} onChange={(e) => onChange(e.target.value)}
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}
         className={`${width} h-9 rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-blue-500`}>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>

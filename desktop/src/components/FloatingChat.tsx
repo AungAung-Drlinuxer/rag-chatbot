@@ -405,7 +405,7 @@ export function FloatingChatPopup() {
                         }}
                         rows={2}
                         className="w-full resize-none rounded-lg border border-blue-200 bg-white p-2 text-xs text-[#0F172A] outline-none dark:border-blue-800"
-                      />
+                       aria-label="Edit message"/>
                       <div className="mt-1.5 flex justify-end gap-1.5">
                         <button
                           onClick={() => { setEditingId(null); setEditText(""); }}
@@ -570,7 +570,7 @@ export function FloatingChatPopup() {
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder="Ask an IT question..."
             className="h-9 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-          />
+           aria-label="Ask a question"/>
           <button
             type="submit"
             aria-label="Send message"

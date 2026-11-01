@@ -644,8 +644,7 @@ export default function Knowledge({
                 <select
                   value={bulkDomain}
                   onChange={(e) => setBulkDomain(e.target.value)}
-                  className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
-                >
+                  className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]" aria-label="{selected.size} selected">
                   <option value="">Move to domain…</option>
                   {chips.filter((c) => c !== "all").map((c) => (
                     <option key={c} value={c}>{metaFor(c).label}</option>
@@ -906,8 +905,7 @@ export default function Knowledge({
                         value={pageSize}
                         onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
                         className="h-7 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
-                        title="Rows per page"
-                      >
+                        title="Rows per page" aria-label="Rows per page">
                         {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
                       </select>
                       <div className="flex items-center gap-1">

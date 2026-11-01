@@ -340,7 +340,7 @@ export default function Users() {
                       <Search className="size-4 shrink-0 text-muted-foreground" />
                       <input value={search} onChange={(event) => setSearch(event.target.value)}
                         placeholder="Search by name, username or email..."
-                        className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
+                        className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"  aria-label="Search users"/>
                       {search && (
                         <button type="button" onClick={() => setSearch("")}
                           className="rounded-md p-1 hover:bg-slate-200 dark:hover:bg-slate-700">
@@ -788,7 +788,7 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
                   <div className="relative">
                     <select value={selectedRole}
                       onChange={(event) => { setSelectedRole(event.target.value as UserRole); setRoleSaved(false); }}
-                      className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-9 text-xs font-medium outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950">
+                      className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-9 text-xs font-medium outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950" aria-label="Role">
                       <option value="Administrator">Administrator</option>
                       <option value="IT Support">IT Support</option>
                       <option value="Knowledge Manager">Knowledge Manager</option>
@@ -985,7 +985,7 @@ function LocalPasswordForm({ username }: { username: string }) {
     <div className="space-y-2">
       <input type="password" value={password} onChange={(event) => setPassword(event.target.value)}
         placeholder="New password (min 8 characters)"
-        className="h-10 w-full rounded-xl border bg-white px-3 text-2xs outline-none transition placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950" />
+        className="h-10 w-full rounded-xl border bg-white px-3 text-2xs outline-none transition placeholder:text-muted-foreground focus:border-sky-400 focus:ring-2 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:ring-sky-950"  aria-label="New password"/>
       <div className="flex justify-end">
         <button type="button" onClick={savePassword} disabled={busy || password.length < 8}
           className="rounded-xl bg-[var(--primary)] px-4 py-2 text-2xs font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-40">
@@ -1036,7 +1036,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
             <h2 className="text-sm font-semibold">Add user</h2>
             <p className="mt-0.5 text-2xs text-muted-foreground">Create a local account or provision an account for directory access.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800">
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800">
             <X className="size-4" />
           </button>
         </div>
@@ -1050,7 +1050,7 @@ function AddUserModal({ onClose }: { onClose: () => void }) {
               <label className="mb-1.5 block text-2xs font-semibold">Role</label>
               <div className="relative">
                 <select value={role} onChange={(event) => setRole(event.target.value as UserRole)}
-                  className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-8 text-xs outline-none dark:border-slate-700 dark:bg-slate-950">
+                  className="h-10 w-full appearance-none rounded-xl border bg-white px-3 pr-8 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Role">
                   <option value="User">User</option>
                   <option value="IT Support">IT Support</option>
                   <option value="Knowledge Manager">Knowledge Manager</option>

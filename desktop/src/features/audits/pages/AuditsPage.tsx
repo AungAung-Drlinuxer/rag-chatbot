@@ -197,21 +197,19 @@ export default function AuditsPage() {
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search user, action or detail…"
               className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-            />
+             aria-label="Search audits"/>
           </div>
           <select
             value={filterAction}
             onChange={(e) => setFilterAction(e.target.value)}
-            className="h-10 rounded-xl border bg-white px-3 text-xs shadow-sm outline-none dark:border-slate-800 dark:bg-slate-900"
-          >
+            className="h-10 rounded-xl border bg-white px-3 text-xs shadow-sm outline-none dark:border-slate-800 dark:bg-slate-900" aria-label="Filter by action">
             <option value="">All actions</option>
             {actions.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
           <select
             value={String(limit)}
             onChange={(e) => setLimit(Number(e.target.value))}
-            className="h-10 rounded-xl border bg-white px-3 text-xs shadow-sm outline-none dark:border-slate-800 dark:bg-slate-900"
-          >
+            className="h-10 rounded-xl border bg-white px-3 text-xs shadow-sm outline-none dark:border-slate-800 dark:bg-slate-900" aria-label="Rows per page">
             <option value="100">100 rows</option>
             <option value="250">250 rows</option>
             <option value="500">500 rows</option>

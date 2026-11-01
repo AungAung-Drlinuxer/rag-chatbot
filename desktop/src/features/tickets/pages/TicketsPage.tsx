@@ -700,7 +700,7 @@ function SyncMenu({
                     }}
                     placeholder="Search ticket ID, subject, requester..."
                     className="h-10 w-full rounded-xl border bg-background pl-10 pr-4 text-xs outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-                  />
+                   aria-label="Search tickets"/>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -713,8 +713,7 @@ function SyncMenu({
                           e.target.value
                         );
                       }}
-                      className="h-10 min-w-[130px] appearance-none rounded-xl border bg-background px-3 pr-9 text-xs outline-none focus:border-blue-500"
-                    >
+                      className="h-10 min-w-[130px] appearance-none rounded-xl border bg-background px-3 pr-9 text-xs outline-none focus:border-blue-500" aria-label="Filter by status">
                       <option value="all">
                         All statuses
                       </option>
@@ -743,8 +742,7 @@ function SyncMenu({
                           e.target.value
                         );
                       }}
-                      className="h-10 min-w-[130px] appearance-none rounded-xl border bg-background px-3 pr-9 text-xs outline-none focus:border-blue-500"
-                    >
+                      className="h-10 min-w-[130px] appearance-none rounded-xl border bg-background px-3 pr-9 text-xs outline-none focus:border-blue-500" aria-label="Filter by priority">
                       <option value="all">
                         All priorities
                       </option>
@@ -1310,7 +1308,7 @@ function SyncMenu({
                         placeholder="Write a comment… (Ctrl+Enter to send)"
                         rows={2}
                         className="w-full resize-none bg-transparent px-3 pt-2.5 text-xs outline-none placeholder:text-muted-foreground"
-                      />
+                       aria-label="Add a comment"/>
                       <div className="flex items-center justify-end px-2 pb-2">
                         <Button size="sm" className="rounded-lg text-2xs" onClick={handleAddComment} disabled={!commentText.trim()}>
                           <MessageSquare className="mr-1 size-3" />
@@ -1384,7 +1382,7 @@ function SyncMenu({
                 }
                 placeholder="Briefly describe the issue"
                 className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              />
+               aria-label="Subject"/>
             </div>
 
             <div>
@@ -1435,7 +1433,7 @@ function SyncMenu({
                 }
                 placeholder="Describe what happened, error messages, affected system, and what you have already tried..."
                 className="w-full resize-none rounded-xl border bg-background px-3 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
-              />
+               aria-label="Ticket description"/>
             </div>
 
             {/* v1.6.4 — ticket destination: Jira or OpenProject (no local-only) */}
@@ -1488,8 +1486,7 @@ function SyncMenu({
                         e.target.value,
                     })
                   }
-                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
-                >
+                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none" aria-label="Category">
                   {/* v1.6.3 — live classifier domains (a new domain appears here immediately) */}
                   {categories.map((c) => (
                     <option key={c.key} value={c.label}>
@@ -1509,8 +1506,7 @@ function SyncMenu({
                     onChange={(e) =>
                       setNewTicket({ ...newTicket, assignee: e.target.value })
                     }
-                    className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
-                  >
+                    className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none" aria-label="Assignee">
                     <option value="">Unassigned</option>
                     {assignable.map((u) => (
                       <option key={u.username} value={u.username}>
@@ -1530,7 +1526,7 @@ function SyncMenu({
                       setNewTicket({ ...newTicket, due_date: e.target.value })
                     }
                     className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
-                  />
+                   aria-label="Due date"/>
                 </div>
               </div>
 
@@ -1574,8 +1570,7 @@ function SyncMenu({
                         e.target.value,
                     })
                   }
-                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none"
-                >
+                  className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none" aria-label="Priority">
                   <option value="critical">
                     Critical
                   </option>

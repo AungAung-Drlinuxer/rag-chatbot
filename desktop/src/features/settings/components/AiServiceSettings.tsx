@@ -291,7 +291,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
               <div className="relative">
                 <select value={form.provider || provider}
                   onChange={(e) => applyProvider(e.target.value)}
-                  className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-background px-3 pr-9 text-xs font-medium text-foreground outline-none focus:border-blue-500">
+                  className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-background px-3 pr-9 text-xs font-medium text-foreground outline-none focus:border-blue-500" aria-label="AI provider">
                   {LLM_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -328,7 +328,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
                     onChange={(e) => setModelQuery(e.target.value)}
                     placeholder={models.length ? `Filter ${models.length} models…` : "No models detected yet"}
                     disabled={!models.length}
-                    className="h-9 w-full rounded-lg border border-[var(--border)] bg-background py-2 pl-9 pr-3 text-xs text-foreground outline-none focus:border-blue-500 disabled:opacity-60" />
+                    className="h-9 w-full rounded-lg border border-[var(--border)] bg-background py-2 pl-9 pr-3 text-xs text-foreground outline-none focus:border-blue-500 disabled:opacity-60"  aria-label="Search models"/>
                 </div>
                 <button type="button" onClick={() => void loadModels()} disabled={loadingModels}
                   className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800">
@@ -362,7 +362,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
                 onChange={(e) => setForm({ ...form, model: e.target.value })}
                 placeholder="or type a model id"
                 spellCheck={false} autoComplete="off"
-                className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-blue-500" />
+                className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-blue-500"  aria-label="{m.id}"/>
 
               {modelsError && (
                 <p className="flex items-start gap-1 text-xs text-rose-600">
@@ -496,7 +496,7 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
             placeholder={isSec && tokenSet ? "leave blank to keep current" : placeholder}
             autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
             data-1p-ignore data-lpignore="true"
-            className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 pr-10 font-mono text-xs text-foreground outline-none focus:border-blue-500 placeholder:font-sans" />
+            className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 pr-10 font-mono text-xs text-foreground outline-none focus:border-blue-500 placeholder:font-sans"  aria-label="Credential value"/>
           {isSec && (
             <button type="button" aria-label={show ? `Hide ${field}` : `Reveal ${field}`}
               onClick={() => setRevealed({ ...revealed, [field]: !show })}

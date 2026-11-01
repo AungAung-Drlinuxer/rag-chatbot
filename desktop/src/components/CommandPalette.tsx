@@ -117,7 +117,7 @@ export default function CommandPalette({
             onKeyDown={onKey}
             placeholder="Search pages, conversations, KB articles…"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
+           aria-label="Search commands"/>
           <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-2xs text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
             Esc
           </kbd>

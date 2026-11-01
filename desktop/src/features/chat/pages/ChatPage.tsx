@@ -1009,7 +1009,7 @@ useEffect(() => {
                   rows={1}
                   placeholder="Ask an IT question..."
                   className="max-h-40 min-h-[30px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[13.5px] leading-6 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                />
+                 aria-label="Ask an IT question"/>
                 {/* The key hint belongs INSIDE the field, beside the button it describes,
                     rather than on the disclaimer row below where it read as fine print. */}
                 <kbd className="hidden shrink-0 rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 font-mono text-2xs text-slate-500 md:inline-block dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
@@ -1114,7 +1114,7 @@ useEffect(() => {
                     value={ticketForm.subject}
                     onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
                     className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950"
-                  />
+                   aria-label="Subject"/>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1125,7 +1125,7 @@ useEffect(() => {
                     value={ticketForm.description}
                     onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
                     className="w-full resize-none rounded-xl border bg-white px-3 py-2.5 text-xs outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950"
-                  />
+                   aria-label="Description"/>
                 </div>
                 {/* v1.6.4 — destination: create in Jira or OpenProject (no local-only) */}
                 <div>
@@ -1166,8 +1166,7 @@ useEffect(() => {
                     <select
                       value={ticketForm.domain}
                       onChange={(e) => setTicketForm({ ...ticketForm, domain: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950"
-                    >
+                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Category">
                       {ticketDomains.map((d) => (
                         <option key={d.key} value={d.key}>{d.label}</option>
                       ))}
@@ -1180,8 +1179,7 @@ useEffect(() => {
                     <select
                       value={ticketForm.priority}
                       onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950"
-                    >
+                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Priority">
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -1198,8 +1196,7 @@ useEffect(() => {
                     <select
                       value={ticketForm.assignee}
                       onChange={(e) => setTicketForm({ ...ticketForm, assignee: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950"
-                    >
+                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Assignee">
                       <option value="">Unassigned</option>
                       {assignable.map((u) => (
                         <option key={u.username} value={u.username}>
@@ -1217,7 +1214,7 @@ useEffect(() => {
                       value={ticketForm.due_date}
                       onChange={(e) => setTicketForm({ ...ticketForm, due_date: e.target.value })}
                       className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950"
-                    />
+                     aria-label="Due date"/>
                   </div>
                 </div>
               </div>
@@ -1268,7 +1265,7 @@ useEffect(() => {
               }}
               className="mb-4 h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800"
               placeholder="Conversation title"
-            />
+             aria-label="Rename conversation"/>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setRenameTarget(null)}
@@ -1316,7 +1313,7 @@ useEffect(() => {
                 }}
                 placeholder="Search conversations..."
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
+               aria-label="Search conversations"/>
               <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-2xs text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
                 Esc
               </kbd>

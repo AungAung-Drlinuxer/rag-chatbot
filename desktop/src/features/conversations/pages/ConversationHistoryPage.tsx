@@ -176,13 +176,12 @@ export default function ConversationHistoryPage() {
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search title or user…"
               className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-            />
+             aria-label="Search conversations"/>
           </div>
           <select
             value={filterUser}
             onChange={(e) => setFilterUser(e.target.value)}
-            className="h-10 rounded-xl border bg-white px-3 text-xs shadow-sm outline-none dark:border-slate-800 dark:bg-slate-900"
-          >
+            className="h-10 rounded-xl border bg-white px-3 text-xs shadow-sm outline-none dark:border-slate-800 dark:bg-slate-900" aria-label="Filter by user">
             <option value="">All users</option>
             {users.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
@@ -316,6 +315,7 @@ export default function ConversationHistoryPage() {
                       </div>
                       <button
                         onClick={closeDetail}
+                        aria-label="Close details"
                         className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
                       >
                         <X className="size-3.5" />

@@ -23,14 +23,25 @@ import { getMySettings } from "@/features/settings/api";
 
 import LoginPage from "@/features/auth/pages/LoginPage";
 import ChatPage from "@/features/chat/pages/ChatPage";
-import DashboardPage from "@/features/dashboard/pages/DashboardPage";
-import KnowledgePage from "@/features/knowledge/pages/KnowledgePage";
-import TicketsPage from "@/features/tickets/pages/TicketsPage";
-import DomainsPage from "@/features/domains/pages/DomainsPage";
-import UsersPage from "@/features/users/pages/UsersPage";
-import ConversationHistoryPage from "@/features/conversations/pages/ConversationHistoryPage";
-import AuditsPage from "@/features/audits/pages/AuditsPage";
-import SettingsPage from "@/features/settings/pages/SettingsPage";
+import { Suspense, lazy } from "react";
+import { PageFallback } from "@/components/PageFallback";
+
+/**
+ * Route-level code splitting.
+ *
+ * Before this, every page shipped in ONE 598 kB chunk (158 kB gzip): the login screen
+ * dragged in the dashboard, tickets, users and settings bundles before it could paint.
+ * Login and Chat are the two routes a session starts on, so they stay eager; everything
+ * else is fetched the first time its nav item is selected.
+ */
+const DashboardPage = lazy(() => import("@/features/dashboard/pages/DashboardPage"));
+const KnowledgePage = lazy(() => import("@/features/knowledge/pages/KnowledgePage"));
+const TicketsPage = lazy(() => import("@/features/tickets/pages/TicketsPage"));
+const DomainsPage = lazy(() => import("@/features/domains/pages/DomainsPage"));
+const UsersPage = lazy(() => import("@/features/users/pages/UsersPage"));
+const ConversationHistoryPage = lazy(() => import("@/features/conversations/pages/ConversationHistoryPage"));
+const AuditsPage = lazy(() => import("@/features/audits/pages/AuditsPage"));
+const SettingsPage = lazy(() => import("@/features/settings/pages/SettingsPage"));
 
 export default function App() {
   // v0.21.44 — apply persisted theme on every page load (previously only Settings
@@ -127,7 +138,9 @@ export default function App() {
         <PageSidebar active={active} onNavigate={setNav} userName={userName} role={role}
           displayRole={meDisplay} perms={perms} onLogout={onLogout}
           collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-        <div className={active === "chat" ? "min-w-0 flex-1 overflow-hidden" : "min-w-0 flex-1 overflow-y-auto"}>{children}</div>
+        <div className={active === "chat" ? "min-w-0 flex-1 overflow-hidden" : "min-w-0 flex-1 overflow-y-auto"}>
+          <Suspense fallback={<PageFallback />}>{children}</Suspense>
+        </div>
       </div>
       {active !== "chat" && <NeedHelpCard />}
       <FloatingChatPopup />
