@@ -79,13 +79,13 @@ Telemetry data forwards to the central host (`10.10.10.18`):
 ```bash
 # Build Frontend
 cd desktop
-docker build -t harbor.drlinuxer.com/ragchatbot/frontend:latest .
-docker push harbor.drlinuxer.com/ragchatbot/frontend:latest
+docker build -t harbor.drlinuxer.com/rag-chatbot/frontend:latest .
+docker push harbor.drlinuxer.com/rag-chatbot/frontend:latest
 
 # Build Backend
 cd ../backend
-docker build -t harbor.drlinuxer.com/ragchatbot/backend:latest .
-docker push harbor.drlinuxer.com/ragchatbot/backend:latest
+docker build -t harbor.drlinuxer.com/rag-chatbot/backend:latest .
+docker push harbor.drlinuxer.com/rag-chatbot/backend:latest
 ```
 
 ### 2. Deploy to Kubernetes
@@ -94,8 +94,8 @@ docker push harbor.drlinuxer.com/ragchatbot/backend:latest
 kubectl apply -k infra/k8s/monitoring/
 
 # Update Workloads
-kubectl -n it-help-chatbot set image deploy/frontend frontend=harbor.drlinuxer.com/ragchatbot/frontend:latest
-kubectl -n it-help-chatbot set image deploy/backend backend=harbor.drlinuxer.com/ragchatbot/backend:latest
+kubectl -n rag-chatbot set image deploy/frontend frontend=harbor.drlinuxer.com/rag-chatbot/frontend:latest
+kubectl -n rag-chatbot set image deploy/backend backend=harbor.drlinuxer.com/rag-chatbot/backend:latest
 ```
 
 ---

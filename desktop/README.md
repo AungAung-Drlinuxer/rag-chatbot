@@ -25,5 +25,5 @@ npm test
 npm run build
 
 # Docker Container Build
-docker build -t harbor.drlinuxer.com/ragchatbot/frontend:latest .
+docker build -t harbor.drlinuxer.com/rag-chatbot/frontend:latest .
 ```

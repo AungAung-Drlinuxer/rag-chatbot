@@ -36,8 +36,8 @@ overridden. This checklist walks through what to change and what to watch.
 
 5. **Harbor (or any registry)** — build & push the four images:
    ```
-   docker build -t <registry>/ragchatbot/backend:0.0.15 backend/
-   docker build -t <registry>/ragchatbot/frontend:0.0.26 desktop/
+   docker build -t <registry>/rag-chatbot/backend:0.0.15 backend/
+   docker build -t <registry>/rag-chatbot/frontend:0.0.26 desktop/
    docker build -t <registry>/rag-chatbot/rerank-svc:1.0.1 infra/k8s/rerank-svc/   # build context = infra/k8s/rerank-svc
    docker build -t <registry>/platform/ollama:0.5.7-models <ollama-dir>          # needs model bake step
    ```
