@@ -34,4 +34,7 @@ Thumbs.db
 
 # Local testing/verification scripts & scratch files
 desktop/scripts/verify_*.mjs
+# Broader on purpose: a local script that drives a real browser against a live site must never
+# ship and must never carry credentials. `history-page-verify.mjs` did — see the security note.
+desktop/scripts/*verify*.mjs
 backup_dump/
