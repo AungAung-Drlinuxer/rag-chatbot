@@ -77,6 +77,10 @@ import {
  * panel that owns its own heading, toolbar, table and range footer — with the selected
  * ticket's detail in a persistent right-hand panel.
  *
+ * The queue table carries the mockup's five columns exactly — Ticket / Subject / Status /
+ * Priority / Requester — and marks the row whose ticket is open in the detail panel with the
+ * mockup's blue left bar, so the table and the panel never disagree about what is selected.
+ *
  * Colours are the app's design tokens (--primary, --border, --muted-foreground) rather than
  * the mockup's literal hexes: the mockup is dark-only, this page must work in both themes.
  */
@@ -266,8 +270,8 @@ export default function Tickets({
     else setAttachments([]);
   }, [selected?.id]);
 
-  // B-9 — column sorting
-  const [sortKey, setSortKey] = useState<null | "id" | "subject" | "status" | "priority" | "requester" | "updated">(null);
+  // B-9 — column sorting (the mockup's five columns, in the mockup's order)
+  const [sortKey, setSortKey] = useState<null | "id" | "subject" | "status" | "priority" | "requester">(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const toggleSort = (k: NonNullable<typeof sortKey>) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -323,7 +327,6 @@ export default function Tickets({
       let r: number;
       if (sortKey === "priority") r = (prioRank[a.priority] ?? 9) - (prioRank[b.priority] ?? 9);
       else if (sortKey === "status") r = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
-      else if (sortKey === "updated") r = String(a.updated_at).localeCompare(String(b.updated_at));
       else r = String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""));
       return r * dir;
     });
@@ -719,7 +722,10 @@ function SyncMenu({
                 <p className="mt-1 text-xs text-muted-foreground">Your team's ticket queue</p>
               </div>
 
-              {/* v1.6.20 — compact action group; Export is the labelled one the mockup shows */}
+              {/* v1.6.20 — compact action group; Export is the labelled one the mockup shows.
+                  Print and Refresh stay icon-only next to it (the Users page does the same):
+                  the mockup is a static frame and cannot show them, but they are working
+                  actions, so they are kept rather than deleted — see the report. */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -866,21 +872,19 @@ function SyncMenu({
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[820px] table-fixed text-xs">
                     <colgroup>
-                      <col className="w-[11%]" />
-                      <col className="w-[33%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[14%]" />
-                      <col className="w-[17%]" />
                       <col className="w-[12%]" />
+                      <col className="w-[38%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[18%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-muted/60">
                       <tr className="text-left text-2xs uppercase tracking-wide">
-                        <SortTh k="id" label="Ticket" className="px-5 py-3" />
+                        <SortTh k="id" label="Ticket" className="border-l-2 border-l-transparent px-5 py-3" />
                         <SortTh k="subject" label="Subject" />
                         <SortTh k="status" label="Status" />
                         <SortTh k="priority" label="Priority" />
                         <SortTh k="requester" label="Requester" />
-                        <SortTh k="updated" label="Updated" />
                       </tr>
                     </thead>
 
@@ -893,12 +897,21 @@ function SyncMenu({
                           const priority =
                             priorityMeta(ticket.priority);
 
+                          const rowSelected = selected?.id === ticket.id;
+
                           return (
                             <tr
                               key={ticket.id}
-                              className="border-t border-[var(--border)]/60 transition hover:bg-muted/40"
+                              aria-selected={rowSelected}
+                              className={[
+                                "border-t border-[var(--border)]/60 transition",
+                                rowSelected ? "bg-[var(--accent-soft)]" : "hover:bg-muted/40",
+                              ].join(" ")}
                             >
-                              <td className="truncate px-5 py-3.5">
+                              <td className={[
+                                "truncate border-l-2 px-5 py-3.5",
+                                rowSelected ? "border-l-[var(--primary)]" : "border-l-transparent",
+                              ].join(" ")}>
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -990,15 +1003,6 @@ function SyncMenu({
                                   ticket.requester
                                 }
                               </td>
-
-                              <td className={[
-                                "truncate px-4 py-3.5",
-                                (Date.now() - new Date(ticket.updated_at.endsWith("Z") ? ticket.updated_at : ticket.updated_at + "Z").getTime()) > 7 * 864e5
-                                  ? "font-medium text-amber-600 dark:text-amber-400"
-                                  : "text-muted-foreground",
-                              ].join(" ")}>
-                                {relTime(ticket.updated_at)}
-                              </td>
                             </tr>
                           );
                         }
@@ -1083,7 +1087,7 @@ function SyncMenu({
               <div className="mt-3 flex items-center gap-2">
                 <StatusBadge status={statusMeta(selected.status)} />
 
-                <PriorityBadge priority={priorityMeta(selected.priority)} />
+                <PriorityBadge priority={priorityMeta(selected.priority)} suffix=" priority" />
               </div>
 
               {/* Detail tabs (visual) */}
@@ -1116,8 +1120,8 @@ function SyncMenu({
                 <MetaRow icon={<TicketIcon className="size-3.5" />} label="Category" value={selected.category} />
                 <MetaRow icon={<AlertCircle className="size-3.5" />} label="Priority" value={priorityMeta(selected.priority).label} />
                 <MetaRow icon={<UserRound className="size-3.5" />} label="Requester" value={selected.requester} />
-                <MetaRow icon={<CheckCircle2 className="size-3.5" />} label="Status" value={statusMeta(selected.status).label} />
                 <MetaRow icon={<Users className="size-3.5" />} label="Assignee" value={selected.assignee ?? "Unassigned"} />
+                <MetaRow icon={<CheckCircle2 className="size-3.5" />} label="Status" value={statusMeta(selected.status).label} />
                 <MetaRow icon={<Clock3 className="size-3.5" />} label="Created" value={new Date(selected.created_at).toLocaleString()} />
               </div>
 

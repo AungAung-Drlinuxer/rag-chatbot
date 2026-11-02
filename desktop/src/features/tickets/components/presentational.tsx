@@ -105,8 +105,11 @@ export function StatusBadge({
 
 export function PriorityBadge({
   priority,
+  suffix = "",
 }: {
   priority: { label: string; className: string; dot: string };
+  /** The detail panel reads "Medium priority" in the mockup; the table reads "Medium". */
+  suffix?: string;
 }) {
   const meta = priority;
 
@@ -120,6 +123,7 @@ export function PriorityBadge({
       <span className={["size-2 rounded-full", meta.dot].join(" ")} />
 
       {meta.label}
+      {suffix}
     </span>
   );
 }
