@@ -48,7 +48,7 @@ export default function CommandPalette({
   const pages = useMemo(
     () => [
       { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" />, cap: "chatbot" },
-      { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
+      { id: "dashboard", label: "Overview", icon: <Home className="size-4" /> },
       { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search" },
       { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },
       { id: "domains", label: "Domains", icon: <Layers className="size-4" />, cap: "manage_domains" },

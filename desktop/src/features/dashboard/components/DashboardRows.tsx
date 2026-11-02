@@ -43,15 +43,15 @@ export function KpiCard({
   className?: string;
 }) {
   return (
-    <Card className={["gap-0 rounded-xl border-[var(--border)] px-5 py-4 shadow-xs", className ?? ""].join(" ")}>
+    <Card className={["gap-0 rounded-xl border-[var(--border)] px-3.5 py-3 shadow-xs", className ?? ""].join(" ")}>
 
-      <div className="text-xs font-medium text-muted-foreground">
+      <div className="truncate text-2xs font-medium text-muted-foreground">
         {title}
       </div>
 
-      <div className="mt-2.5 text-3xl font-semibold tracking-tight">
+      <div className="mt-1.5 text-2xl font-semibold tracking-tight">
         {loading ? (
-          <div className="h-8 w-16 animate-pulse rounded bg-muted" />
+          <div className="h-6 w-14 animate-pulse rounded bg-muted" />
         ) : (
           value
         )}

@@ -18,17 +18,32 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 
-export function PageShell({ children }: { children: ReactNode }) {
+export function PageShell({ children, fill = false }: { children: ReactNode; fill?: boolean }) {
   return (
     <div
       data-slot="page-shell"
-      className="min-h-screen bg-[var(--background)] font-[var(--font)] text-sm leading-normal text-[var(--foreground)]"
+      className={[
+        "bg-[var(--background)] font-[var(--font)] text-sm leading-normal text-[var(--foreground)]",
+        /* `fill` locks a page to the viewport height instead of growing past it. The
+           dashboard uses it: its bands share one screen so nothing has to be scrolled to
+           be read, and the tables scroll INSIDE their own cards instead. Pages that keep
+           the default keep today's behaviour exactly. */
+        fill ? "h-full overflow-hidden" : "min-h-screen",
+      ].join(" ")}
     >
       {/* 1400px, deliberately NOT the chat page's 900px. The chat column holds prose and
           wants a reading measure; these pages hold tables and dashboards, which get worse
           as they narrow — a 7-column ticket table at 900px wraps every row. The shared
           thing is the token set and the rhythm, not one number. */}
-      <div data-slot="page-content" className="mx-auto w-full max-w-[1400px] p-5 lg:p-8">{children}</div>
+      <div
+        data-slot="page-content"
+        className={[
+          "mx-auto w-full max-w-[1400px]",
+          fill ? "flex h-full min-h-0 flex-col overflow-hidden p-4 lg:p-5" : "p-5 lg:p-8",
+        ].join(" ")}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -39,7 +54,6 @@ export function PageHeader({
   description,
   actions,
   icon,
-  breadcrumbs,
   eyebrow,
 }: {
   title: string;
@@ -47,7 +61,13 @@ export function PageHeader({
   description?: string;
   actions?: ReactNode;
   icon?: ReactNode;
-  /** B-5: optional breadcrumb trail, e.g. ["Workspace", "Tickets", "ITHD-22"] */
+  /**
+   * B-5 — breadcrumb trail, e.g. ["Workspace", "Tickets", "ITHD-22"].
+   *
+   * Kept in the props so every page keeps type-checking (the dashboard still passes it),
+   * but NO LONGER rendered here: the trail moved to the shell-level <TopBar>, so it is
+   * drawn once, above the scroll area, on every non-chat page.
+   */
   breadcrumbs?: string[];
   /** Optional uppercase kicker above the title, e.g. "ADMINISTRATION". */
   eyebrow?: string;
@@ -55,16 +75,6 @@ export function PageHeader({
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        {breadcrumbs && breadcrumbs.length > 0 && (
-          <nav aria-label="Breadcrumb" className="mb-1.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
-            {breadcrumbs.map((b, i) => (
-              <span key={i} className="flex items-center gap-1.5">
-                {i > 0 && <span aria-hidden>/</span>}
-                <span className={i === breadcrumbs.length - 1 ? "font-medium text-foreground" : ""}>{b}</span>
-              </span>
-            ))}
-          </nav>
-        )}
         {eyebrow && (
           <div className="mb-1.5 text-2xs font-semibold tracking-[0.14em] text-[var(--accent-foreground)]">
             {eyebrow.toUpperCase()}

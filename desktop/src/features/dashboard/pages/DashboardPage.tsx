@@ -260,7 +260,7 @@ export default function Dashboard({ role }: Props) {
   }
 
     return (
-    <PageShell>
+    <PageShell fill>
       <PageHeader
       breadcrumbs={["Workspace", "Overview"]}
       eyebrow="Administration"
@@ -385,7 +385,11 @@ export default function Dashboard({ role }: Props) {
               CONTENT
           ================================================= */}
 
-          <div className="space-y-5">
+          {/* One screen, no page scroll: the bands are a flex column that shares the
+              viewport height. Everything above the last row is sized, and the last row
+              takes what is left and scrolls INSIDE its own cards — so a long ticket or
+              conversation list never pushes the page taller. */}
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
 
             {/* A failure banner rather than a full-page error: some cards load from
                 different endpoints, so whatever DID arrive stays visible and useful. The
@@ -415,7 +419,7 @@ export default function Dashboard({ role }: Props) {
               />
             ) : (
             <>
-            <section className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <section className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
 
               <KpiCard
                 icon={
@@ -464,8 +468,9 @@ export default function Dashboard({ role }: Props) {
                 title="KB Articles"
                 description="Knowledge base size"
                 loading={loading}
-                /* closes the row when the card count is odd (5) */
-                className={kpiFillLast ? "md:col-span-2 xl:col-span-2" : undefined}
+                /* closes the row when the card count is odd (5): one wide card instead
+                   of a hole, at every breakpoint the row uses */
+                className={kpiFillLast ? "col-span-2" : undefined}
               />
 
               {role === "admin" && (
@@ -485,11 +490,14 @@ export default function Dashboard({ role }: Props) {
                 CHART ROW
             ================================================= */}
 
-            <section className="grid items-stretch gap-4 xl:grid-cols-3">
+            {/* A SIZED row, not a content-sized one: at 1440×900 these three cards get a
+                fixed 230px so the page can never grow past the viewport. The chart bodies
+                below flex into whatever is left of it. */}
+            <section className="grid h-[230px] shrink-0 items-stretch gap-3 xl:grid-cols-3">
 
               {/* Conversations */}
 
-              <Card className="rounded-xl border-[var(--border)] p-5">
+              <Card className="flex min-h-0 flex-col overflow-hidden rounded-xl border-[var(--border)] p-4">
 
                 <div className="flex items-start justify-between gap-3">
 
@@ -538,7 +546,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Escalation */}
 
-              <Card className="rounded-xl border-[var(--border)] p-5">
+              <Card className="flex min-h-0 flex-col overflow-hidden rounded-xl border-[var(--border)] p-4">
 
                 <div>
                   <h2 className="text-sm font-semibold">
@@ -595,7 +603,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Domains */}
 
-              <Card className="rounded-xl border-[var(--border)] p-5">
+              <Card className="flex min-h-0 flex-col overflow-hidden rounded-xl border-[var(--border)] p-4">
 
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -637,7 +645,7 @@ export default function Dashboard({ role }: Props) {
                 CONFIDENCE GATE TREND (v1.1.6 — real meta.decision data)
             ================================================= */}
 
-            <Card className="rounded-xl p-5">
+            <Card className="flex h-[165px] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-sm font-semibold">Confidence gate trend</h2>
@@ -664,8 +672,10 @@ export default function Dashboard({ role }: Props) {
             ================================================= */}
 
             {/* #7 — items-start stops the grid from stretching short panels to the
-                tallest sibling, which left ~400px of dead space under both tables. */}
-            <section className="grid items-stretch gap-4 xl:grid-cols-3">
+                tallest sibling, which left ~400px of dead space under both tables.
+                It also takes the leftover height (flex-1) now, and each card scrolls its
+                own body — that is what keeps the whole page on one screen. */}
+            <section className="grid min-h-0 flex-1 items-stretch gap-3 xl:grid-cols-3">
 
               {/* Recent conversations */}
 
@@ -997,7 +1007,7 @@ export default function Dashboard({ role }: Props) {
                 FOOTER
             ================================================= */}
 
-            <div className="flex flex-col items-center justify-center gap-2 py-1 text-2xs text-muted-foreground sm:flex-row">
+            <div className="flex shrink-0 flex-col items-center justify-center gap-2 text-2xs text-muted-foreground sm:flex-row">
 
               <span
                 title={

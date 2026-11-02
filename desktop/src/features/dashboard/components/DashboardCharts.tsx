@@ -101,12 +101,16 @@ export function ConversationChart({
   }
 
   return (
-    <div className="mt-3 w-full overflow-hidden">
+    /* The card owns the height now (the dashboard's chart row is a fixed 230px), so the
+       chart fills whatever is left. `meet` scales it UNIFORMLY — the 620×240 proportions
+       are kept and any leftover space is letterboxed, rather than `none` stretching the
+       axis labels out of shape when the box gets shorter. */
+    <div className="mt-2 min-h-0 w-full flex-1 overflow-hidden">
 
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-[260px] w-full"
-        preserveAspectRatio="none"
+        className="h-full w-full"
+        preserveAspectRatio="xMidYMid meet"
       >
 
         {/* Grid */}
@@ -329,11 +333,15 @@ export function GateTrendChart({
   const max = niceTickStep(dataMax / 4) * 4;
 
   const width = 1000;
-  const height = 200;
+  /* v1.6.70 — the plot was 200 tall on a 1000-wide viewBox, so at full page width the
+     chart alone was ~270px. The dashboard now has to fit one screen, and the card gives
+     this chart ~100px, so the viewBox is flatter (1000×130): it scales uniformly to fill
+     that box instead of being letterboxed down to half of it. */
+  const height = 130;
   const left = 36;
   const right = 12;
-  const top = 10;
-  const bottom = 26;
+  const top = 8;
+  const bottom = 20;
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
 
@@ -348,7 +356,7 @@ export function GateTrendChart({
   }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 w-full">
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-2 h-full w-full" preserveAspectRatio="xMidYMid meet">
       {[0, 0.25, 0.5, 0.75, 1].map((f) => (
         <g key={f}>
           <line

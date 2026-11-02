@@ -122,7 +122,7 @@ export default function PageSidebar({
   // user knows the feature exists) but clicking one shows WHY access is denied.
   const items: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
     { id: "chat", label: "+ New", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
-    { id: "dashboard", label: "Dashboard", icon: <Home className="size-4" /> },
+    { id: "dashboard", label: "Overview", icon: <Home className="size-4" /> },
     { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search the knowledge base" },
     { id: "domains", label: "Domains & Routing", icon: <Layers className="size-4" />, cap: "manage_domains", capLabel: "Manage classification domains & Jira routing" },
     { id: "tickets", label: "Tickets", icon: <TicketIcon className="size-4" /> },

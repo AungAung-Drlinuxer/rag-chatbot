@@ -111,6 +111,9 @@ const MEASURE = () => {
   return {
     scrollW: de.scrollWidth,
     clientW: de.clientWidth,
+    /* v1.6.70 — the page must fit ONE screen: at 1440×900 nothing may be below the fold. */
+    scrollH: de.scrollHeight,
+    clientH: de.clientHeight,
     kpiFill: rowFill(kpi),
     kpiCount: kpi ? cardsOf(kpi).length : 0,
     kpiHeights: heights(kpi),
@@ -167,6 +170,9 @@ for (const role of ["admin", "user"]) {
     if (generic.length && !http4xx.length) problems.push(fail(`unattributed resource error`));
 
     if (m.scrollW > m.clientW) problems.push(fail(`overflow ${m.scrollW}>${m.clientW}`));
+    // The dashboard's whole point is that it reads in one screen: 1440×900 is the repo's
+    // desktop reference size, so anything past the fold is a regression.
+    if (m.scrollH > m.clientH + 1) problems.push(fail(`page scrolls: ${m.scrollH}>${m.clientH}`));
     if (m.kpiCount === 0) problems.push(fail("no KPI cards found"));
 
     // 2. every KPI row spans the full content width
