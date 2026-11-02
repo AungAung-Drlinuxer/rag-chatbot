@@ -35,6 +35,18 @@
   --fs-xl: 16px;    /* h2 */
   --fs-2xl: 20px;   /* h1 */
   --fs-3xl: 24px;   /* display/KPI */
+
+  /* The B-2 ramp as Tailwind UTILITIES. These must be declared inside @theme: Tailwind v4
+     only emits a `text-*` utility for a token declared here. Declared in :root instead,
+     `text-2xs` / `text-3xs` compile to nothing and every call site silently inherits its
+     parent's size (16px inside a <p>) — which is how 332 call sites ended up with
+     oversized meta text. `--fs-*` above is the same ramp for raw CSS; these two are the
+     utility-bearing ones. */
+  --text-3xs: 9px;
+  --text-3xs--line-height: 1.4;
+  --text-2xs: 10px;
+  --text-2xs--line-height: 1.45;
+
   --dur-fast: 150ms;  /* B-8 unified interactive timing */
   --dur-slow: 200ms;  /* B-8 overlays / panels */
   /* v1.0.1 — Linear/Vercel direction: tight radii. Was xs6/sm8/md10/lg12/xl14, which is a
@@ -84,10 +96,10 @@
        xs   12px  secondary body, form labels
        sm   14px  body copy (the page default)
      --------------------------------------------------------------------------- */
-  --text-3xs: 0.5625rem;
-  --text-3xs--line-height: 1.4;
-  --text-2xs: 0.625rem;
-  --text-2xs--line-height: 1.45;
+  /* --text-3xs / --text-2xs are declared in the @theme block at the top of this file.
+     Tailwind v4 only generates the `text-2xs` / `text-3xs` UTILITIES for tokens declared
+     there; re-declaring them here is inert and silently re-introduces the bug that made
+     every `text-2xs` call site inherit 16px. */
 
   /* ---------------------------------------------------------------------------
      BLUE RAMP — pinned to the accent.

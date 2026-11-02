@@ -86,12 +86,20 @@ for (const scenario of ["sources", "ticket", "empty", "live"]) {
     const pageErrors = [];
     const consoleErrors = [];
     const http4xx = [];
+    // Requests that never produced a response (CORS-blocked, DNS, offline). The shell's
+    // dependency-health poll to the app's API origin lands here when the harness runs
+    // without the backend: the browser blocks it and logs a URL-less "Failed to load
+    // resource" line, which would otherwise count as an unattributed JS error.
+    const apiFailures = [];
     page.on("pageerror", (e) => pageErrors.push(String(e).slice(0, 200)));
     page.on("console", (m) => {
       if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200));
     });
     page.on("response", (r) => {
       if (r.status() >= 400) http4xx.push({ status: r.status(), url: r.url().slice(0, 160) });
+    });
+    page.on("requestfailed", (r) => {
+      if (/api\.drlinuxer\.com/.test(r.url())) apiFailures.push(r.url().slice(0, 160));
     });
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
     await page.goto(`${BASE}?scenario=${scenario}&theme=${theme}`, {
@@ -105,6 +113,14 @@ for (const scenario of ["sources", "ticket", "empty", "live"]) {
       const aside = document.querySelector("aside");
       const cards = [...document.querySelectorAll("aside article")];
       const meters = cards.map((c) => c.querySelector('div[class*="overflow-hidden"][class*="rounded-full"]'));
+      const fontOf = (root, sel) => {
+        const el = root?.querySelector(sel);
+        return el ? getComputedStyle(el).fontSize : null;
+      };
+      // The type ramp is read through the card's own data-slots. "the first <p> in the
+      // card" used to select the reference-count meta line instead of the excerpt, so the
+      // assertion measured a node it never meant to — and reported a ramp no element had.
+      const card = cards.find((c) => c.querySelector("[data-slot=source-excerpt]")) ?? cards[0];
       return {
         scrollW: de.scrollWidth,
         clientW: de.clientWidth,
@@ -116,17 +132,20 @@ for (const scenario of ["sources", "ticket", "empty", "live"]) {
         badWidths: [...document.querySelectorAll("aside [style]")]
           .map((e) => e.getAttribute("style"))
           .filter((s) => /width:\s*(undefined|null|NaN)/.test(s ?? "")),
-        groupChips: [...document.querySelectorAll("aside article")].filter((c) =>
-          /×\d/.test(c.textContent ?? ""),
-        ).length,
+        groupChips: [...document.querySelectorAll("aside article")].filter((c) => {
+          // The grouping marker used to be a "×N" badge on the card; it is now the
+          // reference count in the card's meta line ("2 references"). Accept either
+          // spelling, and only count cards that stand for MORE THAN ONE reference.
+          const meta =
+            c.querySelector("[data-slot=source-meta]")?.textContent ?? c.textContent ?? "";
+          const m = /×(\d+)/.exec(meta) ?? /(\d+)\s+(?:grouped\s+)?references/i.exec(meta);
+          return m ? parseInt(m[1], 10) > 1 : false;
+        }).length,
         // the numbers the panel claims, so they can be checked against the payload
         headerCount: document.querySelector("aside h2")?.parentElement?.parentElement?.textContent ?? "",
-        titleFont: cards[0]?.querySelector("h4")
-          ? getComputedStyle(cards[0].querySelector("h4")).fontSize
-          : null,
-        excerptFont: cards[0]?.querySelector("p")
-          ? getComputedStyle(cards[0].querySelector("p")).fontSize
-          : null,
+        titleFont: fontOf(card, "[data-slot=source-title]"),
+        metaFont: fontOf(card, "[data-slot=source-meta]"),
+        excerptFont: fontOf(card, "[data-slot=source-excerpt]"),
         panelBg: aside ? getComputedStyle(aside).backgroundColor : null,
       };
     });
@@ -135,9 +154,18 @@ for (const scenario of ["sources", "ticket", "empty", "live"]) {
     // A resource-load console line with no URL is attributed via the response side: if
     // every 4xx seen was the harness's missing favicon, there is nothing to report.
     const generic = consoleErrors.filter((t) => /Failed to load resource/.test(t));
-    const namedConsole = consoleErrors.filter((t) => !/Failed to load resource/.test(t));
+    // The harness serves the SPA without the backend, so the shell's dependency-health
+    // fetch to the app's own API origin is blocked by the browser's CORS check. That is an
+    // environment artifact — the same request succeeds behind the ingress — and is not an
+    // app error, so it must not be counted as one.
+    const corsArtifact = (t) => /blocked by CORS policy/.test(t) && /api\.drlinuxer\.com/.test(t);
+    const namedConsole = consoleErrors.filter((t) => !/Failed to load resource/.test(t) && !corsArtifact(t));
     const badHttp = http4xx.filter((r) => !/favicon\.ico/.test(r.url));
-    const unattributed = generic.length > 0 && badHttp.length === 0 && http4xx.length > 0 ? 0 : generic.length;
+    // A URL-less resource error is attributed through the response side; the favicon 404
+    // and the backend-less API failures are harness artifacts, not app errors.
+    const faviconOnly =
+      generic.length > 0 && badHttp.length === 0 && http4xx.length > 0 ? 0 : generic.length;
+    const unattributed = Math.max(0, faviconOnly - apiFailures.length);
     const errors = [
       ...pageErrors.map((e) => `pageerror: ${e}`),
       ...namedConsole.map((t) => `console: ${t}`),
@@ -171,19 +199,24 @@ for (const scenario of ["sources", "ticket", "empty", "live"]) {
 
 // The retrieval numbers printed must exist in the payload (8 sources, top_k 5).
 const s = report.sources_light;
-const printed = `${s.headerCount} ${s.titleFont} ${s.excerptFont}`;
+const printed = `${s.headerCount} title=${s.titleFont} meta=${s.metaFont} excerpt=${s.excerptFont}`;
 report.payloadCheck = {
   headerShowsCount8: s.headerCount.includes("8"),
   titleFont: s.titleFont,
+  metaFont: s.metaFont,
   excerptFont: s.excerptFont,
 };
 if (!s.headerCount.includes("8")) {
   failed = true;
   report.payloadCheck.problem = `panel did not show the payload's source count: ${printed}`;
 }
-if (s.titleFont !== "12px" || s.excerptFont !== "11px") {
+// The expected ramp is the design system's own: title `text-xs` 12px, meta `text-2xs`
+// 10px, excerpt `text-xs` 12px. This doubles as a token guard — `text-2xs` / `text-3xs`
+// are only emitted when they are declared in the `@theme` block, so a token that drifts
+// back into `:root` shows up here as the inherited 16px instead of 10px.
+if (s.titleFont !== "12px" || s.metaFont !== "10px" || s.excerptFont !== "12px") {
   failed = true;
-  report.payloadCheck.problem = `type ramp off: title=${s.titleFont} excerpt=${s.excerptFont}`;
+  report.payloadCheck.problem = `type ramp off: ${printed} (expected 12px / 10px / 12px)`;
 }
 
 console.log(JSON.stringify(report, null, 2));
