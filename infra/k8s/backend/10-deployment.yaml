@@ -17,6 +17,10 @@ data:
   # Non-secret runtime config
   APP_ENV: "prod"
   LOG_LEVEL: "info"
+  # The in-cluster MCP servers (infra/k8s/mcp/) were removed on request, so the assistant must
+  # not attempt MCP calls. Declared explicitly because the app's own default is true — without
+  # this key a redeploy would silently re-enable a client whose endpoints no longer resolve.
+  MCP_ENABLED: "false"
   RAGCHAT_NAMESPACE: "rag-chatbot"
   ALLOWED_DOMAINS: "chat.drlinuxer.com"
   CONFLUENCE_BASE_URL: "https://drlinuxer.atlassian.net/wiki"
