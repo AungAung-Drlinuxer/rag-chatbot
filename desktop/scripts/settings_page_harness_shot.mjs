@@ -40,7 +40,8 @@ const browser = await puppeteer.launch({
 });
 
 // The five sections the nav defines, in nav order.
-const SECTIONS = ["Preferences", "Integrations", "AI service", "Connectors", "Email server"];
+// "Connectors" is gone: the settings nav no longer lists it (removed on request).
+const SECTIONS = ["Preferences", "Integrations", "AI service", "Email server"];
 
 const report = { problems: [], sections: {} };
 // Format only — every call site already pushes the result. Pushing here too

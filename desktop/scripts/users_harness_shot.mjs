@@ -163,7 +163,11 @@ try {
         return b ? getComputedStyle(b).backgroundColor : "missing";
       })(),
     }));
-    check("breadcrumb Workspace / Users", /Workspace\s*\/\s*Users/.test(header.crumb), `"${header.crumb}"`);
+    // The page used to carry its own breadcrumb; it now lives in the shell's TopBar, which
+    // topbar_harness_shot.mjs verifies across all 8 pages. So the assertion is inverted: this
+    // page must NOT duplicate it.
+    check("page does not duplicate the shell breadcrumb",
+      !/Workspace\s*\/\s*Users/.test(header.crumb), `"${header.crumb}"`);
     check("eyebrow + h1 + description", header.eyebrow && header.h1 === "Users" && header.desc, `h1="${header.h1}"`);
     check("header carries the member-count badge", header.badge);
     check('"Add user" is the primary (brand) button', header.addPrimary === "rgb(0, 72, 240)", `bg=${header.addPrimary}`);

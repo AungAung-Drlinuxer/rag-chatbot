@@ -107,7 +107,12 @@ const MEASURE = () => {
   const de = document.documentElement;
   const h1 = [...document.querySelectorAll("h1")].map((h) => (h.textContent ?? "").trim());
   const statSection = sectionWith("Active domains");
-  const conceptSection = sectionWith("Knowledge base (answer retrieval)");
+  // The "how it works" concept strip. The Knowledge page labels its section "(answer
+  // retrieval)"; the Domains page's strip is the two ConceptCards ("Retrieve from Confluence" /
+  // "Route to the right Jira project"). Match whichever the page actually renders — the old
+  // single label existed on neither page after the redesign.
+  const conceptSection =
+    sectionWith("Knowledge base (answer retrieval)") ?? sectionWith("Retrieve from Confluence");
 
   return {
     scrollW: de.scrollWidth,
@@ -172,9 +177,11 @@ for (const page_ of ["domains", "articles"]) {
     // 2. the tab bar is gone
     if (m.tabButtons.length > 0) problems.push(fail(`tab bar still present: ${JSON.stringify(m.tabButtons)}`));
 
-    // 3. each page owns its header
+    // 3. each page owns its header. "Domains & Routing Engine" is the ACCESS-RESTRICTED
+    // heading; a managing role sees the product name "Domains & routing", which is what the
+    // sidebar entry and the TopBar breadcrumb also say.
     if (page_ === "domains") {
-      if (!m.h1.some((t) => t === "Domains & Routing Engine")) {
+      if (!m.h1.some((t) => t === "Domains & routing")) {
         problems.push(fail(`domains header title wrong: ${JSON.stringify(m.h1)}`));
       }
       // 4. even, equal cards
@@ -205,7 +212,9 @@ for (const page_ of ["domains", "articles"]) {
       }
       if (m.hasAccessBlocked) problems.push(fail("admin saw the access-restricted state"));
     } else {
-      if (!m.h1.some((t) => t === "Knowledge Base Articles")) {
+      // The page heading is the product name; "Knowledge Base Articles" is the article
+      // library panel's own heading further down the page.
+      if (!m.h1.some((t) => t === "Knowledge base")) {
         problems.push(fail(`articles header title wrong: ${JSON.stringify(m.h1)}`));
       }
       if (/Unified management of AI classifier routing rules/.test(m.h1.join(" "))) {
