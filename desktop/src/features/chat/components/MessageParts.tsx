@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Check, Copy, ExternalLink, Sparkles } from "lucide-react";
 
 import { type Source } from "@/features/chat/model";
+import { groupedReferenceLabel } from "@/features/chat/sources";
 
 export function ConfidenceBadge({ confidence }: { confidence: number }) {
   const high = confidence >= 85;
@@ -27,7 +28,7 @@ export function ConfidenceBadge({ confidence }: { confidence: number }) {
           high ? "bg-emerald-500" : medium ? "bg-amber-500" : "bg-red-500",
         ].join(" ")}
       />
-      {confidence}% confidence
+      {confidence}% answer confidence
     </span>
   );
 }
@@ -89,13 +90,16 @@ const EXCERPT_CLAMP = 96;
 export function SourceCard({
   source,
   index,
-  chunks = 1,
+  count = 1,
+  match = null,
   onExplain,
 }: {
   source: Source;
   index: number;
-  /** Chunks this article contributed to the answer — the list can repeat a page. */
-  chunks?: number;
+  /** References that collapsed into this entry — the retriever can repeat a page. */
+  count?: number;
+  /** "91% match", or the range the grouped references spanned ("50-65% match"). */
+  match?: string | null;
   /** Ask the assistant to expand this specific source in full detail. */
   onExplain?: (source: Source) => void;
 }) {
@@ -107,9 +111,10 @@ export function SourceCard({
   // reference information and must not compete for attention.
   const top = index <= 3;
   const long = source.excerpt.length > EXCERPT_CLAMP;
-  // `space` carries the classifier domain or the KB provider verbatim; the only
-  // transformation is cosmetic, so nothing is invented when it is missing.
-  const provider = (source.space || "KB").replace(/[_-]+/g, " ");
+  // The chip's first half is the source COLLECTION, not the classifier domain. A row
+  // carrying a page_id came out of the knowledge base; a row without one is a ticket
+  // lookup. `space` still holds the domain and stays reachable as the chip's tooltip.
+  const collection = source.page_id ? "KB" : "Ticket";
 
   async function copyLink() {
     if (!source.url) return;
@@ -124,27 +129,22 @@ export function SourceCard({
 
   return (
     <article className="group mb-2.5 rounded-xl bg-card p-3 shadow-xs ring-1 ring-[var(--border)] transition duration-150 hover:-translate-y-px hover:shadow-sm">
-      {/* --- line 1: provider + rank ("KB - 1") · chunks · score ------------- */}
+      {/* --- line 1: collection + rank ("KB - 1") · match score --------------- */}
       <div className="flex items-center gap-1.5">
-        {/* The mockup's chip is the source collection AND its rank in one label —
-            "KB - 1" — so the eye reads which article this is before the title. */}
+        {/* The mockup's chip is the source COLLECTION and its rank in one label —
+            "KB - 1" — so the eye reads which article this is before the title. It
+            used to render the classifier domain ("Network - 1"), so the chip asked a
+            different question on every answer and never once read "KB". The domain
+            has not been dropped: it is the chip's tooltip. */}
         <span
           className={[
-            "shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-semibold capitalize tabular-nums",
+            "shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
             top ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
           ].join(" ")}
-          title={`Rank ${index} of this answer's sources`}
+          title={source.space ? `${collection} - ${index} · ${source.space}` : `${collection} - ${index}`}
         >
-          {provider} - {index}
+          {collection} - {index}
         </span>
-        {chunks > 1 && (
-          <span
-            className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs tabular-nums text-muted-foreground"
-            title={`${chunks} chunks of this article were retrieved`}
-          >
-            ×{chunks}
-          </span>
-        )}
         <span
           className={[
             "ml-auto shrink-0 text-xs font-semibold tabular-nums",
@@ -153,15 +153,19 @@ export function SourceCard({
           title={
             source.relevance == null
               ? "This answer came from a live ticket lookup — it has no retrieval score"
-              : `Retrieval relevance ${source.relevance}%`
+              : `Retrieval match ${match ?? `${source.relevance}%`}`
           }
         >
-          {source.relevance == null ? "Ticket" : `${source.relevance}%`}
+          {match ?? (source.relevance == null ? "Ticket" : `${source.relevance}%`)}
         </span>
       </div>
 
       {/* --- line 2: title (2 lines at body size) ------------------------------ */}
-      <h4 className="mt-2 line-clamp-2 text-xs font-semibold leading-snug" title={source.title}>
+      <h4
+        data-slot="source-title"
+        className="mt-2 line-clamp-2 text-xs font-semibold leading-snug"
+        title={source.title}
+      >
         {source.url ? (
           <a
             href={source.url}
@@ -176,7 +180,15 @@ export function SourceCard({
         )}
       </h4>
 
-      {/* --- line 3: score meter (only when a score exists) -------------------- */}
+      {/* --- line 3: how many references this entry stands for ---------------- */}
+      {/* data-slot: the harness measures the type ramp through these three hooks. Reading
+          "the first <p> in the card" silently measured THIS line once the reference count
+          moved above the excerpt. */}
+      <p data-slot="source-meta" className="mt-1 text-2xs text-muted-foreground">
+        {groupedReferenceLabel(count)}
+      </p>
+
+      {/* --- line 4: score meter (only when a score exists) -------------------- */}
       {source.relevance != null && (
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
           <div
@@ -186,10 +198,11 @@ export function SourceCard({
         </div>
       )}
 
-      {/* --- line 4: why it matched ------------------------------------------- */}
+      {/* --- line 5: why it matched ------------------------------------------- */}
       {source.excerpt && (
         <>
           <p
+            data-slot="source-excerpt"
             className={[
               "mt-2 text-xs leading-relaxed text-muted-foreground",
               open ? "" : "line-clamp-2",
@@ -210,7 +223,7 @@ export function SourceCard({
         </>
       )}
 
-      {/* --- line 5: actions --------------------------------------------------- */}
+      {/* --- line 6: actions --------------------------------------------------- */}
       <div className="mt-2.5 flex items-center gap-1 border-t border-[var(--border)] pt-2">
         {source.url && (
           <a
@@ -247,7 +260,7 @@ export function SourceCard({
             className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-2xs font-medium text-primary transition duration-150 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           >
             <Sparkles className="size-3" />
-            Explain
+            View source details
           </button>
         )}
       </div>

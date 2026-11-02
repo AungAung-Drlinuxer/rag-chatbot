@@ -147,25 +147,43 @@ function boxOf(el: Element | null) {
 (window as any).__CHAT_HARNESS__ = {
   ready: false,
 
-  /** Click the seeded conversation in the history panel so the message list renders. */
+  /**
+   * Open the seeded conversation so the message list renders.
+   *
+   * The conversation LIST is no longer part of ChatPage — it lives in the app shell's
+   * sidebar, which opens a conversation by dispatching `ith:open-conversation` (ChatPage
+   * subscribes to it). Looking for a clickable node inside this harness therefore found
+   * nothing and every measurement was skipped, so the event is what to drive here. The
+   * click stays as a fallback for a page that renders its own list.
+   */
   async openConversation(): Promise<boolean> {
+    const settled = async () => {
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (document.body.textContent?.includes("corporate identity provider")) return true;
+      }
+      return false;
+    };
+    window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: SESSION }));
+    if (await settled()) return true;
+
     const wanted = "How do I reset my VPN password?";
     const nodes = Array.from(document.querySelectorAll("button, [role='button'], li, a, div"));
     const hit = nodes.find((n) => (n.textContent || "").includes(wanted) && n.children.length <= 3);
     if (!hit) return false;
     (hit as HTMLElement).click();
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      if (document.body.textContent?.includes("corporate identity provider")) return true;
-    }
-    return false;
+    return settled();
   },
 
   /** The three surfaces the review is about, measured as rendered. */
   measure() {
     const column = byClass("max-w-[900px]");
     const composer = document.querySelector("form")?.closest("div");
-    const answer = byClass("text-[13.5px]");
+    // The answer BODY, not merely the first node sharing its type scale: the user
+    // bubble also carries `text-[13.5px]`, so a bare byClass() returned the BUBBLE and
+    // every "the answer is plain prose / wider than the bubble" assertion was measured
+    // against the bubble itself — which is why both widths read 258px.
+    const answer = document.querySelector('article [class*="text-[13.5px]"]');
     const userBubble = byClass("rounded-br-md");
     return {
       column: rect(column),

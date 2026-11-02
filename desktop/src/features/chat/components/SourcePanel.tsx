@@ -30,38 +30,15 @@ import { ChevronDown, Link2, Search } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/page";
 import { SourceCard } from "@/features/chat/components/MessageParts";
+import {
+  groupSources,
+  matchLabel,
+  referenceLabel,
+} from "@/features/chat/sources";
 import { type RetrievalInfo, type Source } from "@/features/chat/model";
 
 /** Sources this many times or fewer are not worth a filter control. */
 const FILTER_FROM = 4;
-
-type Group = { key: string; source: Source; chunks: number };
-
-/**
- * Collapse repeated retrievals of the same article into one entry.
- *
- * The retriever deliberately returns up to 2 chunks per article (`_cap_per_article`)
- * and then expands each winner with its neighbours, so the same page_id legitimately
- * appears more than once. Listing it twice showed the reader the same article as two
- * separate sources. The FIRST occurrence is kept, which preserves rank order.
- */
-function groupSources(sources: Source[]): Group[] {
-  const order: Group[] = [];
-  const byKey = new Map<string, Group>();
-  for (const s of sources) {
-    // page_id is the real identity; a ticket row has none, so its title is the key.
-    const key = s.page_id ?? `title:${s.title}`;
-    const seen = byKey.get(key);
-    if (seen) {
-      seen.chunks += 1;
-      continue;
-    }
-    const g: Group = { key, source: s, chunks: 1 };
-    byKey.set(key, g);
-    order.push(g);
-  }
-  return order;
-}
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -116,8 +93,11 @@ export default function SourcePanel({
 
   return (
     <aside className="hidden w-84 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--card)] xl:flex">
-      {/* ---------------- header (fixed height) ---------------- */}
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4">
+      {/* ---------------- header (same bar as the page header) ----------------
+          h-12 and --topbar-bg match the chat column's header exactly, and both carry a
+          bottom border, so the two read as ONE bar row across the page rather than two
+          bars at slightly different heights. */}
+      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4">
         <div className="min-w-0">
           <h2 className="text-xs font-semibold leading-tight">Knowledge sources</h2>
           {/* The mockup heads this panel with the retrieval summary — how many
@@ -126,7 +106,7 @@ export default function SourcePanel({
           <p className="text-2xs leading-tight text-muted-foreground">
             {sources.length === 0
               ? "Retrieved for this answer"
-              : `${sources.length} reference${sources.length === 1 ? "" : "s"} grouped into ${groups.length} title${groups.length === 1 ? "" : "s"}`}
+              : `${referenceLabel(sources.length)} grouped into ${groups.length} title${groups.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -215,7 +195,7 @@ export default function SourcePanel({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Filter sources"
+              placeholder="Filter source..."
               aria-label="Filter sources by title, provider or excerpt"
               className="h-7 w-full rounded-lg border border-[var(--border)] bg-background pl-6.5 pr-2 text-xs text-foreground outline-none transition focus:border-[var(--primary)]"
             />
@@ -252,7 +232,8 @@ export default function SourcePanel({
               key={g.key}
               source={g.source}
               index={i + 1}
-              chunks={g.chunks}
+              count={g.count}
+              match={matchLabel(g)}
               onExplain={onExplain}
             />
           ))

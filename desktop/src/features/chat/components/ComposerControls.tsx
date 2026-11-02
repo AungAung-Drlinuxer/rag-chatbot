@@ -150,7 +150,7 @@ export function ModeControl({
       accent={mode === "infra" ? "emerald" : "blue"}
       className={className}
       options={[
-        { value: "auto", label: "Auto", hint: "Documents, or the live estate when the question is about it" },
+        { value: "auto", label: "Auto mode", hint: "Documents, or the live estate when the question is about it" },
         { value: "kb", label: "Knowledge base", hint: "Documents only — infrastructure tools are never used" },
         { value: "infra", label: "Infrastructure", hint: "Live Kubernetes / Rancher, read-only. Admin or agent role" },
       ] as const}
@@ -182,7 +182,7 @@ export default function ComposerControls({
         // Hidden on phones: the header hosts it there so the composer stays minimal.
         className="hidden sm:block"
         options={[
-          { value: "auto", label: "Auto", hint: "Documents, or the live estate when the question is about it" },
+          { value: "auto", label: "Auto mode", hint: "Documents, or the live estate when the question is about it" },
           { value: "kb", label: "Knowledge base", hint: "Documents only — infrastructure tools are never used" },
           { value: "infra", label: "Infrastructure", hint: "Live Kubernetes / Rancher, read-only. Admin or agent role" },
         ] as const}

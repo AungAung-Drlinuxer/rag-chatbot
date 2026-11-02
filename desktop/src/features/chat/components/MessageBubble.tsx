@@ -20,6 +20,7 @@ import AgentActivity, { stageFromText } from "@/components/AgentActivity";
 import EvidenceCard from "@/features/chat/components/EvidenceCard";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import { ConfidenceBadge } from "@/features/chat/components/MessageParts";
+import { groupSources, matchLabel, referenceLabel } from "@/features/chat/sources";
 import RagPipelineStatus from "@/features/chat/components/RagPipelineStatus";
 import { useState } from "react";
 
@@ -70,6 +71,10 @@ function MessageBubble({
   const provenance = isLive
     ? "Live infrastructure · read-only MCP"
     : "Grounded in your knowledge base";
+
+  /* Grouped once so the count line and the cards below are derived from the same list:
+     the heading used to count raw rows ("7 references") above a list of four. */
+  const sourceGroups = groupSources(message.sources ?? []);
 
   async function copyText(text: string) {
     try {
@@ -304,14 +309,23 @@ function MessageBubble({
                   <Sparkles className="size-3.5 text-[var(--primary)]" />
                   Sources for this answer
                 </span>
+                {/* The mockup's count line gives BOTH figures: the references that came
+                    back and the distinct titles they collapse to. The list below is
+                    grouped the same way, so the two numbers cannot disagree. */}
                 <span className="shrink-0 text-2xs font-normal text-muted-foreground">
-                  {message.sources!.length} reference{message.sources!.length > 1 ? "s" : ""}
+                  {referenceLabel(message.sources!.length)} · {sourceGroups.length} grouped{" "}
+                  {sourceGroups.length === 1 ? "title" : "titles"}
                 </span>
               </div>
-              <ol className="space-y-2">
-                {message.sources!.map((s, idx) => {
+              {/* Two columns from sm up — the mockup lays the grouped titles out in a
+                  grid, and one full-width row per source turned four short titles into
+                  four very wide bars. */}
+              <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {sourceGroups.map((g, idx) => {
+                  const s = g.source;
+                  const match = matchLabel(g);
                   const content = (
-                    <div className="flex items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-2.5 transition hover:border-[var(--primary)]/40 hover:bg-[var(--accent-soft)]">
+                    <div className="flex h-full items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-2.5 transition hover:border-[var(--primary)]/40 hover:bg-[var(--accent-soft)]">
                       <div className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--accent)] text-2xs font-bold text-[var(--accent-foreground)]">
                         {idx + 1}
                       </div>
@@ -320,12 +334,12 @@ function MessageBubble({
                           {s.title}
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
-                          {s.space && <span className="capitalize">{s.space}</span>}
-                          {s.relevance != null && (
+                          <span>{referenceLabel(g.count)}</span>
+                          {match && (
                             <>
-                              <span aria-hidden>•</span>
+                              <span aria-hidden>·</span>
                               <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                {s.relevance}% match
+                                {match}
                               </span>
                             </>
                           )}
@@ -335,9 +349,9 @@ function MessageBubble({
                     </div>
                   );
                   return (
-                    <li key={`${s.page_id}-${idx}`}>
+                    <li key={g.key}>
                       {s.url ? (
-                        <a href={s.url} target="_blank" rel="noreferrer" className="block text-left">
+                        <a href={s.url} target="_blank" rel="noreferrer" className="block h-full text-left">
                           {content}
                         </a>
                       ) : (
@@ -365,27 +379,15 @@ function MessageBubble({
         </div>
 
         {/* ---- metadata line: time · confidence · tokens ---- */}
+        {/* The mockup's line is exactly these three facts and nothing else. The Copy /
+            Share pair that used to sit here duplicated the footer actions two rows
+            below — which is where the eye already is at the end of a long answer. Share
+            moved down to that row rather than being dropped. */}
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] px-4 py-2.5">
           <span className="flex items-center gap-1 text-2xs text-muted-foreground">
             <Clock3 className="size-3" />
             {message.timestamp}
           </span>
-          {message.content && !busy && (
-            <span className="flex items-center gap-1">
-              <button type="button" title="Copy answer" aria-label="Copy answer"
-                onClick={() => copyText(message.content)}
-                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
-                {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
-                {copied ? "Copied" : "Copy"}
-              </button>
-              <button type="button" title="Share answer" aria-label="Share answer"
-                onClick={() => shareText(message.content)}
-                className="inline-flex h-[26px] items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]">
-                {shared ? <Check className="size-3.5 text-emerald-500" /> : <Share2 className="size-3.5" />}
-                {shared ? "Shared" : "Share"}
-              </button>
-            </span>
-          )}
           {/* v1.6.65 — no confidence badge for a live-infrastructure answer. The
               percentage measures how well a DOCUMENT matched a query, which says
               nothing about a fact read off the cluster; the EvidenceCard carries the
@@ -400,8 +402,11 @@ function MessageBubble({
               title={message.latencyMs ? `Generated in ${(message.latencyMs / 1000).toFixed(1)}s` : undefined}
             >
               <Zap className="size-3 text-amber-500" />
-              {message.usage?.input_tokens ?? 0} in · {message.usage?.output_tokens ?? 0} out
-              {(message.usage?.input_tokens || message.usage?.output_tokens) ? ` = ${((message.usage?.input_tokens ?? 0) + (message.usage?.output_tokens ?? 0)).toLocaleString()} tokens` : ""}
+              {/* The mockup spells both figures out ("2,915 input / 1,465 output
+                  tokens") instead of the old "1840 in · 210 out = 2,050 tokens", which
+                  made the reader add the two numbers up to check the total. */}
+              {(message.usage?.input_tokens ?? 0).toLocaleString()} input /{" "}
+              {(message.usage?.output_tokens ?? 0).toLocaleString()} output tokens
               {message.latencyMs ? <span className="text-muted-foreground/70">· {(message.latencyMs / 1000).toFixed(0)}s</span> : null}
             </span>
           )}
@@ -466,7 +471,20 @@ function MessageBubble({
               className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
             >
               {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? "Copied" : "Copy answer"}
+            </button>
+            {/* Share moved here from the metadata line: the mockup's metadata row is
+                time · confidence · tokens and nothing else, and dropping the capability
+                outright would lose Web Share on the devices that have it. */}
+            <button
+              type="button"
+              title="Share answer"
+              aria-label="Share answer"
+              onClick={() => shareText(message.content)}
+              className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+            >
+              {shared ? <Check className="size-3.5 text-emerald-500" /> : <Share2 className="size-3.5" />}
+              {shared ? "Shared" : "Share"}
             </button>
             <button
               type="button"
@@ -479,12 +497,14 @@ function MessageBubble({
               <RotateCcw className="size-3.5" />
               Regenerate
             </button>
+            {/* The mockup pins the ticket action to the far end of the row, away from
+                the feedback pair it must not be mistaken for. */}
             <button
               onClick={onOpenTicketForm}
-              className="flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3.5 py-1.5 text-xs font-medium text-orange-700 transition hover:bg-orange-100 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
+              className="ml-auto flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/80 px-3.5 py-1.5 text-xs font-medium text-orange-700 transition hover:bg-orange-100 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300"
             >
               <Ticket className="size-3.5 text-orange-600 dark:text-orange-400" />
-              Create Jira Ticket
+              Create Jira ticket
             </button>
           </div>
         )}

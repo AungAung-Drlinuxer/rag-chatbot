@@ -1,7 +1,7 @@
 import {
   Trash2, Bot,
   Menu, Search,
-  Shield, Info, MessageSquareText,
+  Info, MessageSquareText,
   Check, Pencil,
   Ticket as TicketIcon,
 } from "lucide-react";
@@ -16,14 +16,10 @@ import {
 
 import {
   decideApproval,
-  getMcpServers,
-  patchConversation,
   submitFeedback as pushFeedback,
   uploadAttachment,
 } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
-import ComposerControls, { ModeControl } from "@/features/chat/components/ComposerControls";
-import ScopeControl from "@/features/chat/components/ScopeControl";
 import Composer from "@/components/Composer";
 import MessageBubble from "@/features/chat/components/MessageBubble";
 import SessionPanel from "@/features/chat/components/SessionPanel";
@@ -37,7 +33,6 @@ import {
 } from "@/features/chat/model";
 import { EmptyChat } from "@/features/chat/components/chat-parts";
 import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
-import StatusChips from "@/features/chat/components/StatusChips";
 import SourcePanel from "@/features/chat/components/SourcePanel";
 import { alertTicket } from "@/lib/notify";
 import {
@@ -88,19 +83,21 @@ export default function Chat({
   const [stage, setStage] = useState("");
   // v1.6.12 — RAG pipeline live tracker (per-stage telemetry + streaming pill)
   const pipeline = useStageTelemetry();
-  // v1.6.22 — per-request LLM provider selection (user toggle in the chat input bar)
-  const [llmProvider, setLlmProvider] = useState<"auto" | "cloud" | "local">("auto");
+  // The engine and the connector scope are no longer chosen in the composer: its row of
+  // chips ("Auto mode" / "Auto" / "All connectors") was removed, so both are fixed at the
+  // defaults they already sent. `chatMode` is still switched programmatically — "Ask this
+  // in Infrastructure mode" on an answer sets it — so its setter stays.
+  const [llmProvider] = useState<"auto" | "cloud" | "local">("auto");
   // v1.6.55 — WHAT the answer may draw on, separate from which model answers.
   // Claude Desktop / opencode keep "chat" and "MCP tools" visibly distinct; without
   // it a KB answer and an infrastructure answer look identical, and a failed tool
   // lookup reads as "no such information in the knowledge base".
   const [chatMode, setChatMode] = useState<"auto" | "kb" | "infra">("auto");
 
-  // Per-conversation connector scope. EMPTY = every enabled server, which is what the
-  // conversation used before scoping existed — so a failure to load this list degrades to
-  // today's behaviour rather than to a chat that cannot reach the infrastructure.
+  // EMPTY = every enabled server. The picker is gone, but a conversation that was saved
+  // with a narrower scope still restores it on open, and that value is what the composer
+  // sends — so the setter stays even though nothing in the UI calls it.
   const [chatServers, setChatServers] = useState<string[]>([]);
-  const [mcpServers, setMcpServers] = useState<{ name: string; label: string; curated: boolean }[]>([]);
   // v1.6.65 — "Ask this in Infrastructure mode" re-sends a previous question without
   // making the user retype it. State updates are async, so the override travels in a
   // ref that sendMessage consumes once.
@@ -127,19 +124,6 @@ export default function Chat({
       .then((d) => setConversations(d?.conversations ?? []))
       .catch(() => setConversations([]));
   }
-
-    // The scope picker's options. Read once: the connector set changes in Settings, not
-  // mid-conversation, and a failed read leaves the list empty so the control hides itself.
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      try {
-        const j = await getMcpServers();
-        if (live && j.servers.length) setMcpServers(j.servers);
-      } catch { /* picker stays hidden; the chat is unaffected */ }
-    })();
-    return () => { live = false; };
-  }, []);
 
 useEffect(() => {
     refreshConversations();
@@ -210,21 +194,8 @@ useEffect(() => {
   }, []);
 
   /**
-   * The picker writes through to the conversation.
-   *
-   * Best-effort on purpose: a brand-new conversation has no row yet, so this 404s until the
-   * first message — and the stream endpoint persists the same value anyway. Failing here
-   * must not block the composer, so the local state is set first and nothing is awaited by
-   * the caller.
+   * Open a saved conversation and rebuild its message list.
    */
-  function changeScope(next: string[]) {
-    setChatServers(next);
-    const id = sessionRef.current;
-    if (!id) return;
-    patchConversation(id, { connector_scope: next }).catch(() => { /* row not created yet */ });
-  }
-
-
   async function openConversation(id: string) {
     setSelectedConversation(id);
     sessionRef.current = id;
@@ -781,7 +752,9 @@ useEffect(() => {
       {/* ================= MAIN CHAT ================= */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* S2.8 — h-16 duplicated the app-shell bar's height; h-12 keeps a single
-            visual rhythm between the shell chrome and the page chrome. */}
+            visual rhythm between the shell chrome and the page chrome. The source
+            panel's header uses the SAME height and background, so the divider under
+            both is one continuous line across the page. */}
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setMobileHistory(true)}>
@@ -794,41 +767,18 @@ useEffect(() => {
               <h1 className="truncate text-sm font-semibold">IT Assistant</h1>
                 {/* The page identity is the assistant's own name, matching the
                     reference answer card's "IT Assistant". The subtitle keeps the
-                    mockup's line; the four measured chips (StatusChips) carry state. */}
+                    mockup's line; health state lives in the panel's System status. */}
                 <p className="mt-0.5 hidden truncate text-2xs text-muted-foreground sm:block">
                   Get help from enterprise knowledge and IT experts
                 </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* S2.8 — "Hybrid RAG + rerank" moved to the retrieval panel (it was
-                static text here) and the chip is slimmer so the header reads as one
-                line of chrome instead of a second title bar. */}
-            <StatusChips className="hidden lg:flex" />
-            <div className="hidden items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-2xs sm:flex">
-              <Shield className="size-3 text-emerald-600" />
-              RBAC protected
-            </div>
-
-            {/* v1.6.68 — on small screens the answer-source selector lives here, not
-                under the composer: it is a session-level setting, and the composer
-                keeps only attach / mic / send. Visible below sm, where the composer
-                hides its copy. */}
-            <ModeControl
-              mode={chatMode}
-              onModeChange={setChatMode}
-              className="sm:hidden"
-            />
-            {/* Same placement rule as the mode control: a session-level setting belongs
-                in the header on a phone, where the composer keeps only attach / send.
-                Hidden in knowledge-base mode, where scoping connectors cannot change
-                anything. */}
-            <ScopeControl
-              servers={mcpServers}
-              value={chatServers}
-              onChange={changeScope}
-              className={chatMode === "kb" ? "hidden" : "sm:hidden"}
-            />
+            {/* The four health chips (StatusChips) and the "RBAC protected" chip are
+                gone. The right panel's System status card already names every
+                dependency and its state, so the header was repeating a sample of it —
+                and this row now also carries the panel's own header, which is what
+                makes the two columns read as ONE bar instead of two. */}
             {/* v1.6.65 — the panel was `hidden xl:flex`, so on a phone (where this app
                 is mostly used) "what produced this answer" was unreachable. This opens
                 it inline BELOW the header, so it participates in layout and can never
@@ -937,16 +887,6 @@ useEffect(() => {
                   ))}
                 </div>
               )}
-              {/* v1.6.22 — LLM provider toggle (Auto / Cloud / Local) */}
-              {/* v1.6.60 — one quiet row instead of two rows of chips. Six coloured
-                  pills clipped and wrapped on a phone, for settings that change once a
-                  session. See components/ComposerControls.tsx. */}
-              <ComposerControls
-                mode={chatMode}
-                onModeChange={setChatMode}
-                engine={llmProvider}
-                onEngineChange={setLlmProvider}
-              />
               <Composer
                 value={input}
                 onChange={setInput}
@@ -969,20 +909,6 @@ useEffect(() => {
                     setUploading(false);
                   }
                 }}
-                leading={
-                  chatMode !== "kb" ? (
-                    /* The connector scope lives IN the field, not on the row above it: the
-                       type area is where the user decides what this question may reach, and
-                       a control that changes the answer belongs next to the box that asks.
-                       Hidden in knowledge-base mode — with documents-only answers there is
-                       no connector to scope, and a visible-but-inert control reads as a bug. */
-                    <ScopeControl
-                      servers={mcpServers}
-                      value={chatServers}
-                      onChange={changeScope}
-                    />
-                  ) : null
-                }
                 above={
                   pendingFiles.length > 0 ? (
                     <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
@@ -1010,7 +936,7 @@ useEffect(() => {
                 reading; 11px at slate-500/400 clears the contrast floor. */}
             <div className="mt-1.5 flex items-center justify-center gap-3 text-xs leading-snug text-muted-foreground">
               <span className="text-center">
-                Answers are AI-generated — verify before acting. Access is RBAC-protected.
+                AI-generated answers should be verified before acting. Access is RBAC-protected.
               </span>
               {/* The key hint now lives inside the field, next to the Send button it
                   describes. Ctrl+Enter genuinely sends (see the textarea's onKeyDown), so

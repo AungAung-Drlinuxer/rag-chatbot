@@ -350,11 +350,18 @@ export default function RagPipelineStatus({
         )}
       </div>
 
-      {/* ---- stage strip: always on screen ----
+      {/* ---- stage strip: on screen while the pipeline is RUNNING ----
           Each step is a vertical stack, not an inline row: a circular badge carrying the
           stage glyph, then its numbered label, then the measured ms (or "Running" while
           the step is still in flight). The reference lays it out this way, and it lets the
-          badge stay legible at a size where the glyph reads as an icon rather than a smudge. */}
+          badge stay legible at a size where the glyph reads as an icon rather than a smudge.
+
+          Hidden once the run has finished: the reference mockup's completed answer shows
+          ONE line — "Retrieval pipeline completed · 28.1s" — and a five-stage strip under
+          a finished answer is a chart of something that already happened. The strip's job
+          is to make progress readable WHILE it happens; afterwards the per-stage numbers
+          are one click away under Execution details. */}
+      {active && (
       <div
         data-testid="rag-pipeline-stages"
         className="flex flex-wrap items-start gap-x-1 gap-y-3 border-t border-[var(--border)] px-4 py-3"
@@ -438,8 +445,13 @@ export default function RagPipelineStatus({
           );
         })}
       </div>
+      )}
 
-      {/* ---- execution details: telemetry one click away ---- */}
+      {/* ---- execution details: telemetry one click away ----
+          Only once the run has finished. While it is running the stage strip above IS the
+          detail, so this row was a second way to open the same thing — and it was the
+          difference between the running tracker reading as a strip and reading as a panel. */}
+      {!active && (
       <button
         type="button"
         data-testid="rag-pipeline-details-toggle"
@@ -459,6 +471,7 @@ export default function RagPipelineStatus({
           )}
         </span>
       </button>
+      )}
 
       {open && (
         <div className="border-t border-[var(--border)] px-3 py-1">
