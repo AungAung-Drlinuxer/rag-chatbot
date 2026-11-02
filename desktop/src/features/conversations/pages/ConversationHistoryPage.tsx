@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowDown,
+  Bot,
   FileJson,
   FileText,
+  LayoutGrid,
+  List,
   MessagesSquare,
   RefreshCw,
   Search,
   SearchX,
+  Users,
   X,
 } from "lucide-react";
 import { adminListConversations, adminConversationMessages, adminDownloadConversation } from "@/features/conversations/admin-api";
@@ -21,8 +26,14 @@ import { EmptyState, ErrorState, PageShell, PageHeader } from "@/components/ui/p
  * Layout follows the mockup: ADMINISTRATION eyebrow + breadcrumb header, three figures,
  * one toolbar (search / user / date range / Reset) that drives BOTH the list and the
  * transcript panel, then a two-column body — the table on the left, a sticky transcript
- * on the right. The transcript is a rendering of the same messages the export writes, so
+ * on the right. The table keeps the mockup's four columns (USER · CONVERSATION · MSGS ·
+ * LAST ACTIVITY); the transcript is a rendering of the same messages the export writes, so
  * what you read here is what the download contains.
+ *
+ * Two things the mockup shows are deliberately NOT reproduced, because the data cannot
+ * back them: the "preview … / … in source" table footer and the "Screenshot preview"
+ * disclaimer. Those describe a truncated screenshot of a larger list, and this page loads
+ * every row it renders (the footer reports exactly that instead).
  */
 
 type Conv = {
@@ -36,26 +47,41 @@ type Conv = {
 
 type Msg = { role: string; content: string; created_at: string | null };
 
-function fmt(ts: string | null): string {
-  if (!ts) return "—";
-  // Server times are UTC (timestamptz). Parse and render in the viewer's locale.
+/** Server times are UTC (timestamptz); parse so every formatter renders in the viewer's locale. */
+function parseTs(ts: string | null): Date | null {
+  if (!ts) return null;
   const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
-  if (Number.isNaN(d.getTime())) return ts;
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function fmt(ts: string | null): string {
+  const d = parseTs(ts);
+  if (!d) return ts ?? "—";
   return d.toLocaleString(undefined, {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
 
-/** Day bucket for the transcript divider — "Today" / "12 Mar 2026". */
-function dayLabel(ts: string | null): string {
-  if (!ts) return "Unknown date";
-  const d = new Date(ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z");
-  if (Number.isNaN(d.getTime())) return ts;
-  const today = new Date();
-  const same = d.toDateString() === today.toDateString();
-  if (same) return "Today";
+/** Date only, month-first — the transcript panel's meta line, e.g. "Nov 01, 2026". */
+function fmtDay(ts: string | null): string {
+  const d = parseTs(ts);
+  if (!d) return ts ?? "—";
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** Clock time only — the transcript bubble's timestamp, e.g. "22:10". */
+function fmtTime(ts: string | null): string {
+  const d = parseTs(ts);
+  if (!d) return "";
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+/** Day bucket for the transcript divider — the mockup prints the full date, never "Today". */
+function dayLabel(ts: string | null): string {
+  const d = parseTs(ts);
+  if (!d) return ts ?? "Unknown date";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "long", year: "numeric" });
 }
 
 const AVATAR_TONES = [
@@ -234,23 +260,23 @@ export default function ConversationHistoryPage() {
       <main className="space-y-6">
         <section className="grid auto-rows-fr gap-4 md:grid-cols-3">
           <StatCard
-            icon={<MessagesSquare className="size-4" />}
+            icon={<LayoutGrid className="size-4" />}
             value={String(convs.length)}
             title="Conversations"
-            caption="Loaded from the current filter"
+            caption="Across your workspace"
             loading={loading}
           />
           <StatCard
-            icon={<FileText className="size-4" />}
+            icon={<List className="size-4" />}
             value={String(totalMsgs)}
             title="Total messages"
-            caption="Across every loaded conversation"
+            caption="User and assistant messages"
             loading={loading}
           />
           <StatCard
-            icon={<Search className="size-4" />}
+            icon={<Users className="size-4" />}
             value={String(activeUsers)}
-            title="Users active"
+            title="Active users"
             caption="Distinct users in this result"
             loading={loading}
           />
@@ -263,7 +289,7 @@ export default function ConversationHistoryPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search title or user…"
+              placeholder="Search conversation or user..."
               aria-label="Search conversations"
               className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
             />
@@ -284,6 +310,7 @@ export default function ConversationHistoryPage() {
             aria-label="From date"
             className="w-[145px] rounded-lg border border-[var(--border)] bg-card px-3 py-2 text-xs outline-none focus:border-[var(--primary)] dark:[color-scheme:dark]"
           />
+          <span aria-hidden className="text-xs text-muted-foreground">—</span>
           <input
             type="date"
             value={toDate}
@@ -301,7 +328,7 @@ export default function ConversationHistoryPage() {
         </section>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(430px,1fr)_360px]">
-          {/* List table */}
+          {/* List table — USER · CONVERSATION · MSGS · LAST ACTIVITY, as in the mockup. */}
           <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-xs">
             <div className="flex items-center justify-between gap-3 px-5 py-4">
               <h2 className="text-sm font-semibold">
@@ -310,15 +337,19 @@ export default function ConversationHistoryPage() {
                   {shown.length}
                 </span>
               </h2>
-              <span className="text-2xs text-muted-foreground">Newest first</span>
+              <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
+                Latest activity
+                <ArrowDown className="size-3" />
+              </span>
             </div>
 
             <div className="max-h-[560px] overflow-auto">
               <table className="w-full border-collapse text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-muted/60 text-3xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-5 py-3 font-medium">User</th>
                     <th className="px-5 py-3 font-medium">Conversation</th>
-                    <th className="px-5 py-3 font-medium">Messages</th>
+                    <th className="px-5 py-3 font-medium">Msgs</th>
                     <th className="px-5 py-3 font-medium">Last activity</th>
                   </tr>
                 </thead>
@@ -326,7 +357,7 @@ export default function ConversationHistoryPage() {
                   {loading && (
                     Array.from({ length: 8 }).map((_, i) => (
                       <tr key={"sk" + i} className="border-t border-[var(--border)]">
-                        <td colSpan={3} className="px-5 py-3">
+                        <td colSpan={4} className="px-5 py-3">
                           <div className="h-4 animate-pulse rounded bg-muted" style={{ width: `${60 + ((i * 17) % 40)}%` }} />
                         </td>
                       </tr>
@@ -339,31 +370,30 @@ export default function ConversationHistoryPage() {
                       className={[
                         "cursor-pointer border-t border-[var(--border)] text-xs transition",
                         open === c.session_id
-                          ? "bg-[var(--accent-soft)] shadow-[inset_3px_0_var(--primary)]"
+                          ? "bg-[var(--accent-soft)]"
                           : "hover:bg-muted/50",
                       ].join(" ")}
                     >
-                      <td className="px-5 py-4 align-top">
-                        <div className="flex items-start gap-2.5">
+                      <td className="px-5 py-3.5 align-middle">
+                        <div className="flex items-center gap-2.5">
                           <span className={`grid size-7 shrink-0 place-items-center rounded-full text-2xs font-bold ${toneFor(c.username)}`}>
                             {c.username.slice(0, 1).toUpperCase()}
                           </span>
-                          <div className="min-w-0">
-                            <div className="text-[13px] font-medium leading-snug text-foreground"
-                                 style={{ whiteSpace: "normal", minWidth: 210, maxWidth: 300 }}>
-                              {maskProfanity(c.title) || "(untitled conversation)"}
-                            </div>
-                            <div className="mt-0.5 text-2xs text-muted-foreground">{c.username}</div>
-                          </div>
+                          <span className="truncate text-xs font-medium text-foreground">{c.username}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 align-top text-muted-foreground">{c.messages}</td>
-                      <td className="px-5 py-4 align-top text-muted-foreground">{fmt(c.last_at)}</td>
+                      <td className="px-5 py-3.5 align-middle">
+                        <div className="text-xs font-medium leading-snug text-foreground">
+                          {maskProfanity(c.title) || "(untitled conversation)"}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 align-middle text-muted-foreground">{c.messages}</td>
+                      <td className="whitespace-nowrap px-5 py-3.5 align-middle text-muted-foreground">{fmt(c.last_at)}</td>
                     </tr>
                   ))}
                   {error && !loading && (
                     <tr>
-                      <td colSpan={3}>
+                      <td colSpan={4}>
                         <ErrorState
                           compact
                           title="Could not load conversation history"
@@ -374,7 +404,7 @@ export default function ConversationHistoryPage() {
                     </tr>
                   )}
                   {shown.length === 0 && !loading && !error && (
-                    <tr><td colSpan={3}>
+                    <tr><td colSpan={4}>
                       {convs.length === 0 ? (
                         <EmptyState
                           icon={<MessagesSquare className="size-5" />}
@@ -403,7 +433,8 @@ export default function ConversationHistoryPage() {
             </div>
           </section>
 
-          {/* Detail side panel */}
+          {/* Detail side panel — header (user · "Conversation transcript" · close), then the
+              conversation title, its meta line and the two exports, then the transcript. */}
           <div className="hidden lg:block">
             <div className="sticky top-8 flex h-[588px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-xs">
               {detail ? (
@@ -416,7 +447,7 @@ export default function ConversationHistoryPage() {
                         </span>
                         <div className="min-w-0">
                           <h3 className="truncate text-sm font-semibold">{openUser}</h3>
-                          <div className="truncate text-2xs text-muted-foreground">{maskProfanity(detail.title)}</div>
+                          <div className="truncate text-2xs text-muted-foreground">Conversation transcript</div>
                         </div>
                       </div>
                       <button
@@ -427,6 +458,14 @@ export default function ConversationHistoryPage() {
                         <X className="size-3.5" />
                       </button>
                     </div>
+
+                    <div className="mt-3 text-sm font-semibold leading-snug">
+                      {maskProfanity(detail.title) || "(untitled conversation)"}
+                    </div>
+                    <div className="mt-0.5 text-2xs text-muted-foreground">
+                      {detail.messages} message{detail.messages === 1 ? "" : "s"} · {fmtDay(detail.last_at)}
+                    </div>
+
                     <div className="mt-3 flex items-center gap-1.5">
                       <button
                         onClick={() => download(detail, "txt")}
@@ -443,13 +482,13 @@ export default function ConversationHistoryPage() {
                     </div>
                   </div>
 
-                  <div className="flex-1 space-y-4 overflow-y-auto bg-muted/20 p-4">
+                  <div className="flex-1 space-y-4 overflow-y-auto p-4">
                     {detailLoading && (
                       <div className="space-y-3">
                         {Array.from({ length: 5 }).map((_, i) => (
                           <div
                             key={i}
-                            className="h-10 animate-pulse rounded-xl bg-muted"
+                            className="h-10 animate-pulse rounded-lg bg-muted"
                             style={{ width: `${55 + ((i * 13) % 35)}%`, marginLeft: i % 2 ? "auto" : 0 }}
                           />
                         ))}
@@ -469,27 +508,37 @@ export default function ConversationHistoryPage() {
                       </div>
                     )}
                     {!detailLoading && !detailError && grouped.map((g) => (
-                      <div key={g.day} className="space-y-2.5">
+                      <div key={g.day} className="space-y-3">
                         <div className="flex items-center gap-2 text-3xs uppercase tracking-wider text-muted-foreground">
                           <span className="h-px flex-1 bg-[var(--border)]" />
                           {g.day}
                           <span className="h-px flex-1 bg-[var(--border)]" />
                         </div>
-                        {g.items.map((m, i) => (
-                          <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
-                            <span className={[
-                              "inline-block max-w-[88%] whitespace-pre-wrap px-3.5 py-2 text-left text-xs leading-relaxed",
-                              m.role === "user"
-                                ? "rounded-[12px_3px_12px_12px] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                                : "rounded-[3px_12px_12px_12px] border border-[var(--border)] bg-card",
-                            ].join(" ")}>
-                              {m.content}
-                            </span>
-                            <div className="mt-1 text-3xs text-muted-foreground">
-                              {m.role === "user" ? "User" : "Assistant"} · {fmt(m.created_at)}
+                        {g.items.map((m, i) => {
+                          const isUser = m.role === "user";
+                          return (
+                            /* The mockup draws every turn as a full-width block: the sender
+                               sits top-left of the row and the clock top-right, above the
+                               bubble. Only the user's block is inset (92%), matching it. */
+                            <div key={i} className={isUser ? "ml-auto w-[92%]" : "w-full"}>
+                              <div className="mb-1 flex items-center justify-between gap-2 text-3xs text-muted-foreground">
+                                <span className="flex min-w-0 items-center gap-1">
+                                  {!isUser && <Bot className="size-3 shrink-0" />}
+                                  <span className="truncate font-medium">{isUser ? openUser : "IT Assistant"}</span>
+                                </span>
+                                <span className="shrink-0">{fmtTime(m.created_at)}</span>
+                              </div>
+                              <div className={[
+                                "w-full whitespace-pre-wrap rounded-lg px-3.5 py-2 text-xs leading-relaxed",
+                                isUser
+                                  ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                                  : "bg-[var(--muted)] text-foreground",
+                              ].join(" ")}>
+                                {m.content}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))}
                   </div>
