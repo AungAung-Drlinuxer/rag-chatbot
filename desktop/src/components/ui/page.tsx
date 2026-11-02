@@ -115,7 +115,10 @@ export function SectionCard({
   children,
   bodyClassName = "",
 }: {
-  title?: string;
+  // ReactNode rather than string: the Audit log mockup sets the event-count chip on the
+  // heading's own line, so a caller has to be able to pass markup. Widening is backward
+  // compatible — every existing caller passes a plain string.
+  title?: ReactNode;
   description?: string;
   icon?: ReactNode;
   actions?: ReactNode;
