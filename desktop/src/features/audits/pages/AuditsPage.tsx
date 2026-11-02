@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  Activity,
+  ArrowDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Copy,
   Download,
   RefreshCw,
   ScrollText,
   Search,
   SearchX,
-  ShieldCheck,
-  UserCheck,
+  UserPlus,
 } from "lucide-react";
 import { listAudits } from "@/features/audits/api";
 import { EmptyState, ErrorState, PageShell, PageHeader, SectionCard } from "@/components/ui/page";
@@ -139,6 +140,13 @@ const RESULT_STYLE: Record<string, { dot: string; text: string; label: string }>
  */
 const AUDIT_FETCH_LIMIT = 500;
 
+/**
+ * Rows shown per page. The mockup's pager pages over a fixed window, and the sibling
+ * tickets table fixes its size the same way (a constant, no rows-per-page control), so
+ * this page matches both rather than carrying a control the mockup does not show.
+ */
+const PAGE_SIZE = 10;
+
 export default function AuditsPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -149,7 +157,6 @@ export default function AuditsPage() {
   const [filterAction, setFilterAction] = useState("");
   const [filterResult, setFilterResult] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
   async function load() {
     setLoading(true);
@@ -188,14 +195,14 @@ export default function AuditsPage() {
     });
   }, [rows, q, filterResult]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamp rather than reset: narrowing a filter must never leave the view past the
   // last page (a blank table under a "3 / 2" pager), and it should not silently jump
   // the user back to page 1 either.
   const safePage = Math.min(page, pageCount);
   const pageRows = useMemo(
-    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filtered, safePage, pageSize],
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
   );
 
   const today = useMemo(() => {
@@ -225,8 +232,8 @@ export default function AuditsPage() {
     a.click();
   }
 
-  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, filtered.length);
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
 
   return (
     <PageShell>
@@ -237,7 +244,7 @@ export default function AuditsPage() {
           icon={<ScrollText className="size-5" />}
           title="Audit log"
           badge="Administrator"
-          description="A clear record of every important action across your workspace — sign-ins, chats, escalations, feedback, sync and admin changes."
+          description="A clear record of every important action across your workspace."
           actions={
             <div className="flex items-center gap-2">
               <button
@@ -265,19 +272,19 @@ export default function AuditsPage() {
         {/* summary cards — label left, icon right, big number, muted caption */}
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
           <SummaryCard
-            icon={<Activity className="size-4" />}
+            icon={<Copy className="size-4" />}
             label="Total events in log"
             value={total.toLocaleString()}
             caption="Across all workspace activity"
           />
           <SummaryCard
-            icon={<ShieldCheck className="size-4" />}
+            icon={<Clock className="size-4" />}
             label="Today's events"
             value={today.toLocaleString()}
             caption={`${new Date().toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })} · in loaded events`}
           />
           <SummaryCard
-            icon={<UserCheck className="size-4" />}
+            icon={<UserPlus className="size-4" />}
             label="Distinct users"
             value={users.toLocaleString()}
             caption="In loaded events"
@@ -285,12 +292,21 @@ export default function AuditsPage() {
         </div>
 
         <SectionCard
-          title="Activity stream"
-          description="Newest first"
+          // The mockup reads as one header line — "how much is in here" beside the title and
+          // "in what order" on the right — not as a subtitle under the title.
+          title={
+            <span className="flex items-center gap-2">
+              Activity stream
+              <span className="rounded-md bg-[var(--muted)] px-2 py-1 text-2xs font-medium text-muted-foreground">
+                {filtered.length.toLocaleString()} events
+              </span>
+            </span>
+          }
           icon={<ScrollText className="size-4" />}
           actions={
-            <span className="rounded-md bg-[var(--muted)] px-2 py-1 text-2xs font-medium text-muted-foreground">
-              {filtered.length.toLocaleString()} events
+            <span className="flex items-center gap-1 text-2xs text-muted-foreground">
+              Newest first
+              <ArrowDown className="size-3" />
             </span>
           }
         >
@@ -301,7 +317,7 @@ export default function AuditsPage() {
               <input
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                placeholder="Search user, domain, action or detail…"
+                placeholder="Search user, domain, or detail..."
                 className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] pl-9 pr-3 text-xs outline-none transition placeholder:text-muted-foreground focus:border-[var(--primary)]"
                 aria-label="Search audit events"
               />
@@ -325,17 +341,6 @@ export default function AuditsPage() {
               <option value="caution">Caution</option>
               <option value="answer">Answer</option>
               <option value="none">No result</option>
-            </select>
-            <select
-              value={String(pageSize)}
-              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-xs outline-none focus:border-[var(--primary)]"
-              aria-label="Rows per page"
-            >
-              <option value="10">10 rows</option>
-              <option value="25">25 rows</option>
-              <option value="50">50 rows</option>
-              <option value="100">100 rows</option>
             </select>
             <button
               onClick={resetFilters}
@@ -382,7 +387,7 @@ export default function AuditsPage() {
                         <span className="ml-2 text-muted-foreground">{fmtTime(r.created_at)}</span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex rounded-md px-2 py-0.5 text-2xs font-semibold ${toneFor(r.action)}`}>
+                        <span className={`inline-flex rounded-md px-2 py-0.5 text-2xs font-semibold capitalize ${toneFor(r.action)}`}>
                           {r.action}
                         </span>
                       </td>
