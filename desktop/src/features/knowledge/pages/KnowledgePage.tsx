@@ -390,7 +390,8 @@ export default function Knowledge({ role, onToast }: Props) {
   // browser only ever reordered the 50 loaded rows while looking like it had
   // searched the whole KB, which is the same class of wrong answer as the old
   // "50 articles" total.
-  const [pageSize, setPageSize] = useState(50);
+  // The mockup's footer reads "10 / page", so 10 is the default page size.
+  const [pageSize, setPageSize] = useState(10);
   const [sortKey, setSortKey] = useState<"last_synced" | "title" | "domain">("last_synced");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [providerFilter, setProviderFilter] = useState<string>("all");
@@ -473,7 +474,11 @@ export default function Knowledge({ role, onToast }: Props) {
   }, []);
 
   useEffect(() => {
+    // Reloads when the domain chip changes. `query` is read but deliberately not a
+    // dependency: search is submitted explicitly (handleSearch), so re-running on
+    // every keystroke would fire one request per character.
     loadList(chip, query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chip]);
 
   async function handleSearch(e: React.FormEvent) {
@@ -765,8 +770,8 @@ export default function Knowledge({ role, onToast }: Props) {
               aria-label="Sort order"
               className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
             >
-              <option value="last_synced:desc">Newest first</option>
-              <option value="last_synced:asc">Oldest first</option>
+              <option value="last_synced:desc">Recently synced</option>
+              <option value="last_synced:asc">Oldest synced</option>
               <option value="title:asc">Title A–Z</option>
               <option value="title:desc">Title Z–A</option>
               <option value="domain:asc">Domain A–Z</option>
@@ -1091,7 +1096,7 @@ export default function Knowledge({ role, onToast }: Props) {
                   onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
                   className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
                   title="Rows per page" aria-label="Rows per page">
-                  {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
+                  {[10, 25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
                 </select>
                 <div className="flex items-center gap-1.5">
                   <button
