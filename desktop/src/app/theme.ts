@@ -6,7 +6,7 @@
 export function applyStoredTheme(): void {
   // Initial default before server preferences load
   const current = document.documentElement.getAttribute("data-theme");
-  if (!current) {
+  if (!current || current === "undefined") {
     document.documentElement.setAttribute("data-theme", "light");
   }
 }
@@ -16,19 +16,19 @@ export function applyStoredTheme(): void {
  */
 export function applyUserPrefs(s: any): void {
   const root = document.documentElement;
-  let theme: string | undefined = s?.theme;
+  let theme: string;
   // If theme is explicit ("dark" | "light"), trust theme over legacy darkMode
-  if (s?.theme === "dark" || s?.theme === "light") {
-    theme = s.theme;
+  if (s?.theme === "dark") {
+    theme = "dark";
+  } else if (s?.theme === "light") {
+    theme = "light";
   } else if (typeof s?.darkMode === "boolean") {
     theme = s.darkMode ? "dark" : "light";
+  } else {
+    // Default to the reference light design
+    theme = "light";
   }
 
-  if (!theme || theme === "undefined" || theme === "system") {
-    // Check system preference if system or undefined
-    const prefersDark = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    theme = prefersDark ? "dark" : "light";
-  }
   root.setAttribute("data-theme", theme);
   const compact = typeof s?.compact === "boolean" ? s.compact : s?.density === "compact";
   root.dataset.compact = compact ? "1" : "0";

@@ -121,7 +121,7 @@ export default function PageSidebar({
   // v0.21.57 — nav items are capability-aware. Locked items stay visible (so the
   // user knows the feature exists) but clicking one shows WHY access is denied.
   const items: Array<{ id: string; label: string; icon: React.ReactNode; cap?: string; capLabel?: string }> = [
-    { id: "chat", label: "+ New", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
+    { id: "chat", label: "Chat", icon: <MessageSquare className="size-4" />, cap: "chatbot", capLabel: "Ask the AI assistant" },
     { id: "dashboard", label: "Overview", icon: <Home className="size-4" /> },
     { id: "articles", label: "Knowledge", icon: <BookOpen className="size-4" />, cap: "kb_search", capLabel: "Search the knowledge base" },
     { id: "domains", label: "Domains & Routing", icon: <Layers className="size-4" />, cap: "manage_domains", capLabel: "Manage classification domains & Jira routing" },
@@ -212,15 +212,20 @@ export default function PageSidebar({
               window.dispatchEvent(new CustomEvent("ith:new-chat"));
               setMobileOpen(false);
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50"
           >
             <Plus className="size-3.5" />
-            New Chat
+            New conversation
           </button>
         </div>
       )}
 
-      <nav className={"flex-1 py-4 " + (collapsed ? "px-2" : "px-3")}>
+      <nav className={"flex-1 py-3 " + (collapsed ? "px-2" : "px-3")}>
+        {!collapsed && (
+          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
+            Workspace
+          </p>
+        )}
         {items.map((item) => {
           const locked = item.cap ? perms && perms[item.cap] === false : false;
           return (
