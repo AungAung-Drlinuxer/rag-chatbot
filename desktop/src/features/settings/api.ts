@@ -63,13 +63,32 @@ export async function getMySettings(): Promise<UserSettings | Record<string, any
   return {};
 }
 
-export async function updateMySettings(patch: Partial<UserSettings>): Promise<UserSettings> {
+/**
+ * Save preferences. PUT /api/settings REPLACES the whole prefs blob and expects it
+ * wrapped as `{settings: {...}}`, so a partial patch is merged over the current
+ * values first — otherwise saving one toggle would drop every other preference
+ * (theme, font size, and now the per-user integration opt-ins).
+ */
+export async function updateMySettings(patch: Partial<UserSettings> | Record<string, any>): Promise<UserSettings> {
+  let merged: Record<string, any> = { ...patch };
+  try {
+    const current = await getMySettings();
+    const base = (current as any)?.settings && typeof (current as any).settings === "object"
+      ? { ...(current as any), ...(current as any).settings }
+      : { ...(current as any) };
+    delete base.username;
+    delete base.settings;
+    merged = { ...base, ...patch };
+  } catch {
+    /* first save / offline: fall back to the patch alone */
+  }
   const r = await apiFetch(`${BASE}/api/settings`, {
     method: "PUT", headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify(patch),
+    body: JSON.stringify({ settings: merged }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  const body = await r.json().catch(() => ({}));
+  return body?.settings ? { ...body.settings, ...body } : body;
 }
 
 // --- admin knobs ---

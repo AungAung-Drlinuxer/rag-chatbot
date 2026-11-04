@@ -31,7 +31,34 @@ window.fetch = (async (input: any, init?: any) => {
   reqs.push(`${init?.method ?? "GET"} ${url}`);
 
   let body: any = { ...EMPTY };
-  if (/\/api\/settings\/integrations\/llm\/models/.test(url)) {
+  if (/\/api\/settings$/.test(url) && !/integrations|smtp/.test(url)) {
+    // Realistic prefs including the per-user integration opt-in map.
+    body = {
+      settings: {
+        theme: "light", density: "comfortable", chat_font_size: 14,
+        show_rag_sources: true, show_token_usage: true, markdown_rendering: true,
+        animations: true, compact: false,
+        integration_toggles: { confluence: true, jira: true, notion: true },
+      },
+      username: "aung",
+    };
+  } else if (/\/api\/settings\/integrations\/(confluence|jira)$/.test(url)) {
+    body = {
+      ...EMPTY,
+      configured: true,
+      fields_set: ["base_url", "email", "api_token", "space_keys"],
+      secret_fields: ["api_token"],
+      token_set: true,
+      updated_at: "2026-10-31T05:00:00Z",
+    };
+  } else if (/\/api\/dashboard\/health/.test(url)) {
+    body = [
+      { name: "PostgreSQL", status: "healthy" },
+      { name: "Redis", status: "healthy" },
+      { name: "Ollama", status: "healthy" },
+      { name: "Backend", status: "healthy" },
+    ];
+  } else if (/\/api\/settings\/integrations\/llm\/models/.test(url)) {
     body = {
       models: [
         { id: "cline-pass/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash" },

@@ -178,7 +178,7 @@ const tk = await page.evaluate("window.__SETTINGS_PAGE__.tokens()");
 report.tokens = tk;
 const EXPECT = {
   background: "#F7F8FC",
-  primary: "#0048F0",
+  primary: "#7C3AED",   // v1.7.0 — violet workspace primary (was the old blue ramp)
   border: "#DDE2EC",
   mutedForeground: "#5A6478",
   slate400Text: "rgb(138, 148, 171)",     // #8A94AB — navy ramp, matches the mockup
@@ -208,11 +208,11 @@ const darkTk = await page.evaluate(`(() => {
 })()`);
 report.darkTokens = darkTk;
 const DARK_EXPECT = {
-  background: "#12151D",
-  primary: "#0048F0",
-  border: "#2A2F42",
-  mutedForeground: "#6782A0",
-  card: "#1D2130",                        // lifted 1.141:1 off the canvas
+  background: "#14121B",   // v1.5.0 charcoal-navy dark palette
+  primary: "#8B5CF6",
+  border: "#342C46",
+  mutedForeground: "#9C93B4",
+  card: "#1E1A2A",                        // plum card, lifted off the canvas
 };
 for (const [k, want] of Object.entries(DARK_EXPECT)) {
   const got = (darkTk[k] ?? "").toLowerCase();

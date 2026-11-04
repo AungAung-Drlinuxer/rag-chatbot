@@ -1,55 +1,62 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BookOpen, CheckCircle2, ChevronRight, ClipboardList, Rss,
-  Eye, EyeOff, ExternalLink, FileText, Info, KeyRound, ListChecks, Loader2,
-  Loader as LoaderIcon, Lock, NotebookPen, Pencil, RefreshCw, Save,
-  Shapes, ShieldCheck, Ticket, Trash2, Users, XCircle,
+  BookOpen, CheckCircle2, ClipboardList, ExternalLink, FileText, Info, KeyRound,
+  Loader2, Loader as LoaderIcon, Lock, NotebookPen, Pencil, Plus, Power, RefreshCw,
+  Rss, Save, Search, Settings2, Shapes, ShieldCheck, Ticket, Trash2, Users, X, XCircle,
+  Eye, EyeOff, ListChecks, ChevronRight, Sparkles,
 } from "lucide-react";
-import { getIntegrationSettings, putIntegrationSettings, deleteIntegrationSettings, testIntegration, syncOpenProjectTickets } from "@/features/settings/api";
+import {
+  deleteIntegrationSettings, getIntegrationSettings, getMySettings, putIntegrationSettings,
+  syncOpenProjectTickets, testIntegration, updateMySettings,
+} from "@/features/settings/api";
 
-type IntegrationKey = "confluence" | "jira" | "ldap" | "keycloak" | "openproject" | "xwiki" | "notion" | "clickup" | "anytype" | "hashnode";
+/* ============================================================
+   v1.7.0 — Settings → Integrations, rebuilt around OPT-IN.
 
-/** Per-integration icon. A text-only tab bar of 11 items is slow to scan; the icon is
- *  what makes the row navigable at a glance. */
-const ICON: Record<IntegrationKey, typeof BookOpen> = {
-  confluence: BookOpen,
-  jira: Ticket,
-  openproject: ClipboardList,
-  xwiki: FileText,
-  notion: NotebookPen,
-  clickup: ListChecks,
-  anytype: Shapes,
-  hashnode: Rss,
-  ldap: Users,
-  keycloak: KeyRound,
+   Ten providers on one screen is a wall of empty forms: an admin who only uses
+   Jira still had to scroll past nine credential panels. So the screen now opens
+   on a catalogue of what CAN be connected, every provider is OFF by default,
+   and only the providers the operator switches on get a configuration panel.
+   The on/off choice is per USER and persisted in that user's preference blob
+   (`integration_toggles`), because "which tools do I work with" is a personal
+   choice, while the credentials themselves stay deployment-wide (admin only).
+
+   Turning a provider off hides its panel but does NOT delete stored
+   credentials — removal stays an explicit, confirmed action inside the panel.
+============================================================ */
+
+type ProviderKey =
+  | "confluence" | "jira" | "openproject" | "xwiki" | "notion"
+  | "clickup" | "anytype" | "hashnode" | "ldap" | "keycloak";
+
+type Field = { key: string; label: string; placeholder: string; type?: string; isSecret?: boolean };
+
+type Provider = {
+  key: ProviderKey;
+  name: string;
+  tagline: string;
+  desc: string;
+  category: Category;
+  icon: typeof BookOpen;
+  docs: string;
+  fields: Field[];
 };
 
-/** Order the nav shows. Knowledge sources first (they feed the assistant), then the
- *  infrastructure ones, then the model provider. */
-const NAV_ORDER: IntegrationKey[] = [
-  "confluence", "jira", "openproject", "xwiki", "notion", "clickup", "anytype", "hashnode",
-  "ldap", "keycloak",
-];
+type Category = "Knowledge & docs" | "Work tracking" | "Identity & access";
+
+const CATEGORIES: Category[] = ["Knowledge & docs", "Work tracking", "Identity & access"];
 
 /**
- * Field groups. Every integration's fields answer one of three different questions, and
- * putting them in a single flat column is what made this screen hard to read — an endpoint,
- * a secret and an optional tuning knob all carried the same visual weight.
- *
- * The group is DERIVED from the field key rather than declared on each of the ~50 field
- * definitions, so it stays right when an integration is added. Anything unrecognised lands
- * in "options", which is the safe default: a mis-grouped endpoint is a cosmetic problem,
- * whereas silently presenting a secret as ordinary config would not be.
+ * Field groups. Every integration's fields answer one of three different questions,
+ * and a flat column made an endpoint, a secret and a tuning knob look identical.
+ * The group is DERIVED from the field key so it stays right when a provider is added.
  */
 type FieldGroup = "connection" | "credentials" | "options";
 
 const CREDENTIAL_KEYS = new Set([
-  "api_key", "api_token", "access_token", "bind_password", "client_secret", "password",
-  "token", "secret",
+  "api_key", "api_token", "access_token", "bind_password", "client_secret", "password", "token", "secret",
 ]);
-const CONNECTION_KEYS = new Set([
-  "base_url", "host", "port", "issuer", "redirect_uri", "url", "realm",
-]);
+const CONNECTION_KEYS = new Set(["base_url", "host", "port", "issuer", "redirect_uri", "url", "realm"]);
 
 function groupOf(fieldKey: string): FieldGroup {
   const k = fieldKey.toLowerCase();
@@ -65,15 +72,14 @@ const GROUP_META: Record<FieldGroup, { label: string; hint: string }> = {
   options: { label: "Options", hint: "Scope and tuning" },
 };
 
-const META: Record<IntegrationKey, {
-  label: string;
-  desc: string;
-  docs: string;
-  fields: Array<{ key: string; label: string; placeholder: string; type?: string; isSecret?: boolean }>;
-}> = {
-  confluence: {
-    label: "Confluence (Knowledge Base)",
-    desc: "Connect Confluence Cloud to import pages into the knowledge base.",
+const PROVIDERS: Provider[] = [
+  {
+    key: "confluence",
+    name: "Confluence",
+    tagline: "Import wiki spaces into the knowledge base",
+    desc: "Connect Confluence Cloud to import pages into the knowledge base. Pages from the listed spaces are chunked, embedded and become answer sources.",
+    category: "Knowledge & docs",
+    icon: BookOpen,
     docs: "https://id.atlassian.com/manage-profile/security/api-tokens",
     fields: [
       { key: "base_url", label: "Base URL", placeholder: "https://your-domain.atlassian.net/wiki" },
@@ -82,45 +88,70 @@ const META: Record<IntegrationKey, {
       { key: "space_keys", label: "Space Keys (comma separated)", placeholder: "HELP, IT, ENG" },
     ],
   },
-  jira: {
-    label: "Jira (Issue Tracking)",
-    desc: "Connect Jira Cloud to auto-create escalation tickets.",
-    docs: "https://id.atlassian.com/manage-profile/security/api-tokens",
+  {
+    key: "notion",
+    name: "Notion",
+    tagline: "Import shared pages and databases",
+    desc:
+      "Import Notion pages into the knowledge base with an internal integration token. A page must be shared with the " +
+      "integration (page → … → Connections) or it returns 404 even with a valid token. Nested blocks are parsed " +
+      "recursively and sub-pages become their own articles.",
+    category: "Knowledge & docs",
+    icon: NotebookPen,
+    docs: "https://www.notion.so/my-integrations",
     fields: [
-      { key: "base_url", label: "Base URL", placeholder: "https://your-domain.atlassian.net" },
-      { key: "email", label: "Account Email", placeholder: "you@your-domain.com" },
-      { key: "api_token", label: "API Token", placeholder: "ATATT3xFfGF0...", isSecret: true },
-      { key: "project_key", label: "Default Project Key", placeholder: "ITHD" },
+      { key: "api_token", label: "Internal Integration Secret", placeholder: "ntn_... or secret_...", isSecret: true },
+      { key: "source_ids", label: "Page / Database IDs (empty = all shared)", placeholder: "1f2a...c9, 8b7d...42" },
+      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
+      { key: "max_pages", label: "Max pages per sync", placeholder: "300" },
     ],
   },
-  ldap: {
-    label: "LDAP / Active Directory",
-    desc: "Authenticate users against your corporate directory (AD). Used for login + group-based role mapping.",
-    docs: "https://ldap3.readthedocs.io/",
+  {
+    key: "anytype",
+    name: "Anytype",
+    tagline: "Read objects from a local-first space",
+    desc:
+      "Import objects from a local-first Anytype space. Anytype runs on YOUR machine, so the base URL is usually " +
+      "http://127.0.0.1:31009 for the desktop app (CLI: 31012) — a containerised backend cannot reach loopback. " +
+      "Every request also needs an Anytype-Version header; leave it blank for the dated default. Reads only.",
+    category: "Knowledge & docs",
+    icon: Shapes,
+    docs: "https://developers.anytype.io/docs/reference",
     fields: [
-      { key: "host", label: "LDAP Server Host", placeholder: "ldaps://ad.your-domain.local or 10.10.10.10" },
-      { key: "port", label: "Port", placeholder: "389 or 636 (LDAPS)" },
-      { key: "bind_dn", label: "Bind DN (service account)", placeholder: "CN=svc-chatbot,OU=Service,DC=corp,DC=local" },
-      { key: "bind_password", label: "Bind Password", placeholder: "service account password", isSecret: true },
-      { key: "base_dn", label: "Base DN (search root)", placeholder: "DC=corp,DC=local" },
-      { key: "user_filter", label: "User Filter", placeholder: "(sAMAccountName={username})" },
+      { key: "base_url", label: "Anytype API base URL", placeholder: "http://127.0.0.1:31009" },
+      { key: "api_key", label: "API Key (Anytype → Settings → API Keys)", placeholder: "your Anytype API key", isSecret: true },
+      { key: "api_version", label: "Anytype-Version header (blank = 2025-11-08)", placeholder: "2025-11-08" },
+      { key: "space_ids", label: "Space IDs or names (empty = all spaces)", placeholder: "My Space, 6f2a...c9" },
+      { key: "object_types", label: "Object types (empty = all)", placeholder: "page, note" },
+      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
+      { key: "max_objects", label: "Max objects per sync", placeholder: "300" },
     ],
   },
-  keycloak: {
-    label: "Keycloak SSO",
-    desc: "Single sign-on via Keycloak (OpenID Connect). Users sign in with the realm identity provider instead of local passwords.",
-    docs: "https://www.keycloak.org/documentation",
+  {
+    key: "xwiki",
+    name: "XWiki",
+    tagline: "Ingest pages from a self-hosted wiki",
+    desc: "Connect an external XWiki instance. Pages from the configured spaces are ingested into the knowledge base alongside Confluence.",
+    category: "Knowledge & docs",
+    icon: FileText,
+    docs: "https://www.xwiki.org/xwiki/bin/view/Documentation/UserGuide/Features/XWikiRESTfulAPIReferenceGuide/",
     fields: [
-      { key: "issuer", label: "Issuer / Base URL", placeholder: "https://keycloak-chatbot.drlinuxer.com" },
-      { key: "realm", label: "Realm", placeholder: "ith-chatbot" },
-      { key: "client_id", label: "Client ID", placeholder: "it-help-chatbot" },
-      { key: "client_secret", label: "Client Secret", placeholder: "OIDC client secret", isSecret: true },
-      { key: "redirect_uri", label: "Redirect URI", placeholder: "https://chat.drlinuxer.com/auth/callback" },
+      { key: "base_url", label: "Base URL", placeholder: "https://xwiki.drlinuxer.com" },
+      { key: "username", label: "Username", placeholder: "xwiki service user" },
+      { key: "api_token", label: "API Token / Password", placeholder: "xwiki access token", isSecret: true },
+      { key: "wiki", label: "Wiki Name", placeholder: "xwiki" },
+      { key: "spaces", label: "Spaces (comma separated)", placeholder: "Main,IT,Help" },
     ],
   },
-  hashnode: {
-    label: "Hashnode (Blog)",
-    desc: "Ingest a Hashnode blog's published posts into the knowledge base. Reads go through the GraphQL API at gql.hashnode.com — note that Hashnode retired free API access on 2026-05-13, so every query now needs a Pro plan on the publication. The PAT is write-only.",
+  {
+    key: "hashnode",
+    name: "Hashnode",
+    tagline: "Ingest published blog posts",
+    desc:
+      "Ingest a Hashnode blog's published posts. Reads go through the GraphQL API at gql.hashnode.com — Hashnode " +
+      "retired free API access on 2026-05-13, so every query now needs a Pro plan on the publication. The PAT is write-only.",
+    category: "Knowledge & docs",
+    icon: Rss,
     docs: "https://hashnode.com/settings/developer",
     fields: [
       { key: "publication_host", label: "Publication host", placeholder: "blog.example.com" },
@@ -131,242 +162,301 @@ const META: Record<IntegrationKey, {
       { key: "include_drafts", label: "Include drafts", placeholder: "false" },
     ],
   },
-  openproject: {
-    label: "OpenProject (Tickets & Wiki)",
+  {
+    key: "jira",
+    name: "Jira",
+    tagline: "Auto-create escalation tickets",
+    desc: "Connect Jira Cloud to auto-create escalation tickets. The project key is the default target when the assistant escalates a conversation.",
+    category: "Work tracking",
+    icon: Ticket,
+    docs: "https://id.atlassian.com/manage-profile/security/api-tokens",
+    fields: [
+      { key: "base_url", label: "Base URL", placeholder: "https://your-domain.atlassian.net" },
+      { key: "email", label: "Account Email", placeholder: "you@your-domain.com" },
+      { key: "api_token", label: "API Token", placeholder: "ATATT3xFfGF0...", isSecret: true },
+      { key: "project_key", label: "Default Project Key", placeholder: "ITHD" },
+    ],
+  },
+  {
+    key: "openproject",
+    name: "OpenProject",
+    tagline: "Sync work packages and wiki pages",
     desc: "Connect a self-hosted OpenProject instance. Syncs work packages as tickets and optionally ingests wiki pages into the knowledge base.",
+    category: "Work tracking",
+    icon: ClipboardList,
     docs: "https://www.openproject.org/docs/api/",
     fields: [
       { key: "base_url", label: "Base URL", placeholder: "https://openproject.drlinuxer.com" },
       { key: "api_key", label: "API Key", placeholder: "OpenProject access token", isSecret: true },
       { key: "project_id", label: "Project ID", placeholder: "1 or project identifier" },
-      { key: "wiki_enabled", label: "Ingest Wiki Pages (true/false)", placeholder: "true" },
+      { key: "wiki_enabled", label: "Ingest wiki pages (true/false)", placeholder: "true" },
     ],
   },
-  xwiki: {
-    label: "XWiki (Knowledge Base)",
-    desc: "Connect an external XWiki instance. Pages from the configured spaces are ingested into the knowledge base alongside Confluence.",
-    docs: "https://www.xwiki.org/xwiki/bin/view/Documentation/UserGuide/Features/XWikiRESTfulAPIReferenceGuide/",
-    fields: [
-      { key: "base_url", label: "Base URL", placeholder: "https://xwiki.drlinuxer.com" },
-      { key: "username", label: "Username", placeholder: "xwiki service user" },
-      { key: "api_token", label: "API Token / Password", placeholder: "xwiki access token", isSecret: true },
-      { key: "wiki", label: "Wiki Name", placeholder: "xwiki" },
-      { key: "spaces", label: "Spaces (comma separated)", placeholder: "Main,IT,Help" },
-    ],
-  },
-  notion: {
-    label: "Notion (Knowledge Base)",
+  {
+    key: "clickup",
+    name: "ClickUp",
+    tagline: "Import docs and tasks from Lists",
     desc:
-      "Import Notion pages into the knowledge base. Uses a Notion internal integration token. " +
-      "IMPORTANT: a page must be shared with the integration (page -> ... -> Connections) or it " +
-      "returns 404 even with a valid token. Nested blocks are parsed recursively and sub-pages " +
-      "are ingested as their own articles automatically.",
-    docs: "https://www.notion.so/my-integrations",
-    fields: [
-      { key: "api_token", label: "Internal Integration Secret", placeholder: "ntn_... or secret_...", isSecret: true },
-      { key: "source_ids", label: "Page / Database IDs (comma separated, empty = all shared)", placeholder: "1f2a...c9, 8b7d...42" },
-      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
-      { key: "max_pages", label: "Max pages per sync", placeholder: "300" },
-    ],
-  },
-  clickup: {
-    label: "ClickUp (Docs & Tasks)",
-    desc:
-      "Import ClickUp Docs and/or tasks from named Lists. Uses a ClickUp personal token (pk_...) — " +
-      "the raw token goes in the Authorization header, never with a 'Bearer ' prefix. " +
-      "Docs come from the whole workspace (leave Doc IDs empty for all of them). Tasks are only " +
-      "read from Lists you name — enter real LIST ids, not the workspace id (a wrong id returns " +
-      "404 'List not found' and silently syncs nothing). Set KB Domain Tag to a real domain such " +
-      "as 'general', otherwise the content lands in a domain no role can read.",
+      "Import ClickUp Docs and/or tasks from named Lists using a personal token (pk_...) — the raw token goes in the " +
+      "Authorization header, never with a 'Bearer ' prefix. Docs come from the whole workspace (leave Doc IDs empty " +
+      "for all). Tasks are only read from Lists you name: enter real LIST ids, not the workspace id.",
+    category: "Work tracking",
+    icon: ListChecks,
     docs: "https://developer.clickup.com/docs/authentication",
     fields: [
       { key: "api_token", label: "Personal API Token", placeholder: "pk_12345678_ABCDEF...", isSecret: true },
-      { key: "doc_ids", label: "Doc IDs (empty = all docs in the workspace)", placeholder: "8c9c4a1-1018" },
+      { key: "doc_ids", label: "Doc IDs (empty = all docs)", placeholder: "8c9c4a1-1018" },
       { key: "list_ids", label: "List IDs for tasks (NOT the workspace id)", placeholder: "901804099497" },
-      { key: "workspace_ids", label: "Workspace ID (optional — first visible workspace is used)", placeholder: "9018580345" },
+      { key: "workspace_ids", label: "Workspace ID (optional)", placeholder: "9018580345" },
       { key: "include_comments", label: "Include task comments (true/false)", placeholder: "false" },
       { key: "min_chars", label: "Minimum task text length", placeholder: "120" },
-      { key: "domain", label: "KB Domain Tag (use a real domain, e.g. general)", placeholder: "general" },
+      { key: "domain", label: "KB Domain Tag (e.g. general)", placeholder: "general" },
       { key: "max_tasks", label: "Max tasks per sync", placeholder: "500" },
     ],
   },
-  anytype: {
-    label: "Anytype (Knowledge Base)",
-    desc:
-      "Import objects from a local-first Anytype space into the knowledge base. Anytype runs on " +
-      "YOUR machine, so the base URL is usually http://127.0.0.1:31009 for the desktop app (the " +
-      "CLI listens on 31012) — a containerised backend cannot reach loopback, so point this at a " +
-      "reachable host instead. Create the key in Anytype under Settings → API Keys. " +
-      "Anytype ALSO requires an 'Anytype-Version' header on every request: leave it blank to use " +
-      "the dated default, and change it if a newer Anytype refuses the old one. " +
-      "Objects are read as blocks and flattened to markdown; an object that yields no text is " +
-      "skipped rather than indexed as a blank article. Nothing is ever written back to Anytype — " +
-      "this integration only issues reads.",
-    docs: "https://developers.anytype.io/docs/reference",
+  {
+    key: "ldap",
+    name: "LDAP / Active Directory",
+    tagline: "Corporate directory login",
+    desc: "Authenticate users against your corporate directory (AD). Used for login plus group-based role mapping.",
+    category: "Identity & access",
+    icon: Users,
+    docs: "https://ldap3.readthedocs.io/",
     fields: [
-      { key: "base_url", label: "Anytype API base URL", placeholder: "http://127.0.0.1:31009" },
-      { key: "api_key", label: "API Key (Anytype → Settings → API Keys)", placeholder: "your Anytype API key", isSecret: true },
-      { key: "api_version", label: "Anytype-Version header (blank = 2025-11-08)", placeholder: "2025-11-08" },
-      { key: "space_ids", label: "Space IDs or names (comma separated, empty = all spaces)", placeholder: "My Space, 6f2a...c9" },
-      { key: "object_types", label: "Object types (comma separated, empty = all)", placeholder: "page, note" },
-      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
-      { key: "max_objects", label: "Max objects per sync", placeholder: "300" },
+      { key: "host", label: "LDAP Server Host", placeholder: "ldaps://ad.your-domain.local or 10.10.10.10" },
+      { key: "port", label: "Port", placeholder: "389 or 636 (LDAPS)" },
+      { key: "bind_dn", label: "Bind DN (service account)", placeholder: "CN=svc-chatbot,OU=Service,DC=corp,DC=local" },
+      { key: "bind_password", label: "Bind Password", placeholder: "service account password", isSecret: true },
+      { key: "base_dn", label: "Base DN (search root)", placeholder: "DC=corp,DC=local" },
+      { key: "user_filter", label: "User Filter", placeholder: "(sAMAccountName={username})" },
     ],
   },
-};
+  {
+    key: "keycloak",
+    name: "Keycloak SSO",
+    tagline: "Single sign-on over OpenID Connect",
+    desc: "Single sign-on via Keycloak. Users sign in with the realm identity provider instead of local passwords.",
+    category: "Identity & access",
+    icon: KeyRound,
+    docs: "https://www.keycloak.org/documentation",
+    fields: [
+      { key: "issuer", label: "Issuer / Base URL", placeholder: "https://keycloak-chatbot.drlinuxer.com" },
+      { key: "realm", label: "Realm", placeholder: "ith-chatbot" },
+      { key: "client_id", label: "Client ID", placeholder: "it-help-chatbot" },
+      { key: "client_secret", label: "Client Secret", placeholder: "OIDC client secret", isSecret: true },
+      { key: "redirect_uri", label: "Redirect URI", placeholder: "https://chat.drlinuxer.com/auth/callback" },
+    ],
+  },
+];
 
-/** Tab label without the parenthetical: "Confluence (Knowledge Base)" → "Confluence". */
-function shortLabel(k: IntegrationKey): string {
-  return META[k].label.split(" (")[0].split(" /")[0].replace(" SSO", "");
+const BY_KEY = Object.fromEntries(PROVIDERS.map((p) => [p.key, p])) as Record<ProviderKey, Provider>;
+
+/** Per-user opt-in map, stored in the user's preference blob. */
+const PREF_KEY = "integration_toggles";
+
+/* ============================================================
+   SMALL UI PIECES
+============================================================ */
+
+function Switch({ on, onChange, label }: { on: boolean; onChange: (next: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      className={[
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors",
+        on
+          ? "border-transparent bg-[var(--primary)]"
+          : "border-[var(--border)] bg-muted",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "size-3.5 rounded-full bg-white shadow-sm transition-transform",
+          on ? "translate-x-[18px]" : "translate-x-[3px]",
+        ].join(" ")}
+      />
+    </button>
+  );
 }
 
-export function IntegrationsConfig() {
-  const [active, setActive] = useState<IntegrationKey>("confluence");
-  // v1.6.35 — `form` holds ONLY newly typed values. Stored values are never
-  // loaded into it (the API does not return them), so a plain Save can never
-  // re-submit or overwrite a secret with a placeholder.
+function StatusPill({ configured }: { configured?: boolean }) {
+  if (configured === undefined) {
+    // Unknown, not "unconfigured": the status probe is still in flight (or failed),
+    // and claiming "Needs setup" for a live integration would be a lie.
+    return <span className="text-2xs text-muted-foreground/60">Status unavailable</span>;
+  }
+  return configured ? (
+    <span className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--ok)]">
+      <CheckCircle2 className="h-3 w-3" /> Configured
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
+      <span className="size-1.5 rounded-full bg-[var(--warn)]" /> Needs setup
+    </span>
+  );
+}
+
+/* ============================================================
+   PROVIDER EDITOR — only mounted for an enabled provider
+============================================================ */
+
+function ProviderEditor({ provider, onConfigured }: {
+  provider: Provider;
+  onConfigured: (key: ProviderKey, configured: boolean) => void;
+}) {
+  // `form` holds ONLY newly typed values. Stored values are never loaded into it
+  // (the API does not return them), so Save can never re-submit a placeholder.
   const [form, setForm] = useState<Record<string, string>>({});
   const [fieldsSet, setFieldsSet] = useState<string[]>([]);
   const [secretFields, setSecretFields] = useState<string[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [replacing, setReplacing] = useState<Record<string, boolean>>({});
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [clearing, setClearing] = useState(false);
   const [tokenSet, setTokenSet] = useState(false);
-  // PER FIELD. A single shared flag meant revealing one secret revealed every secret on
-  // the form at once, which is the opposite of what an eye toggle is for.
-  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = async (key: IntegrationKey) => {
-    setResult(null);
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await getIntegrationSettings(key);
-      // Every integration here is write-only: nothing readable is ever seeded back into
-      // the form, so a stored value can only be replaced, never read.
+      const res = await getIntegrationSettings(provider.key);
       setForm({});
       setReplacing({});
-      setFieldsSet(res.fields_set || []);
+      const set = res.fields_set || [];
+      setFieldsSet(set);
       setSecretFields(res.secret_fields || []);
       setUpdatedAt(res.updated_at || null);
       setTokenSet(!!res.token_set || (res.secret_fields || []).length > 0);
+      onConfigured(provider.key, set.length > 0);
     } catch {
       setForm({});
       setFieldsSet([]);
       setSecretFields([]);
       setUpdatedAt(null);
       setTokenSet(false);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [provider.key, onConfigured]);
 
-  /** True when the stored config already holds a value for this field. */
+  useEffect(() => {
+    setResult(null);
+    setRevealed({});
+    load();
+  }, [load]);
+
   const isConfigured = (fieldKey: string) => fieldsSet.includes(fieldKey);
-
-  /** A field is editable only after the admin explicitly chooses Replace, or when
-   *  nothing is stored yet. */
   const isEditable = (fieldKey: string) =>
     !isConfigured(fieldKey) || !!replacing[fieldKey] || fieldKey in form;
 
-  const clearIntegration = async () => {
+  async function save() {
+    setSaving(true);
+    setResult(null);
+    const payload: Record<string, string> = {};
+    for (const [k, v] of Object.entries(form)) if (typeof v === "string" && v.trim()) payload[k] = v;
+    const changed = Object.keys(payload).length;
+    try {
+      await putIntegrationSettings(provider.key, payload);
+      setResult({
+        ok: true,
+        message: changed
+          ? `Saved ${changed} field(s). Run Test to verify the connection.`
+          : "Nothing new to save — stored values are unchanged.",
+      });
+      await load();
+    } catch (e: any) {
+      setResult({ ok: false, message: e?.message || "Save failed" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function test() {
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await testIntegration(provider.key);
+      setResult(res?.ok
+        ? { ok: true, message: `Connected as ${res.user || "user"}` }
+        : { ok: false, message: res?.detail || res?.error || "Connection failed" });
+    } catch (e: any) {
+      setResult({ ok: false, message: e?.message || "Test failed" });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function clear() {
     if (!window.confirm(
-      `Remove the stored ${META[active].label} configuration?\n\n` +
+      `Remove the stored ${provider.name} configuration?\n\n` +
       "Credentials are write-only, so this is the only way to revoke them. " +
       "The integration stops working until it is configured again."
     )) return;
     setClearing(true);
     setResult(null);
     try {
-      await deleteIntegrationSettings(active);
+      await deleteIntegrationSettings(provider.key);
       setResult({ ok: true, message: "Stored configuration removed." });
-      await load(active);
+      await load();
     } catch (e: any) {
       setResult({ ok: false, message: e?.message || "Could not clear the configuration" });
     } finally {
       setClearing(false);
     }
-  };
+  }
 
-  const switchTab = (key: IntegrationKey) => {
-    setActive(key);
-    setRevealed({});
-    setReplacing({});
-    load(key);
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setResult(null);
-    // Only fields the admin actually typed are sent. Omitted fields keep their
-    // stored value server-side, so a write-only field can never be blanked.
-    const payload: Record<string, string> = {};
-    for (const [k, v] of Object.entries(form)) {
-      if (typeof v === "string" && v.trim()) payload[k] = v;
-    }
-    const changed = Object.keys(payload).length;
-    try {
-      await putIntegrationSettings(active, payload);
-      setResult({
-        ok: true,
-        message: changed
-          ? `Saved ${changed} field(s). Click Test to verify the connection.`
-          : "Nothing new to save — stored values are unchanged.",
-      });
-      await load(active);
-    } catch (e: any) {
-      setResult({ ok: false, message: e?.message || "Save failed" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const test = async () => {
-    setTesting(true);
+  async function syncTickets() {
+    setSyncing(true);
     setResult(null);
     try {
-      const res = await testIntegration(active);
-      if (res?.ok) setResult({ ok: true, message: `Connected as ${res.user || "user"}` });
-      else setResult({ ok: false, message: res?.detail || res?.error || "Connection failed" });
+      const res = await syncOpenProjectTickets();
+      setResult(res?.ok
+        ? { ok: true, message: `Synced: ${res.created ?? 0} created, ${res.updated ?? 0} updated (total ${res.total ?? 0})` }
+        : { ok: false, message: res?.message || "Sync failed" });
     } catch (e: any) {
-      setResult({ ok: false, message: e?.message || "Test failed" });
+      setResult({ ok: false, message: e?.message || "Sync failed" });
     } finally {
-      setTesting(false);
+      setSyncing(false);
     }
-  };
+  }
 
-  /** One field row. Kept as a local function so the grouping loop above stays readable. */
-  function renderField(f: { key: string; label: string; placeholder: string; type?: string; isSecret?: boolean }) {
+  function renderField(f: Field) {
     const configured = isConfigured(f.key);
     const editable = isEditable(f.key);
     const isSecret = !!f.isSecret || secretFields.includes(f.key);
     const show = !!revealed[f.key];
-    const showBadge = configured;
 
     return (
       <div key={f.key} className="space-y-1.5">
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+        <label className="flex items-center gap-2 text-xs font-medium text-foreground">
           {f.label}
-          {showBadge && (
-            <span className="inline-flex items-center gap-1 text-2xs text-emerald-600">
+          {configured && (
+            <span className="inline-flex items-center gap-1 text-2xs text-[var(--ok)]">
               {isSecret ? <Lock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
               {isSecret ? "Saved — not retrievable" : "Configured"}
             </span>
           )}
         </label>
 
-        {/* A stored value is never rendered. The admin sees a mask and must press Replace. */}
         {configured && !editable ? (
           <div className="flex items-center gap-2">
-            <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-              <Lock className="h-3 w-3 shrink-0 text-slate-400" />
-              <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
-              <span className="ml-auto text-2xs text-slate-400">write-only</span>
+            <div className="flex flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-muted/40 px-3 py-2">
+              <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="select-none font-mono text-xs tracking-widest text-muted-foreground">••••••••</span>
+              <span className="ml-auto text-2xs text-muted-foreground">write-only</span>
             </div>
             <button
               type="button"
               onClick={() => setReplacing({ ...replacing, [f.key]: true })}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/50"
               title="Enter a new value for this field"
             >
               <Pencil className="h-3.5 w-3.5" /> Replace
@@ -374,34 +464,34 @@ export function IntegrationsConfig() {
           </div>
         ) : (
           <>
-              <div className="relative">
-                <input
-                  type={isSecret && !show ? "password" : (f.type || "text")}
-                  value={form[f.key] || ""}
-                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                  placeholder={isSecret && tokenSet ? "leave blank to keep current" : f.placeholder}
-                  /* Security: an integration token is not a site login. Without these the
-                     browser and password managers offer to save it into the admin's personal
-                     vault, and autocorrect/spellcheck can ship the value to a third party. */
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  data-1p-ignore
-                  data-lpignore="true"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                />
-                {isSecret && (
-                  <button
-                    type="button"
-                    aria-label={show ? `Hide ${f.label}` : `Reveal ${f.label}`}
-                    onClick={() => setRevealed({ ...revealed, [f.key]: !show })}
-                    className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600"
-                  >
-                    {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  </button>
-                )}
-              </div>
+            <div className="relative">
+              <input
+                type={isSecret && !show ? "password" : (f.type || "text")}
+                value={form[f.key] || ""}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                placeholder={isSecret && tokenSet ? "leave blank to keep current" : f.placeholder}
+                /* Security: an integration token is not a site login. Without these the
+                   browser and password managers offer to save it, and autocorrect can
+                   ship the value to a third party. */
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
+                className="w-full rounded-xl border border-[var(--border)] bg-background px-3 py-2 pr-10 font-mono text-xs text-foreground outline-none transition placeholder:font-sans placeholder:text-muted-foreground focus:border-[var(--primary)]"
+              />
+              {isSecret && (
+                <button
+                  type="button"
+                  aria-label={show ? `Hide ${f.label}` : `Reveal ${f.label}`}
+                  onClick={() => setRevealed({ ...revealed, [f.key]: !show })}
+                  className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
+                >
+                  {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              )}
+            </div>
             {configured && (
               <button
                 type="button"
@@ -411,7 +501,7 @@ export function IntegrationsConfig() {
                   delete next[f.key];
                   setForm(next);
                 }}
-                className="mt-1 text-2xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300"
+                className="mt-1 text-2xs text-muted-foreground underline hover:text-foreground"
               >
                 Keep the stored value
               </button>
@@ -423,177 +513,466 @@ export function IntegrationsConfig() {
   }
 
   const groups = GROUP_ORDER
-    .map((g) => ({ group: g, fields: META[active].fields.filter((f) => groupOf(f.key) === g) }))
+    .map((g) => ({ group: g, fields: provider.fields.filter((f) => groupOf(f.key) === g) }))
     .filter((x) => x.fields.length > 0);
-
   const dirty = Object.values(form).some((v) => typeof v === "string" && v.trim().length > 0);
 
   return (
-    <div className="flex flex-col lg:flex-row">
-      {/* ---- nav rail ------------------------------------------------------------ */}
-      <nav className="shrink-0 border-b border-slate-200 p-3 dark:border-slate-800 lg:w-60 lg:border-b-0 lg:border-r">
-        <p className="hidden px-2 pb-2 text-2xs font-semibold uppercase tracking-wider text-slate-400 lg:block">
-          Knowledge &amp; Services
-        </p>
-        <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
-          {NAV_ORDER.map((k) => {
-            const Icon = ICON[k];
-            const on = active === k;
-            return (
-              <button
-                key={k}
-                onClick={() => switchTab(k)}
-                title={META[k].label}
-                className={[
-                  "flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium transition lg:w-full",
-                  on
-                    ? "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
-                    : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60",
-                ].join(" ")}
-              >
-                <Icon className="size-3.5 shrink-0" />
-                <span className="whitespace-nowrap lg:truncate">{shortLabel(k)}</span>
-                {on && <ChevronRight className="ml-auto hidden size-3 shrink-0 lg:block" />}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-
-      {/* ---- panel --------------------------------------------------------------- */}
-      <div className="min-w-0 flex-1 p-5">
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+      {/* header */}
+      <header className="border-b border-[var(--border)] bg-muted/20 px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{META[active].label}</h3>
-              {fieldsSet.length > 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3 w-3" /> Configured
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-2xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                  <span className="size-1.5 rounded-full bg-slate-400" /> Not configured
-                </span>
-              )}
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)] text-[var(--accent-foreground)]">
+              <provider.icon className="size-5" />
             </div>
-            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-              {META[active].desc}
-            </p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold tracking-tight">{provider.name}</h3>
+                <StatusPill configured={loading ? undefined : fieldsSet.length > 0} />
+              </div>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">{provider.desc}</p>
+            </div>
           </div>
           <a
-            href={META[active].docs}
+            href={provider.docs}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-2xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] px-2.5 py-1.5 text-2xs font-medium text-foreground transition hover:bg-muted/50"
           >
-            Get API token <ExternalLink className="h-3 w-3" />
+            Provider docs <ExternalLink className="h-3 w-3" />
           </a>
         </div>
+      </header>
 
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50">
-          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-          <p className="text-2xs leading-relaxed text-slate-600 dark:text-slate-400">
-            <b>Credentials are write-only.</b> Every value below — URLs, hosts, accounts, keys and
-            tokens — is stored server-side and is <b>never returned</b> once saved. Enter a value
-            only when adding or replacing it; leaving a field blank keeps what is already stored.
-            {updatedAt && <> Last saved {new Date(updatedAt).toLocaleString()}.</>}
+      {/* write-only banner */}
+      <div className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-[var(--border)] bg-muted/30 px-3 py-2.5">
+        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ok)]" />
+        <p className="text-2xs leading-relaxed text-muted-foreground">
+          <b className="text-foreground">Credentials are write-only.</b> Every value below — URLs, hosts, accounts,
+          keys and tokens — is stored server-side and <b className="text-foreground">never returned</b> once saved.
+          Enter a value only to add or replace it; leaving a field blank keeps what is stored.
+          {updatedAt && <> Last saved {new Date(updatedAt).toLocaleString()}.</>}
+        </p>
+      </div>
+
+      {/* fields */}
+      <div className="space-y-5 px-5 py-4">
+        {loading ? (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading stored configuration…
           </p>
-        </div>
-
-        <div className="mt-5 space-y-6">
-          {groups.map(({ group, fields }) => (
+        ) : (
+          groups.map(({ group, fields }) => (
             <section key={group}>
-              <div className="mb-2 flex flex-wrap items-baseline gap-2 border-b border-slate-100 pb-1.5 dark:border-slate-800">
-                <h4 className="text-2xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <div className="mb-2 flex flex-wrap items-baseline gap-2 border-b border-[var(--border)] pb-1.5">
+                <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {GROUP_META[group].label}
                 </h4>
-                <span className="text-2xs text-slate-400">{GROUP_META[group].hint}</span>
-                {group === "credentials" && <Lock className="size-3 text-slate-400" />}
+                <span className="text-2xs text-muted-foreground/70">{GROUP_META[group].hint}</span>
+                {group === "credentials" && <Lock className="size-3 text-muted-foreground" />}
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {fields.map(renderField)}
               </div>
             </section>
-          ))}
-        </div>
-
-        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save
-          </button>
-          <button
-            onClick={test}
-            disabled={testing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LoaderIcon className="h-3.5 w-3.5" />}
-            Test connection
-          </button>
-          {active === "openproject" && (
-            <button
-              onClick={async () => {
-                setSyncing(true);
-                setResult(null);
-                try {
-                  const res = await syncOpenProjectTickets();
-                  if (res?.ok) {
-                    setResult({ ok: true, message: `Synced: ${res.created ?? 0} created, ${res.updated ?? 0} updated (total ${res.total ?? 0})` });
-                  } else {
-                    setResult({ ok: false, message: res?.message || "Sync failed" });
-                  }
-                } catch (e: any) {
-                  setResult({ ok: false, message: e?.message || "Sync failed" });
-                } finally {
-                  setSyncing(false);
-                }
-              }}
-              disabled={syncing}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
-              title="Pull work packages from OpenProject into the tickets board"
-            >
-              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Sync tickets now
-            </button>
-          )}
-
-          {fieldsSet.length > 0 && (
-            <button
-              onClick={clearIntegration}
-              disabled={clearing}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30"
-              title="Revoke the stored credentials — the only way to remove a write-only value"
-            >
-              {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              Remove stored settings
-            </button>
-          )}
-        </div>
-
-        {/* Unsaved input is called out, because a write-only field cannot be read back to
-            check whether the value was actually stored. */}
-        {dirty && !result && (
-          <p className="mt-2 flex items-center gap-1 text-2xs text-amber-600 dark:text-amber-400">
-            <Info className="h-3 w-3" /> Unsaved changes — press Save to store them.
-          </p>
-        )}
-
-        {result && (
-          <p
-            className={[
-              "mt-2 inline-flex items-center gap-1 text-xs",
-              result.ok ? "text-emerald-600" : "text-rose-600",
-            ].join(" ")}
-          >
-            {result.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-            {result.message}
-          </p>
+          ))
         )}
       </div>
+
+      {/* actions */}
+      <footer className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] bg-muted/20 px-5 py-3.5">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--primary)] px-3.5 py-2 text-xs font-medium text-[var(--primary-foreground)] transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save
+        </button>
+        <button
+          onClick={test}
+          disabled={testing}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3.5 py-2 text-xs font-medium text-foreground transition hover:bg-muted/50 disabled:opacity-50"
+        >
+          {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LoaderIcon className="h-3.5 w-3.5" />}
+          Test connection
+        </button>
+        {provider.key === "openproject" && (
+          <button
+            onClick={syncTickets}
+            disabled={syncing}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--accent)] px-3.5 py-2 text-xs font-medium text-[var(--accent-foreground)] transition hover:opacity-90 disabled:opacity-50"
+            title="Pull work packages from OpenProject into the tickets board"
+          >
+            {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Sync tickets now
+          </button>
+        )}
+        {fieldsSet.length > 0 && (
+          <button
+            onClick={clear}
+            disabled={clearing}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3.5 py-2 text-xs font-medium text-[var(--danger)] transition hover:bg-[var(--danger)]/10 disabled:opacity-50"
+            title="Revoke the stored credentials — the only way to remove a write-only value"
+          >
+            {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Remove stored settings
+          </button>
+        )}
+      </footer>
+
+      {(dirty || result) && (
+        <div className="border-t border-[var(--border)] px-5 py-2.5">
+          {dirty && !result && (
+            <p className="flex items-center gap-1 text-2xs text-[var(--warn)]">
+              <Info className="h-3 w-3" /> Unsaved changes — press Save to store them.
+            </p>
+          )}
+          {result && (
+            <p className={["flex items-center gap-1 text-xs", result.ok ? "text-[var(--ok)]" : "text-[var(--danger)]"].join(" ")}>
+              {result.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+              {result.message}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ============================================================
+   CATALOGUE — the browse view; everything starts OFF
+============================================================ */
+
+function Catalog({ enabled, status, onToggle, onConfigure }: {
+  enabled: Record<string, boolean>;
+  status: Record<string, boolean>;
+  onToggle: (key: ProviderKey, next: boolean) => void;
+  onConfigure: (key: ProviderKey) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<Category | "All">("All");
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return PROVIDERS.filter((p) =>
+      (category === "All" || p.category === category) &&
+      (!q || `${p.name} ${p.tagline} ${p.category} ${p.desc}`.toLowerCase().includes(q))
+    );
+  }, [query, category]);
+
+  return (
+    <div className="space-y-4">
+      {/* toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search integrations"
+            placeholder="Search integrations…"
+            className="h-9 w-full rounded-xl border border-[var(--border)] bg-background pl-9 pr-3 text-xs text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[var(--primary)]"
+          />
+        </div>
+        <div className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-muted/30 p-1">
+          {(["All", ...CATEGORIES] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategory(c)}
+              className={[
+                "shrink-0 rounded-lg px-2.5 py-1.5 text-2xs font-medium transition",
+                category === c
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* cards */}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {shown.map((p) => {
+          const on = !!enabled[p.key];
+          const Icon = p.icon;
+          return (
+            <div
+              key={p.key}
+              className={[
+                "group relative flex flex-col rounded-2xl border bg-card p-4 transition",
+                on
+                  ? "border-[var(--primary)]/45 ring-1 ring-[var(--primary)]/15"
+                  : "border-[var(--border)] hover:border-[var(--primary)]/30 hover:shadow-sm",
+              ].join(" ")}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div
+                    className={[
+                      "grid size-9 shrink-0 place-items-center rounded-xl transition",
+                      on
+                        ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                        : "bg-muted text-muted-foreground",
+                    ].join(" ")}
+                  >
+                    <Icon className="size-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-foreground">{p.name}</p>
+                    <p className="mt-0.5 line-clamp-2 text-2xs leading-relaxed text-muted-foreground">{p.tagline}</p>
+                  </div>
+                </div>
+                <Switch on={on} onChange={(next) => onToggle(p.key, next)} label={`Enable ${p.name}`} />
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
+                <StatusPill configured={status[p.key]} />
+                {on ? (
+                  <button
+                    type="button"
+                    onClick={() => onConfigure(p.key)}
+                    className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--primary)] hover:underline"
+                  >
+                    Configure <ChevronRight className="size-3" />
+                  </button>
+                ) : (
+                  <span className="text-2xs text-muted-foreground/70">{p.category}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {shown.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-[var(--border)] px-4 py-10 text-center">
+          <p className="text-xs text-muted-foreground">No integration matches “{query}”.</p>
+        </div>
+      )}
+
+      <p className="flex items-start gap-1.5 text-2xs leading-relaxed text-muted-foreground">
+        <Info className="mt-0.5 size-3 shrink-0" />
+        Switching a provider on adds its configuration panel for you only. It never disables the integration for other
+        users, and switching it off keeps the stored credentials until you remove them inside the panel.
+      </p>
+    </div>
+  );
+}
+
+/* ============================================================
+   PANEL
+============================================================ */
+
+export function IntegrationsConfig() {
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [status, setStatus] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<ProviderKey | null>(null);
+  const [browsing, setBrowsing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [prefs, setPrefs] = useState<Record<string, any>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  // Load the per-user opt-in map (falls back to an empty map = everything off).
+  useEffect(() => {
+    let mounted = true;
+    getMySettings()
+      .then((s: any) => {
+        if (!mounted) return;
+        const all: Record<string, any> = s?.settings && typeof s.settings === "object"
+          ? { ...s.settings, ...s }
+          : { ...s };
+        setPrefs(all);
+        const map = all?.[PREF_KEY];
+        const clean: Record<string, boolean> = {};
+        if (map && typeof map === "object") {
+          for (const p of PROVIDERS) if (map[p.key] === true) clean[p.key] = true;
+        }
+        setEnabled(clean);
+        const first = PROVIDERS.find((p) => clean[p.key]);
+        setSelected(first ? first.key : null);
+        // Nothing switched on yet is the honest first-run state: open the catalogue.
+        if (!first) setBrowsing(true);
+      })
+      .catch(() => { if (mounted) setBrowsing(true); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  const markConfigured = useCallback((key: ProviderKey, configured: boolean) => {
+    setStatus((prev) => (prev[key] === configured ? prev : { ...prev, [key]: configured }));
+  }, []);
+
+  // Probe every provider once so the catalogue can show real Configured / Needs setup
+  // states. Ten small GETs on open beats showing a placeholder that looks like an answer.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled(
+      PROVIDERS.map(async (p) => {
+        const res = await getIntegrationSettings(p.key);
+        return [p.key, (res.fields_set || []).length > 0] as const;
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      setStatus((prev) => {
+        const next = { ...prev };
+        for (const r of rows) if (r.status === "fulfilled") next[r.value[0]] = r.value[1];
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function persist(next: Record<string, boolean>) {
+    setError(null);
+    const body = { ...prefs, [PREF_KEY]: next };
+    setPrefs(body);
+    try {
+      await updateMySettings(body as any);
+    } catch (e: any) {
+      setError(e?.message || "Could not save your integration choices");
+    }
+  }
+
+  function toggle(key: ProviderKey, next: boolean) {
+    const map = { ...enabled };
+    if (next) map[key] = true;
+    else delete map[key];
+    setEnabled(map);
+    if (next) {
+      setSelected(key);
+      setBrowsing(false);
+    } else if (selected === key) {
+      const rest = PROVIDERS.find((p) => map[p.key]);
+      setSelected(rest ? rest.key : null);
+    }
+    void persist(map);
+  }
+
+  const enabledList = PROVIDERS.filter((p) => enabled[p.key]);
+  const activeProvider = selected ? BY_KEY[selected] : null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 px-1 py-8 text-xs text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Loading integrations…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* summary strip */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-muted/25 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="grid size-8 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
+            <Sparkles className="size-4" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-foreground">
+              {enabledList.length} of {PROVIDERS.length} integrations enabled
+            </p>
+            <p className="text-2xs text-muted-foreground">
+              Only enabled providers show a configuration panel — keep the list short.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {enabledList.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { setEnabled({}); setSelected(null); setBrowsing(true); void persist({}); }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 py-1.5 text-2xs font-medium text-foreground transition hover:bg-muted/50"
+            >
+              <Power className="size-3" /> Turn all off
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setBrowsing((b) => !b)}
+            className={[
+              "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-2xs font-semibold transition",
+              browsing
+                ? "border border-[var(--border)] text-foreground hover:bg-muted/50"
+                : "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90",
+            ].join(" ")}
+          >
+            {browsing ? <><X className="size-3" /> Close catalogue</> : <><Plus className="size-3" /> Add integration</>}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="rounded-xl border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-2 text-2xs text-[var(--danger)]">
+          {error}
+        </p>
+      )}
+
+      {browsing ? (
+        <Catalog enabled={enabled} status={status} onToggle={toggle} onConfigure={(k) => { setSelected(k); setBrowsing(false); }} />
+      ) : enabledList.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[var(--border)] px-6 py-12 text-center">
+          <div className="mx-auto grid size-11 place-items-center rounded-xl bg-muted text-muted-foreground">
+            <Settings2 className="size-5" />
+          </div>
+          <p className="mt-3 text-sm font-semibold text-foreground">No integrations enabled</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+            Pick only the tools your workspace actually uses. Each one you enable gets its own configuration panel here.
+          </p>
+          <button
+            type="button"
+            onClick={() => setBrowsing(true)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[var(--primary)] px-3.5 py-2 text-xs font-medium text-[var(--primary-foreground)] transition hover:opacity-90"
+          >
+            <Plus className="size-3.5" /> Browse integrations
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* enabled selector */}
+          <div className="flex flex-wrap gap-1.5">
+            {enabledList.map((p) => {
+              const on = selected === p.key;
+              const Icon = p.icon;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setSelected(p.key)}
+                  className={[
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-2xs font-medium transition",
+                    on
+                      ? "border-[var(--primary)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+                      : "border-[var(--border)] text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  <Icon className="size-3" />
+                  {p.name}
+                  <span className={["size-1.5 rounded-full", status[p.key] ? "bg-[var(--ok)]" : "bg-[var(--warn)]"].join(" ")} />
+                </button>
+              );
+            })}
+          </div>
+
+          {activeProvider && (
+            <ProviderEditor
+              key={activeProvider.key}
+              provider={activeProvider}
+              onConfigured={markConfigured}
+            />
+          )}
+
+          <p className="flex items-start gap-1.5 text-2xs leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 size-3 shrink-0" />
+            Disabling a provider only hides its panel from your view. To revoke credentials, use
+            “Remove stored settings” inside that provider's panel.
+          </p>
+        </>
+      )}
     </div>
   );
 }

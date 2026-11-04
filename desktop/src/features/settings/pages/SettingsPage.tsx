@@ -53,7 +53,7 @@ function ToggleRow({ checked, onChange, title, description }: {
       <div className="shrink-0">
       <button type="button" onClick={() => onChange(!checked)} aria-pressed={checked}
         className={`relative flex h-5.5 w-10 items-center rounded-full transition-colors ${
-          checked ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`}>
+          checked ? "bg-[var(--primary)]" : "bg-muted ring-1 ring-[var(--border)]"}`}>
         <span className={`size-4.5 rounded-full bg-white shadow-xs transition-transform ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
       </button>
       </div>
@@ -71,7 +71,7 @@ function SelectRow({ label, description, value, onChange, options, width = "w-52
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}
-        className={`${width} h-9 rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-blue-500`}>
+        className={`${width} h-9 rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-[var(--primary)]`}>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </div>
@@ -105,7 +105,7 @@ function SectionCard({ icon, iconTone, title, description, children }: {
   icon: React.ReactNode; iconTone: string; title: string; description: string; children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
       <div className="border-b border-[var(--border)] px-6 py-4.5 bg-muted/20">
         <div className="flex items-center gap-3.5">
           <div className={`flex size-9 items-center justify-center rounded-xl ${iconTone}`}>{icon}</div>
@@ -280,9 +280,12 @@ export default function Settings({ role }: { role?: string }) {
           }
         />
 
-        {/* Tabs — one group visible at a time (the mockup's horizontal switch). The
-            aria-label is kept so the section nav stays a labelled landmark. */}
-        <nav aria-label="Settings sections" className="mb-6 flex items-center gap-1 overflow-x-auto border-b border-[var(--border)]">
+        {/* Tabs — one group visible at a time. Kept as a labelled landmark so the
+            section navigation stays addressable for assistive tech and tests. */}
+        <nav
+          aria-label="Settings sections"
+          className="mb-6 flex items-center gap-1 overflow-x-auto rounded-2xl border border-[var(--border)] bg-muted/25 p-1.5"
+        >
           {visibleItems.map((it) => (
             <button
               key={it.id}
@@ -290,13 +293,13 @@ export default function Settings({ role }: { role?: string }) {
               onClick={() => setActive(it.id)}
               aria-current={active === it.id ? "page" : undefined}
               className={[
-                "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-xs font-medium transition",
+                "flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-medium transition",
                 active === it.id
-                  ? "border-[var(--primary)] text-[var(--primary)]"
-                  : "border-transparent text-muted-foreground hover:border-[var(--border)] hover:text-foreground",
+                  ? "bg-card text-foreground shadow-xs ring-1 ring-[var(--border)]"
+                  : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
               ].join(" ")}
             >
-              <span aria-hidden>{it.icon}</span>
+              <span aria-hidden className={active === it.id ? "text-[var(--primary)]" : ""}>{it.icon}</span>
               {it.label}
             </button>
           ))}
@@ -372,15 +375,37 @@ export default function Settings({ role }: { role?: string }) {
             {/* ==================== INTEGRATIONS ==================== */}
 
             {active === "integrations" && (
-            <SectionCard icon={<Link2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />}
-              iconTone="bg-teal-50 dark:bg-teal-950/40"
-              title="Integrations" description="Connect external tools and services.">
-              <IntegrationsConfig />
-              <div className="border-t border-slate-100 px-5 pb-5 pt-4 dark:border-slate-800">
-                <p className="mb-3 text-2xs font-semibold uppercase tracking-wider text-slate-400">Service status</p>
-                <IntegrationStatusCards />
-              </div>
-            </SectionCard>
+            <div className="space-y-4">
+              <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+                <div className="border-b border-[var(--border)] bg-muted/20 px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-9 place-items-center rounded-xl bg-[var(--accent)] text-[var(--accent-foreground)]">
+                      <Link2 className="size-4.5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold tracking-tight">Integrations</h2>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Switch on the tools you actually use — each enabled one gets its own setup panel.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-5">
+                  <IntegrationsConfig />
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
+                <div className="flex items-center gap-2 border-b border-[var(--border)] bg-muted/20 px-5 py-3">
+                  <span className="size-1.5 rounded-full bg-[var(--ok)]" />
+                  <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">Service status</p>
+                  <span className="ml-auto text-2xs text-muted-foreground/70">Live health of the dependencies</span>
+                </div>
+                <div className="p-4">
+                  <IntegrationStatusCards />
+                </div>
+              </section>
+            </div>
             )}
 
             {/* Branding — admin only (logo on login + sidebar) */}
@@ -409,7 +434,7 @@ export default function Settings({ role }: { role?: string }) {
 
           {/* ---- right rail ---------------------------------------------------------- */}
           <aside className="hidden w-[260px] shrink-0 space-y-4 min-[1100px]:block">
-            <section className="rounded-xl border border-[var(--border)] bg-card p-5 text-card-foreground shadow-xs">
+            <section className="rounded-2xl border border-[var(--border)] bg-card p-5 text-card-foreground shadow-xs">
               <div className="flex items-center gap-2.5">
                 <div className="grid size-8 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
                   <Building2 className="size-4" />
@@ -475,7 +500,7 @@ export default function Settings({ role }: { role?: string }) {
                   Discard
                 </button>
                 <button type="button" onClick={saveSettings} disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50">
+                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-[var(--primary-foreground)] shadow-xs transition hover:opacity-90 active:scale-[0.98] disabled:opacity-50">
                   <Save className="size-3.5" />
                   {saving ? "Saving…" : "Save changes"}
                 </button>
