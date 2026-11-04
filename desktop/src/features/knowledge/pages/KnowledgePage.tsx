@@ -10,7 +10,6 @@ import {
   Clock3,
   Database,
   ExternalLink,
-  FolderInput,
   Layers,
   RefreshCw,
   Search,
@@ -24,7 +23,6 @@ import {
   listArticleDomains,
   getSyncStatus,
   listArticles,
-  bulkMoveArticles,
 } from "@/features/knowledge/api";
 
 import {
@@ -272,41 +270,8 @@ function StatCard({
   );
 }
 
-/**
- * The header checkbox selects the rows on the CURRENT page, so it needs a third visual
- * state (indeterminate) that a plain `checked` boolean cannot express — a partly-selected
- * page must not read as fully selected.
- */
-function PageCheckbox({
-  checked,
-  indeterminate,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  indeterminate: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate;
-  }, [indeterminate]);
-  return (
-    <input
-      ref={ref}
-      type="checkbox"
-      aria-label={label}
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-      className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
-    />
-  );
-}
-
 export default function Knowledge({ role, onToast }: Props) {
   // v1.1.1 — domain_manager merged into knowledge (single Knowledge Manager role)
-  const canManage = role === "admin" || role === "agent" || role === "knowledge" || role === "domain_manager";
   const canManageDomains = role === "admin" || role === "knowledge" || role === "domain_manager";
 
   // Classifier Domain State — this page reads the domain list only to label the article
@@ -396,9 +361,6 @@ export default function Knowledge({ role, onToast }: Props) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [qField, setQField] = useState<"all" | "title" | "body">("all");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkDomain, setBulkDomain] = useState("");
-  const [bulkBusy, setBulkBusy] = useState(false);
   const [status, setStatus] = useState<SyncStatus | null>(null);
 
   const [query, setQuery] = useState("");
@@ -463,11 +425,6 @@ export default function Knowledge({ role, onToast }: Props) {
     }
   }
 
-  /** Reload the current view (used after edits, bulk actions and re-classification). */
-  function reload() {
-    void loadList(chip, query, (page - 1) * pageSize);
-    void loadBrowse();
-  }
 
   useEffect(() => {
     loadBrowse();
@@ -539,7 +496,6 @@ export default function Knowledge({ role, onToast }: Props) {
     setProviderFilter("all");
     setChip("all");
     setQuery("");
-    setSelected(new Set());
     void loadList("all", "", 0);
   }
 
@@ -662,7 +618,6 @@ export default function Knowledge({ role, onToast }: Props) {
                   onClick={() => {
                     setChip("general");
                     setPage(1);
-                    setSelected(new Set());
                     void loadList("general", query, 0);
                     chipsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
                   }}
@@ -748,7 +703,7 @@ export default function Knowledge({ role, onToast }: Props) {
                 select communicates the same thing in one row. */}
             <select
               value={providerFilter}
-              onChange={(e) => { setProviderFilter(e.target.value); setSelected(new Set()); void loadList(chip, query, 0); }}
+              onChange={(e) => { setProviderFilter(e.target.value); void loadList(chip, query, 0); }}
               title="Filter by knowledge source"
               aria-label="Filter by knowledge source"
               className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
@@ -811,7 +766,6 @@ export default function Knowledge({ role, onToast }: Props) {
                   onClick={() => {
                     setChip(domain);
                     setPage(1);
-                    setSelected(new Set());
                     void loadList(domain, query, 0);
                   }}
                   /* P0#1 — the per-domain colour and wording come from the DB, so a
@@ -856,48 +810,6 @@ export default function Knowledge({ role, onToast }: Props) {
             </div>
           )}
 
-          {/* 4. bulk bar — appears only when rows are selected. */}
-          {selected.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] bg-[var(--accent-soft)] px-5 py-2.5">
-              <span className="text-xs font-semibold text-[var(--accent-foreground)]">
-                {selected.size} selected across pages
-              </span>
-              <select
-                value={bulkDomain}
-                onChange={(e) => setBulkDomain(e.target.value)}
-                className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]" aria-label="{selected.size} selected">
-                <option value="">Move to domain…</option>
-                {chips.filter((c) => c !== "all").map((c) => (
-                  <option key={c} value={c}>{metaFor(c).label}</option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                className="h-8 rounded-lg text-xs"
-                disabled={!bulkDomain || bulkBusy}
-                onClick={async () => {
-                  setBulkBusy(true);
-                  try {
-                    const res = await bulkMoveArticles([...selected], bulkDomain);
-                    const d = res.data as { moved?: number };
-                    onToast(`Moved ${d.moved ?? 0} article(s) to ${metaFor(bulkDomain).label}`);
-                    setSelected(new Set()); setBulkDomain(""); reload();
-                  } catch { onToast("Bulk move failed", "err"); }
-                  finally { setBulkBusy(false); }
-                }}
-              >
-                <FolderInput className="size-3" /> Move
-              </Button>
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                Clear selection
-              </button>
-            </div>
-          )}
-
           {/* 5. the table — scrolls horizontally on narrow screens. */}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-xs">
@@ -905,20 +817,6 @@ export default function Knowledge({ role, onToast }: Props) {
                   column names — and the sort control inside them — have to stay reachable. */}
               <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-muted/60 backdrop-blur-sm">
                 <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
-                  <th className="w-9 px-3 py-3.5">
-                    {canManage && items && items.length > 0 && (
-                      <PageCheckbox
-                        label="Select all rows on this page"
-                        checked={items.every((a) => selected.has(a.page_id))}
-                        indeterminate={items.some((a) => selected.has(a.page_id)) && !items.every((a) => selected.has(a.page_id))}
-                        onChange={(checked) => {
-                          const next = new Set(selected);
-                          items.forEach((a) => (checked ? next.add(a.page_id) : next.delete(a.page_id)));
-                          setSelected(next);
-                        }}
-                      />
-                    )}
-                  </th>
                   {([
                     { k: "title", l: "Article title", cls: "px-5 py-3.5 font-semibold" },
                     { k: null, l: "Source", cls: "px-4 py-3.5 font-semibold" },
@@ -1002,28 +900,8 @@ export default function Knowledge({ role, onToast }: Props) {
                     return (
                       <tr
                         key={article.page_id}
-                        className={[
-                          "border-t border-[var(--border)]/60 transition",
-                          selected.has(article.page_id)
-                            ? "bg-[var(--accent-soft)]"
-                            : "hover:bg-muted/40",
-                        ].join(" ")}
+                        className="border-t border-[var(--border)]/60 transition hover:bg-muted/40"
                       >
-                        <td className="px-3 py-3 align-middle">
-                          {canManage && (
-                            <input
-                              type="checkbox"
-                              aria-label={`Select ${article.title || article.page_id}`}
-                              checked={selected.has(article.page_id)}
-                              onChange={(e) => {
-                                const next = new Set(selected);
-                                if (e.target.checked) next.add(article.page_id); else next.delete(article.page_id);
-                                setSelected(next);
-                              }}
-                              className="size-3.5 rounded border-[var(--border)] align-middle accent-[var(--primary)]"
-                            />
-                          )}
-                        </td>
                         {/* Was `truncate` on a fixed max-width, which cut long article
                             titles with no way to read the rest. Two lines, then ellipsis,
                             plus the full text in the tooltip. The cell is a button now:
@@ -1093,7 +971,7 @@ export default function Knowledge({ role, onToast }: Props) {
               <div className="flex items-center gap-2">
                 <select
                   value={pageSize}
-                  onChange={(e) => { setPageSize(Number(e.target.value)); setSelected(new Set()); void loadList(chip, query, 0); }}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); void loadList(chip, query, 0); }}
                   className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
                   title="Rows per page" aria-label="Rows per page">
                   {[10, 25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
@@ -1103,7 +981,7 @@ export default function Knowledge({ role, onToast }: Props) {
                     type="button"
                     aria-label="Previous page"
                     disabled={page <= 1 || listing}
-                    onClick={() => { setSelected(new Set()); void loadList(chip, query, (page - 2) * pageSize); }}
+                    onClick={() => { void loadList(chip, query, (page - 2) * pageSize); }}
                     className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
                   >
                     <ChevronLeft className="size-3.5" />
@@ -1113,7 +991,7 @@ export default function Knowledge({ role, onToast }: Props) {
                     type="button"
                     aria-label="Next page"
                     disabled={page >= totalPages || listing}
-                    onClick={() => { setSelected(new Set()); void loadList(chip, query, page * pageSize); }}
+                    onClick={() => { void loadList(chip, query, page * pageSize); }}
                     className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
                   >
                     <ChevronRight className="size-3.5" />

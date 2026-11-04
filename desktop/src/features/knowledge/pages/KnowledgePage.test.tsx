@@ -116,14 +116,6 @@ async function typeInto(el: HTMLInputElement, value: string) {
   await settle();
 }
 
-async function choose(el: HTMLSelectElement, value: string) {
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
-    setter.call(el, value);
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await settle();
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -251,27 +243,5 @@ describe("KnowledgePage — filters, search and sync", () => {
     expect(text).toContain("Needs review");
     expect(text).toContain("5 articles still in General IT");
     expect(text).toContain("1 domain have no description");
-  });
-});
-
-describe("KnowledgePage — bulk selection (manage role only)", () => {
-  it("exposes the bulk-move bar only once a row is selected", async () => {
-    const el = await mount("admin");
-    const checkbox = el.querySelector('input[aria-label="Select Restart nginx safely"]') as HTMLInputElement;
-    expect(checkbox).toBeTruthy();
-    await act(async () => { checkbox.click(); });
-    await settle();
-    expect(el.textContent).toContain("1 selected");
-
-    const bulkSelect = el.querySelector('select[aria-label="{selected.size} selected"]') as HTMLSelectElement;
-    await choose(bulkSelect, "database");
-    await click(button(el, "Move"));
-    expect(m.bulkMoveArticles).toHaveBeenCalledWith(["kb-1"], "database");
-    expect(onToast).toHaveBeenCalledWith("Moved 1 article(s) to Database");
-  });
-
-  it("hides the selection checkboxes from a plain user", async () => {
-    const el = await mount("user");
-    expect(el.querySelector('input[aria-label="Select Restart nginx safely"]')).toBeNull();
   });
 });
