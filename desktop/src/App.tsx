@@ -179,7 +179,7 @@ export default function App() {
     <FloatingChatProvider>
       {(() => { switch (nav) {
     case "chat":
-      return shell("chat", <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />);
+      return <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />;
     case "dashboard":
       return shell("dashboard", <DashboardPage userName={userName} role={role} />);
     case "articles":

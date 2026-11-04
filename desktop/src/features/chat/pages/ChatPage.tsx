@@ -1,1251 +1,784 @@
+import React, { useMemo, useState } from "react";
 import {
-  Trash2, Bot,
-  Menu, Search,
-  Info, MessageSquareText,
-  Check, Pencil,
-  Ticket as TicketIcon,
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  BookOpen,
+  Bot,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  Copy,
+  LayoutDashboard,
+  LifeBuoy,
+  Menu,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
+  Settings,
+  ShieldCheck,
+  Ticket,
+  ThumbsDown,
+  ThumbsUp,
+  Users,
+  X,
+  FileText,
 } from "lucide-react";
 
+interface ReferenceGroup {
+  title: string;
+  count: number;
+  match: string;
+  source: string;
+  details: string;
+}
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+const referenceGroups: ReferenceGroup[] = [
+  {
+    title: "Say no to traditional database",
+    count: 4,
+    match: "50–65%",
+    source: "Knowledge base",
+    details: "Grouped knowledge references related to database troubleshooting and recovery guidance.",
+  },
+  {
+    title: "PostgreSQL Service Failure",
+    count: 1,
+    match: "62%",
+    source: "Knowledge base",
+    details: "Reference group for PostgreSQL service failure checks and diagnosis.",
+  },
+  {
+    title: "Database",
+    count: 1,
+    match: "66%",
+    source: "Knowledge base",
+    details: "General database support reference.",
+  },
+  {
+    title: "Database Support Routing",
+    count: 1,
+    match: "64%",
+    source: "Knowledge base",
+    details: "Routing guidance for escalating database incidents to the DBA Team.",
+  },
+];
 
-import {
-  decideApproval,
-  submitFeedback as pushFeedback,
-  uploadAttachment,
-} from "@/features/chat/api";
-import { runChatStream } from "@/features/chat/hooks/useChatStream";
-import Composer from "@/components/Composer";
-import MessageBubble from "@/features/chat/components/MessageBubble";
-import SessionPanel from "@/features/chat/components/SessionPanel";
-import {
-  type Message,
-  type Source,
-  type Conv,
-  currentTime,
-  latestSources,
-  latestRetrieval,
-} from "@/features/chat/model";
-import { EmptyChat } from "@/features/chat/components/chat-parts";
-import RagPipelineStatus, { useStageTelemetry } from "@/features/chat/components/RagPipelineStatus";
-import SourcePanel from "@/features/chat/components/SourcePanel";
-import { alertTicket } from "@/lib/notify";
-import {
-  listConversations,
-  getConversationMessages,
-  renameConversation,
-} from "@/features/conversations/api";
-import { createTicketApi, listActiveDomains, listTicketDestinations } from "@/features/tickets/api";
-import { assignableUsers } from "@/features/users/api";
-import { useUserPreferences } from "@/app/useUserPreferences";
+const healthServices = [
+  "PostgreSQL + pgvector",
+  "Redis",
+  "Ollama / embeddings",
+  "Model Provider",
+  "Confidence sync",
+  "Jira",
+  "LDAP / AD",
+];
 
-/* ============================================================
-   MAIN COMPONENT
-============================================================ */
+interface CheckItem {
+  id: string;
+  label: string;
+  command?: string;
+  done: boolean;
+}
 
-export default function Chat({
-  userName,
-  // retained in the prop contract; no longer used now that escalations run
-  // through the requester's ticket form instead of an admin approval modal
-  role: _role,
-  displayRole: _displayRole,
-  perms: _perms,
-  onNavigate,
-  onLogout: _onLogout,
-}: {
+const initialChecklist: CheckItem[] = [
+  { id: "postgres", label: "Confirm PostgreSQL accepts connections", command: "pg_isready -p 5432", done: false },
+  { id: "health", label: "Application health checks pass", done: false },
+  { id: "logs", label: "Service logs contain no new critical errors", done: false },
+  { id: "monitoring", label: "Monitoring returns healthy", done: false },
+];
+
+const navItems = [
+  { name: "Chat", icon: MessageSquare },
+  { name: "Overview", icon: LayoutDashboard },
+  { name: "Knowledge", icon: BookOpen },
+  { name: "Domains & routing", icon: Activity },
+  { name: "Tickets", icon: Ticket },
+  { name: "Users", icon: Users },
+  { name: "Conversations", icon: MessageSquare },
+  { name: "Audit log", icon: FileText },
+  { name: "Settings", icon: Settings },
+];
+
+const NAV_MAP: Record<string, string> = {
+  "Chat": "chat",
+  "Overview": "dashboard",
+  "Knowledge": "articles",
+  "Domains & routing": "domains",
+  "Tickets": "tickets",
+  "Users": "users",
+  "Conversations": "history",
+  "Audit log": "audits",
+  "Settings": "settings",
+};
+
+interface SidebarProps {
+  onNavigate?: (nav: string) => void;
+  closeMobile?: () => void;
+  userName?: string;
+  displayRole?: string;
+  onLogout?: () => void;
+}
+
+function Sidebar({ onNavigate, closeMobile, userName, displayRole, onLogout }: SidebarProps) {
+  const handleNav = (name: string) => {
+    const target = NAV_MAP[name] || name;
+    if (onNavigate) onNavigate(target);
+    closeMobile?.();
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-3 px-2 pb-6 pt-2">
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm">ITH</span>
+        <span className="text-sm font-bold tracking-tight text-white">IT Help Desk</span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          handleNav("chat");
+        }}
+        className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-3 text-sm font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50"
+      >
+        <Plus size={17} />
+        New conversation
+      </button>
+
+      <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">Workspace</p>
+      <nav aria-label="Workspace navigation" className="space-y-1">
+        {navItems.map(({ name, icon: Icon }) => {
+          const active = name === "Chat";
+          return (
+            <button
+              key={name}
+              type="button"
+              aria-current={active ? "page" : undefined}
+              onClick={() => {
+                handleNav(name);
+              }}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition ${
+                active ? "bg-white text-violet-700 shadow-sm" : "text-white/80 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <Icon size={17} aria-hidden="true" />
+              {name}
+              {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-500" />}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="mt-6 border-t border-white/15 pt-4">
+        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-white/60">Recent conversations</p>
+        {["Database is down", "Reset my password…", "Check my Proxmox VM…"].map((title) => (
+          <button
+            key={title}
+            type="button"
+            onClick={() => {
+              handleNav("chat");
+            }}
+            className={`block w-full truncate rounded-lg px-3 py-2.5 text-left text-xs transition ${
+              title === "Database is down" ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            {title}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-auto border-t border-white/15 pt-4">
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-xs font-bold text-white">
+              {(userName || "AD").slice(0, 2).toUpperCase()}
+            </span>
+            <span>
+              <span className="block text-xs font-semibold text-white">{userName || "Administrator"}</span>
+              <span className="block text-[10px] text-white/65">{displayRole || "Workspace admin"}</span>
+            </span>
+          </div>
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              title="Sign out"
+              className="rounded-lg p-1 text-white/60 hover:bg-white/10 hover:text-white text-xs"
+            >
+              Sign out
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PanelCardProps {
+  title?: string;
+  subtitle?: string;
+  icon?: any;
+  children: React.ReactNode;
+  className?: string;
+}
+
+function PanelCard({ title, subtitle, icon: Icon, children, className = "" }: PanelCardProps) {
+  return (
+    <section className={`rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/[0.025] ${className}`}>
+      {(title || Icon) && (
+        <div className="flex items-start gap-3 px-4 pb-0 pt-4">
+          {Icon && (
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
+              <Icon size={17} aria-hidden="true" />
+            </span>
+          )}
+          <div className="min-w-0">
+            {title && <h2 className="text-sm font-semibold text-slate-900">{title}</h2>}
+            {subtitle && <p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p>}
+          </div>
+        </div>
+      )}
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+interface ReferenceCardProps {
+  group: ReferenceGroup;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+function ReferenceCard({ group, expanded, onToggle }: ReferenceCardProps) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white transition hover:border-violet-200">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="flex w-full items-start gap-3 p-3 text-left"
+      >
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-700">
+          <BookOpen size={15} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-semibold leading-5 text-slate-800">{group.title}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+            <span>{group.count} {group.count === 1 ? "reference" : "references"}</span>
+            <span aria-hidden="true">·</span>
+            <span>{group.match} match</span>
+          </span>
+        </span>
+        <ChevronDown size={15} className={`mt-1 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="border-t border-slate-100 px-3 pb-3 pt-2.5">
+          <p className="text-[11px] leading-5 text-slate-600">{group.details}</p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[10px] text-slate-400">Source: {group.source}</span>
+            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">
+              {group.match} retrieval match
+            </span>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+interface ChatProps {
   userName?: string;
   role?: string;
   displayRole?: string;
   perms?: Record<string, boolean>;
   onNavigate?: (nav: string) => void;
   onLogout?: () => void;
-}) {
+}
 
-  const preferences = useUserPreferences();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [conversations, setConversations] = useState<Conv[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState("");
-  const [search, setSearch] = useState("");
-  // v0.21.35 — Ctrl+K quick search palette
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [pendingFiles, setPendingFiles] = useState<{ id: string; filename: string; mime: string }[]>([]);
-  // B-6 — notification bell data (admin/agent)
-  const [uploading, setUploading] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [stage, setStage] = useState("");
-  // v1.6.12 — RAG pipeline live tracker (per-stage telemetry + streaming pill)
-  const pipeline = useStageTelemetry();
-  // The engine and the connector scope are no longer chosen in the composer: its row of
-  // chips ("Auto mode" / "Auto" / "All connectors") was removed, so both are fixed at the
-  // defaults they already sent. `chatMode` is still switched programmatically — "Ask this
-  // in Infrastructure mode" on an answer sets it — so its setter stays.
-  const [llmProvider] = useState<"auto" | "cloud" | "local">("auto");
-  // v1.6.55 — WHAT the answer may draw on, separate from which model answers.
-  // Claude Desktop / opencode keep "chat" and "MCP tools" visibly distinct; without
-  // it a KB answer and an infrastructure answer look identical, and a failed tool
-  // lookup reads as "no such information in the knowledge base".
-  const [chatMode, setChatMode] = useState<"auto" | "kb" | "infra">("auto");
+interface MessageItem {
+  id: number;
+  type: "user" | "assistant";
+  text: string;
+}
 
-  // EMPTY = every enabled server. The picker is gone, but a conversation that was saved
-  // with a narrower scope still restores it on open, and that value is what the composer
-  // sends — so the setter stays even though nothing in the UI calls it.
-  const [chatServers, setChatServers] = useState<string[]>([]);
-  // v1.6.65 — "Ask this in Infrastructure mode" re-sends a previous question without
-  // making the user retype it. State updates are async, so the override travels in a
-  // ref that sendMessage consumes once.
-  const askOverrideRef = useRef<{ question: string; mode: "auto" | "kb" | "infra" } | null>(null);
-  // v1.6.65 — mobile access to "what produced this answer".
-  const [panelOpen, setPanelOpen] = useState(false);
-  // v1.6.40 — the escalation is resolved by the requester filling the ticket form
-  // themselves, so remember which pending approval that form supersedes. On submit
-  // it is marked "cancelled" (NOT resumed), which prevents an admin from later
-  // approving the same escalation and creating a duplicate ticket.
-  const [escalationApprovalId, setEscalationApprovalId] = useState<string | null>(null);
-  const [showSources] = useState(true);
-  const [mobileHistory, setMobileHistory] = useState(false);
-  const sessionRef = useRef<string>(crypto.randomUUID());
-  const historyRef = useRef<{ role: string; content: string }[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export default function Chat({
+  userName,
+  displayRole,
+  onNavigate,
+  onLogout,
+}: ChatProps) {
+  const [checklist, setChecklist] = useState<CheckItem[]>(initialChecklist);
+  const [sourceQuery, setSourceQuery] = useState("");
+  const [expandedReferences, setExpandedReferences] = useState<string[]>([]);
+  const [systemOpen, setSystemOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileSourcesOpen, setMobileSourcesOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [followUp, setFollowUp] = useState("");
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [toast, setToast] = useState("");
+  const [jiraOpen, setJiraOpen] = useState(false);
+  const [jiraCreated, setJiraCreated] = useState(false);
+  const [quickAction, setQuickAction] = useState<string | null>(null);
 
-  /* ----------------------------------------------------------
-      LOAD CONVERSATIONS
-  ---------------------------------------------------------- */
+  const filteredReferences = useMemo(() => {
+    const term = sourceQuery.trim().toLowerCase();
+    if (!term) return referenceGroups;
+    return referenceGroups.filter((group) =>
+      [group.title, group.source, group.details, group.match].join(" ").toLowerCase().includes(term)
+    );
+  }, [sourceQuery]);
 
-  function refreshConversations() {
-    listConversations()
-      .then((d) => setConversations(d?.conversations ?? []))
-      .catch(() => setConversations([]));
+  function notify(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 3000);
   }
 
-useEffect(() => {
-    refreshConversations();
-    const handleOpen = (e: any) => {
-      const id = e?.detail;
-      if (id) openConversation(id);
-    };
-    const handleNew = () => {
-      newChat();
-    };
-    /* v1.0.1 — right-panel Quick Actions drop their question in the composer. It is
-       deliberately a PREFILL and not a send: the user sees the exact prompt before it
-       goes out, so a quick action can never fire a request they did not read. */
-    const handleAsk = (e: any) => {
-      const q = e?.detail;
-      if (typeof q !== "string" || !q) return;
-      setInput(q);
-      window.setTimeout(() => composerRef.current?.focus(), 0);
-    };
-    window.addEventListener("ith:open-conversation", handleOpen);
-    window.addEventListener("ith:new-chat", handleNew);
-    window.addEventListener("ith:ask", handleAsk);
+  function toggleChecklist(id: string) {
+    setChecklist((current) => current.map((item) => item.id === id ? { ...item, done: !item.done } : item));
+  }
 
-    // If navigated with hash #/chat and was already on chat, treat as new chat trigger if event requested
-    return () => {
-      window.removeEventListener("ith:open-conversation", handleOpen);
-      window.removeEventListener("ith:new-chat", handleNew);
-      window.removeEventListener("ith:ask", handleAsk);
-    };
-  }, []);
+  const answerText = [
+    "Validate recovery and involve the DBA team.",
+    "If the service error indicates configuration, permissions, recovery, replication, or data issues, escalate to the DBA Team.",
+    "Use approved recovery procedures.",
+    "Restart only through an approved DBA incident/change procedure. For high availability or failover, follow the specific approved cluster failover runbook.",
+    ...checklist.map((item) => `${item.label}${item.command ? ` ${item.command}` : ""}`),
+  ].join("\n\n");
 
-  /* ----------------------------------------------------------
-      AUTO SCROLL
-  ---------------------------------------------------------- */
-
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  // The right panel's empty-state CTA ("Ask a question") needs somewhere to put the
-  // caret. Without it the button would be a control that does nothing visible.
-  const composerRef = useRef<HTMLTextAreaElement>(null);
-  /** Stop-generation: the stream already accepts an AbortSignal, but nothing ever
-   *  created one — a long or wrong answer could only be waited out. */
-  const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({
-        top: messagesContainerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  }, [messages, isTyping]);
-
-  /* ----------------------------------------------------------
-      OPEN A PAST CONVERSATION
-  ---------------------------------------------------------- */
-
-  // v0.21.35 — global Ctrl+K / Cmd+K to open the search palette
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((v) => !v);
-      }
-      if (e.key === "Escape") setPaletteOpen(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  /**
-   * Open a saved conversation and rebuild its message list.
-   */
-  async function openConversation(id: string) {
-    setSelectedConversation(id);
-    sessionRef.current = id;
-    setMobileHistory(false);
+  async function copyAnswer() {
     try {
-      const r: any = await getConversationMessages(id);
-      // Restore this conversation's connector scope. [] decodes to unscoped, which is also
-      // what a pre-existing row means (NULL) — so an old conversation keeps today's
-      // behaviour rather than becoming unreachable.
-      setChatServers(Array.isArray(r?.connector_scope) ? r.connector_scope : []);
-      const list: Message[] = (r.messages ?? []).map((m: any, i: number) => ({
-        id: `${id}-${i}`,
-        role: m.role,
-        content: m.content,
-        timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
-        confidence: m.meta?.confidence != null ? Math.round(m.meta.confidence * 100) : undefined,
-        decision: m.meta?.decision,
-        topK: m.meta?.top_k,
-        usage: m.meta?.usage,
-        toolUsed: m.meta?.tool_used || undefined,
-        toolNote: m.meta?.tool_note || undefined,
-        toolCalls: m.meta?.tool_calls || undefined,
-        evidence: m.meta?.evidence || null,
-        rawOutput: m.meta?.raw_output || undefined,
-        latencyMs: m.meta?.latency_ms,
-        ragTrace: m.meta?.rag_trace || (m.meta?.latency_ms ? { stages: {}, totalMs: m.meta.latency_ms } : undefined),
-        serverId: m.message_id || undefined,  // feedback target (v0.21.90)
-        sources: (m.meta?.hits ?? []).map((h: any) => ({
-          page_id: h.page_id ?? null,
-          title: h.title ?? "Untitled",
-          space: h.domain ?? "KB",
-          relevance: h.relevance != null ? Math.round(h.relevance * 100)
-            : h.distance != null ? Math.round((1 - h.distance) * 100)
-            : null as unknown as number,
-          excerpt: (h.content ?? h.snippet ?? "").slice(0, 180),
-          url: h.source_url ?? null,
-        })),
-      }));
-      setMessages(list);
-      historyRef.current = list.map((m) => ({ role: m.role, content: m.content }));
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(answerText);
+      } else {
+        const element = document.createElement("textarea");
+        element.value = answerText;
+        element.style.position = "fixed";
+        element.style.opacity = "0";
+        document.body.appendChild(element);
+        element.select();
+        document.execCommand("copy");
+        element.remove();
+      }
+      notify("Answer copied to clipboard.");
     } catch {
-      setMessages([]);
+      notify("Copy is unavailable in this browser.");
     }
   }
 
-
-  /* ----------------------------------------------------------
-      SEND (streaming)
-  ---------------------------------------------------------- */
-
-  async function sendMessage(event?: FormEvent) {
-    event?.preventDefault();
-    const override = askOverrideRef.current;
-    askOverrideRef.current = null;
-    const question = (override?.question ?? input).trim();
-    // The mode for THIS send: an override (one-click re-ask) wins over the composer
-    // selection, which is what lets "Ask this in Infrastructure mode" work without
-    // first mutating the control and waiting for a re-render.
-    const sendMode = override?.mode ?? chatMode;
-    const sendServers = chatServers;
-    if (!question || isTyping) return;
-
-    // v0.21.36 — append attachment links to the outgoing message
-    let content = question;
-    if (pendingFiles.length > 0) {
-      const links = pendingFiles
-        .map((f) => (f.mime.startsWith("image/")
-          ? `![${f.filename}](/api/attachments/${f.id})`
-          : `[📄 ${f.filename}](/api/attachments/${f.id})`))
-        .join(" ");
-      content = `${question}\n\n${links}`;
-    }
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-      timestamp: currentTime(),
-    };
-    setPendingFiles([]);
-    setInput("");
-
-    const assistantId = crypto.randomUUID();
-
-    setMessages((prev) => [...prev, userMessage]);
-    historyRef.current = [...historyRef.current, { role: "user", content }];
-    setIsTyping(true);
-    pipeline.begin();
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantId, role: "assistant", content: "", timestamp: currentTime() },
+  function sendFollowUp(event: React.FormEvent) {
+    event.preventDefault();
+    const text = followUp.trim();
+    if (!text) return;
+    setMessages((current) => [
+      ...current,
+      { id: Date.now(), type: "user", text },
+      {
+        id: Date.now() + 1,
+        type: "assistant",
+        text: "I can’t verify this follow-up while offline. Please consult the approved runbook or contact the DBA Team.",
+      },
     ]);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    try {
-      const streamed = await runChatStream(
-        question,
-        sessionRef.current,
-        historyRef.current.slice(0, -1),
-        {
-          onMeta: (meta) =>
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? {
-                      ...m,
-                      confidence: meta.confidence != null ? Math.round(meta.confidence * 100) : undefined,
-                      decision: meta.decision,
-                      topK: meta.top_k,
-                      toolUsed: (meta as any).tool_used || undefined,
-                      toolNote: (meta as any).tool_note || undefined,
-                      toolCalls: (meta as any).tool_calls || undefined,
-                      evidence: (meta as any).evidence || null,
-                      rawOutput: (meta as any).raw_output || undefined,
-                      // meta.servers_scope is what the turn was ALLOWED to reach; the
-                      // evidence card shows it next to what it actually used, so a
-                      // restricted turn is visibly restricted rather than merely quiet.
-                      serversScope: (meta as any).servers_scope || undefined,
-                      sources: (meta.hits ?? []).map((h: any) => ({
-                        page_id: h.page_id ?? null,
-                        title: h.title ?? "Untitled",
-                        space: h.domain ?? "KB",
-                        relevance: h.relevance != null ? Math.round(h.relevance * 100)
-                          : h.distance != null ? Math.round((1 - h.distance) * 100)
-                          : null,
-                        excerpt: (h.content ?? "").slice(0, 180),
-                          url: h.source_url ?? null,
-                        })),
-                        // S1.1 — real retrieval stats for the right-hand panel
-                        retrieval: meta.retrieval ?? undefined,
-                        }
-                        : m,
-              ),
-            ),
-          onToken: (token) => {
-            pipeline.onFirstToken();
-            setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + token } : m))
-            );
-          },
-          onStage: (detail, stageKey) => {
-            setStage(detail);
-            pipeline.onStage(detail, stageKey);
-          },
-          onApprovalRequest: (data) => {
-            setStage("");
-            // v1.6.40 — the HITL approval modal is replaced by the ticket form:
-            // the requester fills in the details and creates the ticket directly.
-            setEscalationApprovalId(data.approval_id);
-            openTicketForm(undefined, {
-              subject: (data.question || "").slice(0, 120),
-              description: data.question || "",
-            });
-            alertTicket("before");
-            chatAlert("Escalation understood — fill in the ticket details and submit.");
-            setMessages((prev) => prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, content: m.content + "\n\n📝 **Fill in the ticket form to escalate this.**" }
-                : m));
-          },
-          onCaution: (data) => {
-            // v1.1.4 guardrail: blocked messages already have the policy text
-            // injected via onToken; tag the message so the renderer shows a
-            // security notice instead of the "No answer" fallback.
-            if (data?.blocked) {
-              setMessages((prev) => prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, guardrail: data.type ?? "blocked" }
-                  : m));
-            }
-          },
-          onDone: (d) => {
-            setStage("");
-            const finalTrace = pipeline.finish();
-            const traceSnapshot = {
-              stages: finalTrace.stages && Object.keys(finalTrace.stages).length > 0
-                ? { ...finalTrace.stages }
-                : { ...pipeline.telemetryRef.current },
-              totalMs: finalTrace.totalMs || pipeline.elapsedRef.current || d.latency_ms || 0,
-            };
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? {
-                      ...m,
-                      usage: d.usage ?? m.usage,
-                      latencyMs: d.latency_ms ?? m.latencyMs,
-                      serverId: d.message_id ?? m.serverId,
-                      ragTrace: traceSnapshot,
-                    }
-                  : m,
-              ),
-            );
-          },
-        },
-        llmProvider,
-        sendMode,
-        sendServers,
-        // 8th positional arg — `servers` sits between mode and signal, so passing the
-        // signal any earlier silently sends it as the connector scope.
-        controller.signal,
-      );
-      historyRef.current = [
-        ...historyRef.current,
-        { role: "assistant", content: streamed },
-      ];
-      refreshConversations();
-      window.dispatchEvent(new CustomEvent("ith:refresh-conversations", { detail: sessionRef.current }));
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: m.content || "⚠️ Connection error — please try again." }
-            : m,
-        ),
-      );
-    } finally {
-      setIsTyping(false);
-      setStage("");
-      abortRef.current = null;
-    }
+    setFollowUp("");
   }
 
-  /** Abort the in-flight answer, keeping whatever has already streamed. */
-  function stopGeneration() {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setIsTyping(false);
-    setStage("");
-    chatAlert("Generation stopped.");
+  function createJiraPreview(event: React.FormEvent) {
+    event.preventDefault();
+    setJiraCreated(true);
+    setJiraOpen(false);
+    notify("Jira ticket preview created locally. Nothing was sent to Jira.");
   }
 
-  /* ----------------------------------------------------------
-      RETRY — re-run a previous user turn (v1.1.2)
-      Trims messages after the chosen user turn (both the user
-      turn and its assistant answer) and resends the question.
-  ---------------------------------------------------------- */
-  /**
-   * v1.6.65 — re-ask this question against the LIVE estate.
-   *
-   * The whole point of an explicit mode switch is that the user can act on it. Getting
-   * a documents answer and wanting the cluster's own answer used to mean retyping the
-   * question and switching modes; this does both in one click.
-   */
-  function askLiveFromMessage(target: Message) {
-    if (isTyping) return;
-    const idx = messages.findIndex((m) => m.id === target.id);
-    if (idx < 0) return;
-    let question = "";
-    for (let i = idx; i >= 0; i -= 1) {
-      if (messages[i].role === "user") { question = messages[i].content.trim(); break; }
-    }
-    if (!question) return;
-    setChatMode("infra");
-    askOverrideRef.current = { question, mode: "infra" };
-    void sendMessage();
+  function toggleReference(title: string) {
+    setExpandedReferences((current) =>
+      current.includes(title) ? current.filter((item) => item !== title) : [...current, title]
+    );
   }
 
-  function retryFromMessage(target: Message) {
-    if (isTyping || target.role !== "user") return;
-    const idx = messages.findIndex((m) => m.id === target.id);
-    if (idx < 0) return;
-    const question = target.content.trim();
-    if (!question) return;
-
-    // Drop everything from this user turn onward (it + its answer),
-    // then resend exactly like a fresh send.
-    const kept = messages.slice(0, idx);
-    setMessages(kept);
-    historyRef.current = kept
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role, content: m.content }));
-
-    // Reuse the standard send path
-    setInput(question);
-    window.setTimeout(() => {
-      const form = document.querySelector<HTMLFormElement>("form");
-      form?.requestSubmit();
-    }, 60);
+  function triggerQuickAction(action: string) {
+    setQuickAction(action);
   }
 
-  /* ----------------------------------------------------------
-      EDIT-IN-PLACE (v1.3.1) — ChatGPT-style edit of a previous
-      user turn: truncate the thread at that turn and resend the
-      edited question through the standard send path.
-  ---------------------------------------------------------- */
-  function handleEditSubmit(messageId: string, newText: string) {
-    if (isTyping) return;
-    const idx = messages.findIndex((m) => m.id === messageId);
-    if (idx < 0 || !newText.trim()) return;
-
-    // Drop everything from this user turn onward (it + its answer),
-    // then resend with the edited text — exactly like a fresh send.
-    const kept = messages.slice(0, idx);
-    setMessages(kept);
-    historyRef.current = kept
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role, content: m.content }));
-
-    setInput(newText.trim());
-    window.setTimeout(() => {
-      const form = document.querySelector<HTMLFormElement>("form");
-      form?.requestSubmit();
-    }, 60);
+  function closeQuickAction() {
+    if (!quickAction) return;
+    notify(`${quickAction} is a local preview action. No system was contacted.`);
+    setQuickAction(null);
   }
 
-  /* ----------------------------------------------------------
-      NEW CHAT
-  ---------------------------------------------------------- */
+  const sourcesPanel = (
+    <div className="space-y-4">
+      <PanelCard
+        title="Sources"
+        subtitle="7 references grouped into 4 titles"
+        icon={BookOpen}
+      >
+        <label className="relative mb-3 block">
+          <span className="sr-only">Filter source references</span>
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <input
+            value={sourceQuery}
+            onChange={(event) => setSourceQuery(event.target.value)}
+            placeholder="Filter references…"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+          />
+        </label>
+        <div className="space-y-2">
+          {filteredReferences.map((group) => (
+            <ReferenceCard
+              key={group.title}
+              group={group}
+              expanded={expandedReferences.includes(group.title)}
+              onToggle={() => toggleReference(group.title)}
+            />
+          ))}
+          {filteredReferences.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">No matching references.</p>
+          )}
+        </div>
+        <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2.5 text-[10px] leading-4 text-blue-800">
+          Match scores describe retrieval similarity, not answer confidence.
+        </p>
+      </PanelCard>
 
-  function newChat() {
-    setMessages([]);
-    setInput("");
-    setSelectedConversation("");
-    sessionRef.current = crypto.randomUUID();
-
-    historyRef.current = [];
-    setMobileHistory(false);
-    setStage("");
-    setIsTyping(false);
-    window.dispatchEvent(new CustomEvent("ith:new-chat-started"));
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }
-
-  // Ctrl+N / Cmd+N — new chat shortcut
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        newChat();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  /* ----------------------------------------------------------
-      ESCALATE → /api/escalate
-  ---------------------------------------------------------- */
-
-  // v0.21.90 — prefill ticket dialog (instead of silent auto-create on click)
-  const [ticketForm, setTicketForm] = useState<null | {
-    subject: string; description: string; domain: string; priority: string;
-    assignee: string; due_date: string; destination: string;
-  }>(null);
-  // v1.6.4 — configured external destinations (Jira / OpenProject)
-  const [ticketDests, setTicketDests] = useState<
-    { key: string; label: string; configured: boolean }[]
-  >([{ key: "jira", label: "Jira", configured: true }]);
-  const [ticketBusy, setTicketBusy] = useState(false);
-  // v1.6.3 — categories come from the live classifier-domain registry so a domain
-  // added by a knowledge manager shows up immediately (was a hardcoded 7-item list)
-  const [ticketDomains, setTicketDomains] = useState<{ key: string; label: string }[]>([
-    { key: "general", label: "General" },
-  ]);
-  // v0.21.98 — chat create-ticket mirrors the Tickets page form (native /api/tickets)
-  type AssignableUser = { username: string; email: string | null; role: string };
-  const [assignable, setAssignable] = useState<AssignableUser[]>([]);
-  const [chatNote, setChatNote] = useState<string | null>(null);
-  function chatAlert(msg: string, kind?: string) {
-    setChatNote(kind === "err" ? `⚠️ ${msg}` : `ℹ️ ${msg}`);
-    window.setTimeout(() => setChatNote(null), 3200);
-  }
-
-  function submitFeedback(message: Message, rating: 1 | -1) {
-    const target = message.serverId;
-    if (!target) { chatAlert("Answer not saved yet — feedback unavailable", "err"); return; }
-    const next = message.feedback === rating ? 0 : rating;
-    pushFeedback(target, next, undefined)
-      .then(() => {
-        setMessages((prev) => prev.map((m) => m.id === message.id ? { ...m, feedback: (next === 0 ? undefined : next) as 1 | -1 | undefined } : m));
-        chatAlert(next === 0 ? "Feedback cleared" : next === 1 ? "Thanks — marked helpful" : "Thanks — we'll improve this answer");
-      })
-      .catch(() => chatAlert("Feedback failed", "err"));
-  }
-
-  /** v1.6.45 — answer a follow-up grounded in ONE retrieved source.
-   *
-   * The source card only shows a trimmed excerpt, so "I want the details of this
-   * article" previously meant retyping the question and hoping retrieval picked
-   * the same chunks again. This sends a prompt that names the article, which pins
-   * the retrieval target and asks for the full context, the procedure and any
-   * exact commands.
-   */
-  function explainSource(source: Source) {
-    const q =
-      `Explain the knowledge base article "${source.title}" in full detail. ` +
-      `Include: what it covers, the complete step-by-step procedure, every exact ` +
-      `command or configuration value it mentions (in fenced code blocks), and any ` +
-      `warnings or prerequisites.` +
-      (source.url ? `\nSource: ${source.url}` : "");
-    setInput(q);
-    window.setTimeout(() => {
-      document.querySelector<HTMLFormElement>("form")?.requestSubmit();
-    }, 60);
-  }
-
-  function openTicketForm(
-    _message?: Message,
-    prefill?: { subject?: string; description?: string; domain?: string },
-  ) {
-    // v0.21.99 — open an EMPTY form; the user writes their own subject/description.
-    // v1.6.40 — when the escalation comes from chat the same form is opened with the
-    // user's own request pre-filled, so they only complete the details. Nothing is
-    // auto-created: the user reviews and submits.
-    setTicketForm({
-      subject: prefill?.subject ?? "",
-      description: prefill?.description ?? "",
-      domain: prefill?.domain ?? "general",
-      priority: "medium",
-      assignee: "",
-      due_date: "",
-      destination: "jira",
-    });
-    listTicketDestinations()
-      .then((ds) => {
-        setTicketDests(ds);
-        const firstConfigured = ds.find((d) => d.configured);
-        if (firstConfigured)
-          setTicketForm((f) => (f ? { ...f, destination: firstConfigured.key } : f));
-      })
-      .catch(() => { /* noop */ });
-    // v0.21.98 — assignable users (same list as Tickets page)
-    assignableUsers()
-      .then((d) => setAssignable(d?.users ?? []))
-      .catch(() => setAssignable([]));
-    // v1.6.3 — live category list (reflects domains added by knowledge managers)
-    listActiveDomains()
-      .then((ds) => {
-        if (!ds.length) return;
-        const hasGeneral = ds.some((x) => x.key === "general");
-        const list = [
-          ...(hasGeneral ? [] : [{ key: "general", label: "General" }]),
-          ...ds.map((x) => ({ key: x.key, label: x.label })),
-        ];
-        setTicketDomains(list);
-        // keep the current selection if it still exists, else fall back to General
-        setTicketForm((f) => (f ? {
-          ...f,
-          domain: list.some((x) => x.key === f.domain) ? f.domain : list[0].key,
-        } : f));
-      })
-      .catch(() => { /* keep fallback list */ });
-  }
-
-  async function submitTicketForm() {
-    if (!ticketForm || !ticketForm.subject.trim()) return;
-    setTicketBusy(true);
-    try {
-      // v0.21.98 — same native path as Tickets page "Create support ticket"
-      const created = await createTicketApi({
-        subject: ticketForm.subject,
-        description: ticketForm.description,
-        domain: ticketForm.domain,
-        priority: ticketForm.priority,
-        assignee: ticketForm.assignee || null,
-        due_date: ticketForm.due_date || null,
-        destination: ticketForm.destination,
-        session_id: sessionRef.current ?? null,
-      });
-      const destLabel = ticketForm.destination === "openproject" ? "OpenProject" : "Jira";
-      const ticketId = created?.id ?? "";
-      const link = created?.jira_link ?? "";
-
-      // v1.6.40 — the form supersedes the pending HITL escalation: mark it cancelled
-      // so it leaves the admin queue and cannot be approved later (which would create
-      // a second ticket). Best-effort — the ticket already exists either way.
-      if (escalationApprovalId) {
-        try {
-          await decideApproval(escalationApprovalId, "cancelled");
-        } catch { /* the ticket is already created; the queue entry is cosmetic */ }
-        setEscalationApprovalId(null);
-      }
-
-      // "after" signal: sound + haptics + in-app notice. The requester email is
-      // sent server-side by notifier.notify_ticket_created() in POST /api/tickets.
-      alertTicket("after");
-      chatAlert(`${ticketId || "Ticket"} created in ${destLabel}`);
-      // v1.6.8 — reflect the creation in the chat itself (assistant info message);
-      // the backend also persisted it, so it survives reload.
-      const infoLine = link
-        ? `✅ Ticket ${ticketId} created in ${destLabel}.\nYou can follow it here: ${link}\nThe IT team will follow up.`
-        : `✅ Ticket ${ticketId} created in ${destLabel}. The IT team will follow up.`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: infoLine,
-          timestamp: currentTime(),
-        },
-      ]);
-      setTicketForm(null);
-    } catch (e: any) {
-      // v1.6.3 — surface the real reason (was a generic message that hid 422s)
-      chatAlert(`Ticket creation failed — ${e?.message ?? "unknown error"}`, "err");
-    } finally {
-      setTicketBusy(false);
-    }
-  }
-
-
-
-  /* ----------------------------------------------------------
-      FILTER HISTORY
-  ---------------------------------------------------------- */
-
-  const filteredConversations = conversations.filter((c) => {
-    const q = search.toLowerCase();
-    const title = (c.title ?? c.session_id).toLowerCase();
-    return !q || title.includes(q);
-  });
-
-  /* ----------------------------------------------------------
-      RENDER
-  ---------------------------------------------------------- */
-
-  // S1.1 — derived once per render: real retrieval stats + cited sources for the panel.
-  const sources = latestSources(messages);
-  const retrieval = latestRetrieval(messages);
-  // v1.6.65 — "what produced this answer" for the detail strip. A live-infrastructure
-  // answer has no retrieval numbers, so the same panel used to read 0 / "—" throughout.
-  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-  const lastIsLive = lastAssistant?.toolUsed === "mcp_infra";
-  const SERVER_LABEL: Record<string, string> = {
-    rancher: "Rancher / Kubernetes",
-    proxmox: "Proxmox VE",
-  };
-  const detailSummary = {
-    live: lastIsLive,
-    serverLabels: (lastAssistant?.evidence?.servers ?? []).map((x) => SERVER_LABEL[x] ?? x),
-    at: lastAssistant?.evidence?.at ?? null,
-    calls: lastAssistant?.evidence?.calls ?? lastAssistant?.toolCalls?.length ?? undefined,
-    totalMs: lastAssistant?.evidence?.total_ms,
-    readOnly: lastAssistant?.evidence?.read_only ?? true,
-    chunks: retrieval?.chunks ?? null,
-    cited: retrieval?.cited ?? (sources.length || null),
-    rerankUsed: retrieval?.rerank_used ?? null,
-    role: retrieval?.role ?? null,
-    aclScoped: retrieval?.acl_scoped ?? null,
-  };
-  // S1.2 — exactly one progress surface: the live pipeline card. While it is on
-  // screen (isTyping) the in-bubble placeholder degrades to a neutral skeleton so
-  // the user never reads two competing "in progress" animations.
-  return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
-      {mobileHistory && (
-        <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setMobileHistory(false)} />
-      )}
-
-      {/* ================= MAIN CHAT ================= */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* S2.8 — h-16 duplicated the app-shell bar's height; h-12 keeps a single
-            visual rhythm between the shell chrome and the page chrome. The source
-            panel's header uses the SAME height and background, so the divider under
-            both is one continuous line across the page. */}
-        <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--topbar-bg)] px-4 lg:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <button className="rounded-lg p-2 hover:bg-muted lg:hidden" onClick={() => setMobileHistory(true)}>
-              <Menu className="size-5" />
-            </button>
-            <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-[var(--brand-chip)] text-[var(--accent-foreground)] shadow-sm">
-              <Bot className="size-4" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold">IT Assistant</h1>
-                {/* The page identity is the assistant's own name, matching the
-                    reference answer card's "IT Assistant". The subtitle keeps the
-                    mockup's line; health state lives in the panel's System status. */}
-                <p className="mt-0.5 hidden truncate text-2xs text-muted-foreground sm:block">
-                  Get help from enterprise knowledge and IT experts
-                </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* The four health chips (StatusChips) and the "RBAC protected" chip are
-                gone. The right panel's System status card already names every
-                dependency and its state, so the header was repeating a sample of it —
-                and this row now also carries the panel's own header, which is what
-                makes the two columns read as ONE bar instead of two. */}
-            {/* v1.6.65 — the panel was `hidden xl:flex`, so on a phone (where this app
-                is mostly used) "what produced this answer" was unreachable. This opens
-                it inline BELOW the header, so it participates in layout and can never
-                occlude the composer. */}
-            <button
-              type="button"
-              onClick={() => setPanelOpen((v) => !v)}
-              title="What produced this answer"
-              aria-label="Toggle answer detail"
-              className={`rounded-lg p-2 transition xl:hidden ${
-                panelOpen ? "bg-muted text-foreground" : "hover:bg-muted text-muted-foreground"
-              }`}
-            >
-              <Info className="size-4" />
-            </button>
-          </div>
-        </header>
-
-        {/* v1.6.65 — inline (not a floating sheet) so it can never cover the composer,
-            and mode-aware so a live answer is not described with retrieval numbers. */}
-        {panelOpen && (
-          <div className="shrink-0 border-b border-[var(--border)] bg-[var(--card)] px-4 py-3 xl:hidden">
-            <SessionPanel summary={detailSummary} />
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <button
+          type="button"
+          aria-expanded={systemOpen}
+          onClick={() => setSystemOpen((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 p-4 text-left"
+        >
+          <span className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><ShieldCheck size={17} /></span>
+            <span>
+              <span className="block text-sm font-semibold text-slate-900">System status</span>
+              <span className="mt-1 block text-xs text-slate-500">7 services · status from screenshot</span>
+            </span>
+          </span>
+          <ChevronDown size={16} className={`text-slate-400 transition-transform ${systemOpen ? "rotate-180" : ""}`} />
+        </button>
+        {systemOpen && (
+          <div className="space-y-1 border-t border-slate-100 p-3">
+            {healthServices.map((service) => (
+              <div key={service} className="flex items-center justify-between gap-2 rounded-lg px-2 py-2">
+                <span className="text-[11px] font-medium text-slate-700">{service}</span>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Healthy
+                </span>
+              </div>
+            ))}
+            <p className="px-2 pt-2 text-[10px] leading-4 text-slate-400">Static status labels from the supplied screenshot; not live monitoring.</p>
           </div>
         )}
+      </section>
 
-        {/* Messages */}
-        <div ref={messagesContainerRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          {/* S2.4 — the scroll container must be a flex column for `justify-center`
-              to have any height to centre within; previously the empty state sat
-              top-heavy with ~200px of dead space above the composer. */}
-          <div className="mx-auto flex min-h-full max-w-[900px] flex-col px-4 py-6 lg:px-6">
-            {messages.length === 0 ? (
-              <div className="flex flex-1 flex-col justify-center">
-                <EmptyChat userName={userName} onSuggestion={(q) => { setInput(q); window.setTimeout(() => { const form = document.querySelector<HTMLFormElement>("form"); form?.requestSubmit(); }, 60); }} />
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {messages.map((m) => (
-                  <MessageBubble
-                    key={m.id}
-                    message={m}
-                    busy={isTyping}
-                    showSources={preferences.show_rag_sources}
-                    showTokenUsage={preferences.show_token_usage}
-                    markdownRendering={preferences.markdown_rendering}
-                    liveStageText={stage}
-                    liveElapsedMs={pipeline.elapsed}
-                    onHelpful={() => submitFeedback(m, 1)}
-                    onNotHelpful={() => submitFeedback(m, -1)}
-                    onOpenTicketForm={() => openTicketForm(m)}
-                    onSubmitEdit={(mid, text) => handleEditSubmit(mid, text)}
-                    onRetryQuestion={() => retryFromMessage(m)}
-            onAskLive={() => askLiveFromMessage(m)}
-                  />
-                ))}
-                {/* In-flight RAG execution status shown ONLY while actively generating before message persists */}
-                {isTyping && (
-                  // S2.7 — align with the answer column (bubbles are max-w-[88%] of
-                  // the 1000px column) instead of a narrower 768px panel that read
-                  // like a floating modal parked under the bubble.
-                  <div className="w-full pb-2">
-                    <RagPipelineStatus
-                      active={true}
-                      stage={stage}
-                      streaming={pipeline.streaming}
-                      telemetry={pipeline.telemetry}
-                      elapsedMs={pipeline.elapsed}
-                      defaultOpen={false}
-                    />
-                  </div>
-                )}
-                {chatNote && (
-                  <div className="mx-auto w-fit rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-2xs font-medium shadow-sm">
-                    {chatNote}
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
+      <PanelCard title="Quick actions" subtitle="Shortcuts for common requests" icon={LifeBuoy}>
+        <div className="space-y-2">
+          {[
+            ["Reset password", "Reset password"],
+            ["Check service status", "Check service status"],
+            ["My tickets", "My tickets"],
+          ].map(([label, action]) => (
+            <button
+              key={action}
+              type="button"
+              onClick={() => triggerQuickAction(action)}
+              className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-medium text-slate-700 transition hover:border-violet-200 hover:bg-violet-50"
+            >
+              {label}<ArrowUpRight size={14} className="text-slate-400" />
+            </button>
+          ))}
         </div>
+        <p className="mt-3 text-[10px] text-slate-400">Actions show local demo confirmations only.</p>
+      </PanelCard>
+    </div>
+  );
 
-        {/* v1.6.40 — the HITL approval modal was removed. An escalation now opens the
-            pre-filled Create Ticket form for the requester, who fills in the details and
-            submits; the pending approval is marked `cancelled` (never resumed, so no
-            duplicate ticket). Admins keep the notification bell for awareness. */}
-
-        {/* Composer — compact single-row */}
-        <div className="shrink-0 border-t border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-xs">
-          <div className="mx-auto max-w-[900px] px-4 py-2 sm:px-6 sm:py-2.5">
-            <form onSubmit={sendMessage} className="relative">
-              {pendingFiles.length > 0 && (
-                <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
-                  {pendingFiles.map((f) => (
-                    <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-2xs">
-                      {f.mime.startsWith("image/") ? "🖼️" : "📄"} {f.filename}
-                      <button
-                        type="button"
-                        className="text-muted-foreground hover:text-red-500"
-                        onClick={() => setPendingFiles((p) => p.filter((x) => x.id !== f.id))}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <Composer
-                value={input}
-                onChange={setInput}
-                onSubmit={sendMessage}
-                busy={isTyping}
-                onStop={stopGeneration}
-                hint
-                multiline
-                placeholder="Ask a follow-up IT question..."
-                attaching={uploading}
-                attachAccept="image/*,.pdf,.txt,.md,.doc,.docx,.xlsx,.csv"
-                inputRef={composerRef}
-                aria-label="Ask an IT question"
-                onAttach={async (f: File) => {
-                  setUploading(true);
-                  try {
-                    const res = await uploadAttachment(f, sessionRef.current);
-                    setPendingFiles((p) => [...p, res]);
-                  } finally {
-                    setUploading(false);
-                  }
-                }}
-                above={
-                  pendingFiles.length > 0 ? (
-                    <div className="flex w-full flex-wrap gap-2 px-1 pb-2">
-                      {pendingFiles.map((f) => (
-                        <span key={f.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-2xs">
-                          {f.mime.startsWith("image/") ? "🖼️" : "📄"} {f.filename}
-                          <button
-                            type="button"
-                            aria-label={`Remove ${f.filename}`}
-                            className="text-muted-foreground hover:text-red-500"
-                            onClick={() => setPendingFiles((p) => p.filter((x) => x.id !== f.id))}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null
-                }
-              />
-
-            </form>
-
-            {/* S3.11 — 9.5px slate-500 on the page background failed comfortable
-                reading; 11px at slate-500/400 clears the contrast floor. */}
-            <div className="mt-1.5 flex items-center justify-center gap-3 text-xs leading-snug text-muted-foreground">
-              <span className="text-center">
-                AI-generated answers should be verified before acting. Access is RBAC-protected.
-              </span>
-              {/* The key hint now lives inside the field, next to the Send button it
-                  describes. Ctrl+Enter genuinely sends (see the textarea's onKeyDown), so
-                  the hint is accurate; plain Enter still sends as well. */}
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/35 md:hidden" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setMobileNavOpen(false);
+        }}>
+          <aside className="flex h-full w-72 flex-col bg-gradient-to-b from-violet-700 to-violet-900 p-4 shadow-2xl">
+            <div className="mb-3 flex justify-end">
+              <button type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} className="rounded-lg p-2 text-white hover:bg-white/10"><X size={18} /></button>
             </div>
-          </div>
+            <Sidebar onNavigate={onNavigate} closeMobile={() => setMobileNavOpen(false)} userName={userName} displayRole={displayRole} onLogout={onLogout} />
+          </aside>
         </div>
-      </main>
-
-      {/* ================= RIGHT SOURCE PANEL ================= */}
-      {/* S2.6 — always mounted on xl (was gated on messages.length > 0, which made
-          the message column jump 300px narrower the moment the first answer landed).
-          The panel itself (header, retrieval meta, filter, grouped list, empty state)
-          now lives in its own component so it can be rendered and measured without
-          signing in — see scripts/sources_harness_shot.mjs. */}
-      {preferences.show_rag_sources && showSources && (
-        <SourcePanel
-          sources={sources}
-          retrieval={retrieval}
-          live={lastIsLive}
-          onExplain={explainSource}
-          onAsk={() => composerRef.current?.focus()}
-          onNavigate={onNavigate}
-        />
       )}
 
-      {/* v0.21.38 — rename conversation dialog */}
-{/* ---------- create-ticket prefill dialog (v0.21.90) ---------- */}
-        {ticketForm && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]"
-            onClick={() => setTicketForm(null)}
-          >
-            <div
-              className="w-full max-w-lg rounded-2xl bg-[var(--card)] shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b px-5 py-4 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-9 place-items-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300">
-                    <TicketIcon className="size-4" />
+      {mobileSourcesOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/35 lg:hidden" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setMobileSourcesOpen(false);
+        }}>
+          <aside className="ml-auto h-full w-full max-w-sm overflow-y-auto bg-slate-50 p-4 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold">Sources & status</h2>
+              <button type="button" aria-label="Close sources panel" onClick={() => setMobileSourcesOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-white"><X size={18} /></button>
+            </div>
+            {sourcesPanel}
+          </aside>
+        </div>
+      )}
+
+      <div className="flex min-h-screen">
+        <aside className="sticky top-0 hidden h-screen w-[230px] shrink-0 flex-col bg-gradient-to-b from-violet-700 to-violet-900 p-4 md:flex">
+          <Sidebar onNavigate={onNavigate} userName={userName} displayRole={displayRole} onLogout={onLogout} />
+        </aside>
+
+        <main className="min-w-0 flex-1">
+          <div className="mx-auto grid max-w-[1700px] grid-cols-1 gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:px-7 lg:py-6">
+            <section className="min-w-0">
+              <header className="mb-5 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <button type="button" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm md:hidden">
+                    <Menu size={18} />
+                  </button>
+                  <div className="min-w-0">
+                    <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
+                      <span>Workspace</span><ChevronRight size={12} /><span>Chat</span>
+                    </div>
+                    <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">Database support</h1>
                   </div>
+                </div>
+                <button type="button" onClick={() => setMobileSourcesOpen(true)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm lg:hidden">
+                  <BookOpen size={15} /> Sources
+                </button>
+              </header>
+
+              <div className="mb-5 flex justify-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 px-4 py-3 text-sm font-medium text-white shadow-sm">
+                  Database is down
+                </div>
+              </div>
+
+              <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Bot size={20} /></span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-sm font-bold text-slate-900">IT Assistant</h2>
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Visible answer excerpt</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Database support</p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-medium text-slate-600">
+                    <Clock3 size={12} /> Retrieval pipeline completed 28.1s
+                  </span>
+                </div>
+
+                <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
                   <div>
-                    <h2 className="text-sm font-semibold">Create support ticket</h2>
-                    <p className="text-2xs text-muted-foreground">
-                      Prefilled from this chat — edit the details before submitting
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Suggested next step</p>
+                    <h3 className="text-xl font-bold leading-snug tracking-tight text-slate-950 sm:text-2xl">
+                      Validate recovery and involve the DBA team
+                    </h3>
+                    <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+                      If the service error indicates configuration, permissions, recovery, replication, or data issues, escalate to the DBA Team.
                     </p>
                   </div>
-                </div>
-                <button
-                  onClick={() => setTicketForm(null)}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <Trash2 className="size-4 opacity-0" />
-                  <span className="text-xs">✕</span>
-                </button>
-              </div>
 
-              <div className="space-y-4 p-5">
-                <div>
-                  <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Subject
-                  </label>
-                  <input
-                    value={ticketForm.subject}
-                    onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
-                    className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950"
-                   aria-label="Subject"/>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Description
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={ticketForm.description}
-                    onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
-                    className="w-full resize-none rounded-xl border bg-white px-3 py-2.5 text-xs outline-none focus:border-orange-500 dark:border-slate-700 dark:bg-slate-950"
-                   aria-label="Description"/>
-                </div>
-                {/* v1.6.4 — destination: create in Jira or OpenProject (no local-only) */}
-                <div>
-                  <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Create in
-                  </label>
-                  <div className="flex gap-2">
-                    {ticketDests.map((d) => {
-                      const active = ticketForm.destination === d.key;
-                      return (
-                        <button
-                          key={d.key}
-                          type="button"
-                          disabled={!d.configured}
-                          title={d.configured
-                            ? `Create this ticket in ${d.label}`
-                            : `${d.label} is not configured — set it up in Settings → Integrations`}
-                          onClick={() => setTicketForm({ ...ticketForm, destination: d.key })}
-                          className={`h-10 flex-1 rounded-xl border px-3 text-xs font-medium transition dark:border-slate-700 dark:bg-slate-950 ${
-                            active
-                              ? "border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400"
-                              : d.configured
-                                ? "border hover:border-orange-400 dark:border-slate-700"
-                                : "cursor-not-allowed cursor-not-allowed opacity-40 italic dark:border-slate-800"
-                          }`}
-                        >
-                          {d.label}{!d.configured ? " (not configured)" : ""}
-                        </button>
-                      );
-                    })}
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+                    <div className="flex gap-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700"><AlertTriangle size={16} /></span>
+                      <div>
+                        <p className="text-xs font-bold text-amber-950">Use approved recovery procedures.</p>
+                        <p className="mt-1.5 text-xs leading-5 text-amber-900/85">
+                          Restart only through an approved DBA incident/change procedure. For high availability or failover, follow the specific approved cluster failover runbook.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Category
-                    </label>
-                    <select
-                      value={ticketForm.domain}
-                      onChange={(e) => setTicketForm({ ...ticketForm, domain: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Category">
-                      {ticketDomains.map((d) => (
-                        <option key={d.key} value={d.key}>{d.label}</option>
+
+                  <section aria-labelledby="validation-title">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 id="validation-title" className="text-sm font-bold text-slate-900">Validation checklist</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {checklist.filter((item) => item.done).length} of {checklist.length} checks complete
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600">Local checklist</span>
+                    </div>
+                    <div className="space-y-2">
+                      {checklist.map((item) => (
+                        <label key={item.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition ${item.done ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 hover:border-violet-200 hover:bg-violet-50/30"}`}>
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            onChange={() => toggleChecklist(item.id)}
+                            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300 accent-violet-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500"
+                            aria-label={item.label}
+                          />
+                          <span className={`min-w-0 flex-1 text-xs leading-5 ${item.done ? "text-slate-500 line-through" : "text-slate-700"}`}>
+                            {item.label}
+                            {item.command && <code className="ml-1.5 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-violet-800">{item.command}</code>}
+                          </span>
+                          {item.done && <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />}
+                        </label>
                       ))}
-                    </select>
+                    </div>
+                  </section>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="mb-3 flex items-center gap-2 text-slate-700"><Users size={15} /><h3 className="text-xs font-bold">Incident routing</h3></div>
+                      <div className="space-y-2.5 text-xs">
+                        <div className="flex justify-between gap-3"><span className="text-slate-500">Owner</span><span className="font-semibold text-slate-800">DBA Team</span></div>
+                        <div className="flex justify-between gap-3"><span className="text-slate-500">Jira queue / project</span><span className="text-right font-semibold text-slate-800">IT HelpDesk · Database</span></div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-center gap-2 text-slate-700"><Activity size={15} /><h3 className="text-xs font-bold">Answer metadata</h3></div>
+                      <p className="text-xs leading-5 text-slate-600">11:52 PM <span className="mx-1 text-slate-300">·</span> <strong className="font-semibold text-slate-800">79% answer confidence</strong></p>
+                      <p className="mt-1 text-[11px] text-slate-500">2,915 input / 1,465 output tokens</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Priority
-                    </label>
-                    <select
-                      value={ticketForm.priority}
-                      onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Priority">
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" aria-pressed={feedback === "helpful"} onClick={() => { setFeedback("helpful"); notify("Thanks for your feedback. Saved in this preview."); }} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${feedback === "helpful" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                        <ThumbsUp size={14} /> Helpful
+                      </button>
+                      <button type="button" aria-pressed={feedback === "not-helpful"} onClick={() => { setFeedback("not-helpful"); notify("Feedback noted locally in this preview."); }} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${feedback === "not-helpful" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                        <ThumbsDown size={14} /> Not helpful
+                      </button>
+                      <button type="button" onClick={copyAnswer} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+                        <Copy size={14} /> Copy answer
+                      </button>
+                      <button type="button" onClick={() => notify("Regenerate is unavailable offline; no AI service was contacted.")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+                        <RefreshCw size={14} /> Regenerate
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => setJiraOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700">
+                      <Ticket size={15} /> {jiraCreated ? "Create another Jira preview" : "Create Jira ticket"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Feedback, copy, and ticket actions are local preview interactions.</p>
+                </div>
+              </article>
+
+              {messages.length > 0 && (
+                <section aria-label="Follow-up conversation" className="mt-5 space-y-3">
+                  {messages.map((message) => (
+                    <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.type === "user" ? "rounded-br-md bg-violet-600 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700 shadow-sm"}`}>
+                        {message.type === "assistant" && <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">Offline preview response</p>}
+                        {message.text}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              )}
+
+              <form onSubmit={sendFollowUp} className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <label htmlFor="follow-up" className="sr-only">Ask a follow-up question</label>
+                <textarea
+                  id="follow-up"
+                  value={followUp}
+                  onChange={(event) => setFollowUp(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  rows={2}
+                  placeholder="Ask a follow-up question…"
+                  className="w-full resize-y border-0 bg-transparent px-2 py-2 text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600">
+                    <Bot size={13} /> Auto mode <ChevronDown size={12} />
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="hidden text-[10px] text-slate-400 sm:inline">Offline demo · no AI call</span>
+                    <button type="submit" disabled={!followUp.trim()} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45">
+                      <Send size={14} /> Send
+                    </button>
                   </div>
                 </div>
-                {/* v0.21.98 — Assignee + Due date (same as Tickets page form) */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Assignee
-                    </label>
-                    <select
-                      value={ticketForm.assignee}
-                      onChange={(e) => setTicketForm({ ...ticketForm, assignee: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950" aria-label="Assignee">
-                      <option value="">Unassigned</option>
-                      {assignable.map((u) => (
-                        <option key={u.username} value={u.username}>
-                          {u.username}{u.role === "admin" ? " (admin)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Due date
-                    </label>
-                    <input
-                      type="date"
-                      value={ticketForm.due_date}
-                      onChange={(e) => setTicketForm({ ...ticketForm, due_date: e.target.value })}
-                      className="h-10 w-full rounded-xl border bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950"
-                     aria-label="Due date"/>
-                  </div>
-                </div>
-              </div>
+              </form>
+              <p className="mt-2 text-center text-[10px] text-slate-400">Follow-up messages receive a canned offline preview response.</p>
+            </section>
 
-              <div className="flex justify-end gap-2 border-t px-5 py-4 dark:border-slate-800">
-                <button
-                  onClick={() => setTicketForm(null)}
-                  className="rounded-xl border px-4 py-2.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={submitTicketForm}
-                  disabled={ticketBusy || !ticketForm.subject.trim()}
-                  className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:opacity-50"
-                >
-                  <TicketIcon className="size-3.5" />
-                  {ticketBusy ? "Creating…" : "Create ticket"}
-                </button>
-              </div>
-            </div>
+            <aside className="hidden min-w-0 lg:block">
+              <div className="sticky top-6">{sourcesPanel}</div>
+            </aside>
           </div>
-        )}
+        </main>
+      </div>
 
-              {renameTarget && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setRenameTarget(null)}
-        >
-          <div
-            className="mx-4 w-full max-w-[400px] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <Pencil className="size-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-sm font-semibold">Rename conversation</span>
+      {jiraOpen && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/40 p-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setJiraOpen(false);
+        }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="jira-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Local preview only</p>
+                <h2 id="jira-title" className="mt-1 text-lg font-bold text-slate-950">Create Jira ticket</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Review the simulated ticket details. Nothing will be sent to Jira.</p>
+              </div>
+              <button type="button" aria-label="Close Jira preview dialog" onClick={() => setJiraOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={17} /></button>
             </div>
-            <input
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={async (e) => {
-                if (e.key === "Enter" && renameTarget) {
-                  await renameConversation(renameTarget.id, renameValue);
-                  setRenameTarget(null);
-                  refreshConversations();
-                }
-              }}
-              className="mb-4 h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800"
-              placeholder="Conversation title"
-             aria-label="Rename conversation"/>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setRenameTarget(null)}
-                className="rounded-lg border px-3 py-2 text-xs font-medium transition hover:bg-muted dark:border-slate-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (renameTarget) {
-                    await renameConversation(renameTarget.id, renameValue);
-                    setRenameTarget(null);
-                    refreshConversations();
-                  }
-                }}
-                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-              >
-                Save
-              </button>
-            </div>
-          </div>
+            <form onSubmit={createJiraPreview} className="space-y-4">
+              <label className="block text-xs font-semibold text-slate-700">
+                Summary
+                <input defaultValue="Database is down — validate recovery" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] text-slate-500">Project</p><p className="mt-1 text-xs font-semibold text-slate-800">IT HelpDesk</p></div>
+                <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] text-slate-500">Queue</p><p className="mt-1 text-xs font-semibold text-slate-800">Database</p></div>
+              </div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Description
+                <textarea defaultValue="Validate database recovery using approved procedures and involve the DBA Team." rows={3} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal leading-5 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100" />
+              </label>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button type="button" onClick={() => setJiraOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-700">Create preview ticket</button>
+              </div>
+            </form>
+          </section>
         </div>
       )}
-      {/* v0.21.35 — Ctrl+K conversation palette */}
-      {paletteOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 pt-[12vh] backdrop-blur-sm"
-          onClick={() => setPaletteOpen(false)}
-        >
-          <div
-            className="mx-4 w-full max-w-[560px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2 border-b px-4 py-3 dark:border-slate-700">
-              <Search className="size-4 text-muted-foreground" />
-              <input
-                autoFocus
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && filteredConversations.length > 0) {
-                    openConversation(filteredConversations[0].session_id);
-                    setPaletteOpen(false);
-                  }
-                }}
-                placeholder="Search conversations..."
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-               aria-label="Search conversations"/>
-              <kbd className="shrink-0 rounded border bg-slate-50 px-1.5 py-0.5 text-2xs text-muted-foreground dark:border-slate-600 dark:bg-slate-800">
-                Esc
-              </kbd>
-            </div>
-            <div className="max-h-[46vh] overflow-y-auto p-2">
-              {filteredConversations.length === 0 ? (
-                <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-                  No conversations found
+
+      {quickAction && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/40 p-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setQuickAction(null);
+        }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="quick-action-title" className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700"><LifeBuoy size={18} /></span>
+                <div>
+                  <h2 id="quick-action-title" className="text-sm font-bold text-slate-900">{quickAction}</h2>
+                  <p className="mt-1 text-[10px] font-semibold text-violet-700">Local demonstration</p>
                 </div>
-              ) : (
-                filteredConversations.map((c) => (
-                  <button
-                    key={c.session_id}
-                    onClick={() => { openConversation(c.session_id); setPaletteOpen(false); }}
-                    className={[
-                      "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition",
-                      selectedConversation === c.session_id
-                        ? "bg-blue-50 dark:bg-blue-950/40"
-                        : "hover:bg-slate-50 dark:hover:bg-slate-800",
-                    ].join(" ")}
-                  >
-                    <MessageSquareText className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
-                      {c.title || "New conversation"}
-                    </span>
-                    {selectedConversation === c.session_id && (
-                      <Check className="size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                    )}
-                  </button>
-                ))
-              )}
+              </div>
+              <button type="button" aria-label="Close quick action" onClick={() => setQuickAction(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={16} /></button>
             </div>
-            <div className="border-t px-4 py-2 text-2xs text-muted-foreground dark:border-slate-700">
-              Enter open · Esc close
-            </div>
-          </div>
+            <p className="text-xs leading-5 text-slate-600">
+              This shortcut is displayed for demonstration only. No account, service, or ticket system was contacted.
+            </p>
+            <button type="button" onClick={closeQuickAction} className="mt-5 w-full rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-700">Got it</button>
+          </section>
+        </div>
+      )}
+
+      {toast && (
+        <div role="status" aria-live="polite" className="fixed bottom-5 left-1/2 z-[80] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-medium text-white shadow-xl">
+          <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />{toast}
         </div>
       )}
     </div>
   );
 }
-
-/* ============================================================
-   MESSAGE BUBBLE
-============================================================ */
