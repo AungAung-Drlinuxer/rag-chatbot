@@ -114,17 +114,17 @@
      accent itself: #0048F0 on white is 6.59:1, so it is safe as a background with white
      text and as text on white.
      --------------------------------------------------------------------------- */
-  --color-blue-50:  #E8EDFB;
-  --color-blue-100: #D0DCF7;
-  --color-blue-200: #A8BCF0;
-  --color-blue-300: #7F9CE9;
-  --color-blue-400: #5C8CFF;
-  --color-blue-500: #2563F5;
-  --color-blue-600: #0048F0;
-  --color-blue-700: #0039C4;
-  --color-blue-800: #002D9C;
-  --color-blue-900: #002177;
-  --color-blue-950: #001A5C;
+  --color-blue-50:  #F5F3FF;
+  --color-blue-100: #EDE9FE;
+  --color-blue-200: #DDD6FE;
+  --color-blue-300: #C4B5FD;
+  --color-blue-400: #A78BFA;
+  --color-blue-500: #8B5CF6;
+  --color-blue-600: #7C3AED;
+  --color-blue-700: #6D28D9;
+  --color-blue-800: #5B21B6;
+  --color-blue-900: #4C1D95;
+  --color-blue-950: #2E1065;
 
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "JetBrains Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
@@ -136,19 +136,19 @@
   --card: #FFFFFF;
   --card-foreground: #12151D;
   --popover: #FFFFFF; --popover-foreground: #12151D;
-  --primary: #0048F0;
+  --primary: #7C3AED;
   --primary-foreground: #FFFFFF;
   --secondary: #EEF1F7;
   --secondary-foreground: #3A4356;
   --muted: #EEF1F7;
   --muted-foreground: #5A6478;
-  --accent: #E8EDFB;
-  --accent-foreground: #0040D8;
+  --accent: #F5F3FF;
+  --accent-foreground: #6D28D9;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
   --border: #DDE2EC;
   --input: #DDE2EC;
-  --ring: #0048F0;
+  --ring: #7C3AED;
   /* v0.21.65 — Sidebar vs main panel: two-tone. Sidebar = navy #0A1628,
      main content = soft blue-gray. Professional separation without borders. */
   --sidebar-bg: #0A1628;        /* deep ocean navy sidebar */
@@ -160,16 +160,16 @@
        #0048F0 — two blues on one screen, which is what made the sidebar read as coming
        from a different product. #5C8CFF is the accent lifted for text: #0048F0 is only
        2.77:1 on the navy sidebar, #5C8CFF is 5.79:1. */
-    --sidebar-hover: rgba(0, 72, 240, 0.14);
-    --sidebar-active-bg: rgba(0, 72, 240, 0.22);
-    --sidebar-active-text: #5C8CFF;
+    --sidebar-hover: rgba(124, 58, 237, 0.14);
+    --sidebar-active-bg: rgba(124, 58, 237, 0.22);
+    --sidebar-active-text: #A78BFA;
   --topbar-bg: #FFFFFF;
   --shadow: 0 2px 8px rgb(15 23 42 / .06), 0 1px 2px rgb(15 23 42 / .04);
   --shadow-md: 0 4px 6px rgb(15 23 42 / .06), 0 2px 4px rgb(15 23 42 / .04);
   --shadow-lg: 0 10px 15px rgb(15 23 42 / .06), 0 4px 6px rgb(15 23 42 / .04);
   --shadow-xl: 0 20px 25px rgb(15 23 42 / .08), 0 8px 10px rgb(15 23 42 / .04);
   --bg: var(--background); --surface: var(--card); --surface-2: var(--muted); --text: var(--foreground);
-  --text-muted: var(--muted-foreground); --accent-2: #0048F0; --accent-soft: #E8EDFB;
+  --text-muted: var(--muted-foreground); --accent-2: #7C3AED; --accent-soft: #F5F3FF;
   --ok: #16a34a; --warn: #d97706; --danger: #dc2626;
   --chat-font-size: 14px;
 }
@@ -183,36 +183,36 @@
   --card: #1D2130;
   --card-foreground: #E8EBF2;
   --popover: #222635; --popover-foreground: #E8EBF2;
-  --primary: #0048F0;
+  --primary: #8B5CF6;
   --primary-foreground: #FFFFFF;
   --secondary: #222635;
   --secondary-foreground: #C2C9D8;
   --muted: #222635;
   --muted-foreground: #6782A0;
-  --accent: rgba(0, 72, 240, 0.16);
+  --accent: rgba(124, 58, 237, 0.18);
   /* #0048F0 is only 2.77:1 as TEXT on this canvas, so accent TEXT gets a lighter tone
      while filled buttons keep the mockup's exact blue. */
-  --accent-foreground: #5C8CFF;
+  --accent-foreground: #A78BFA;
   --destructive: #f87171;
   --destructive-foreground: #12151D;
   --border: #2A2F42;
   --input: #2A2F42;
-  --ring: #0048F0;
+  --ring: #8B5CF6;
   /* v0.21.65 — sidebar deeper than main panel (two-tone depth) */
   --sidebar-bg: #050912;         /* deeper than --background #070B14 */
   --sidebar-border: #0F1D33;
   --sidebar-text: #C2C9D8;
   --sidebar-text-muted: #64748B;
-    --sidebar-hover: rgba(0, 72, 240, 0.16);
-    --sidebar-active-bg: rgba(0, 72, 240, 0.26);
-    --sidebar-active-text: #5C8CFF;
+    --sidebar-hover: rgba(124, 58, 237, 0.16);
+    --sidebar-active-bg: rgba(124, 58, 237, 0.26);
+    --sidebar-active-text: #A78BFA;
   --topbar-bg: #1D2130;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.4), 0 4px 6px rgba(0,0,0,.3);
   --shadow-xl: 0 20px 25px rgba(0,0,0,.5), 0 8px 10px rgba(0,0,0,.3);
   --bg: var(--background); --surface: var(--card); --surface-2: var(--muted); --text: var(--foreground);
-  --text-muted: var(--muted-foreground); --accent-2: #0048F0; --accent-soft: rgba(0, 72, 240, 0.16);
+  --text-muted: var(--muted-foreground); --accent-2: #8B5CF6; --accent-soft: rgba(124, 58, 237, 0.18);
   --ok: #22c55e; --warn: #f59e0b; --danger: #ef4444;
 }
 
@@ -252,7 +252,7 @@ body {
 .brand { display: flex; align-items: center; gap: 10px; }
 .logo {
   width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #002D9C, #0048F0); color: #fff; font-weight: 800; font-size: 14px;
+  background: linear-gradient(135deg, #5B21B6, #7C3AED); color: #fff; font-weight: 800; font-size: 14px;
 }
 .brand-text { font-weight: 700; font-size: 15px; }
 .sub { font-size: 11px; color: var(--text-muted); font-weight: 400; }
@@ -302,7 +302,7 @@ body {
   width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center;
   font-weight: 700; font-size: 11px; margin-top: 4px; user-select: none;
 }
-.avatar.assistant { background: linear-gradient(135deg, #0036B8, #0048F0); color: #fff; box-shadow: 0 4px 10px rgba(0, 72, 240,.25); }
+.avatar.assistant { background: linear-gradient(135deg, #6D28D9, #7C3AED); color: #fff; box-shadow: 0 4px 10px rgba(124, 58, 237,.25); }
 .avatar.user { background: var(--accent-soft); color: var(--primary); border: 1.5px solid color-mix(in srgb, var(--primary) 25%, transparent); }
 [data-theme="dark"] .avatar.user { color: #a5b4fc; }
 .msg { min-width: 0; max-width: min(78%, 680px); display: flex; flex-direction: column; gap: 4px; }
@@ -400,11 +400,11 @@ body {
 
 /* ---- Login ---- */
 .login-shell { display: grid; grid-template-columns: 1.15fr 1fr; height: 100vh; }
-.login-left { background: radial-gradient(1200px 600px at -10% -20%, rgba(0, 72, 240,.28), transparent 60%), radial-gradient(900px 500px at 110% 120%, rgba(14,165,233,.18), transparent 55%), linear-gradient(160deg, #101538 0%, #1e1b4b 45%, #002D9C 100%); color: #eef1ff; padding: 56px 58px; display: flex; flex-direction: column; gap: 26px; }
+.login-left { background: radial-gradient(1200px 600px at -10% -20%, rgba(124, 58, 237,.28), transparent 60%), radial-gradient(900px 500px at 110% 120%, rgba(167, 139, 250,.18), transparent 55%), linear-gradient(160deg, #1E1B4B 0%, #312E81 45%, #5B21B6 100%); color: #eef1ff; padding: 56px 58px; display: flex; flex-direction: column; gap: 26px; }
 .login-brand { display: flex; align-items: center; gap: 12px; }
-.logo-xl { width: 44px; height: 44px; border-radius: 12px; font-size: 17px; background: linear-gradient(135deg, #5C8CFF, #0048F0); box-shadow: 0 8px 22px rgba(0, 72, 240,.45); }
+.logo-xl { width: 44px; height: 44px; border-radius: 12px; font-size: 17px; background: linear-gradient(135deg, #A78BFA, #7C3AED); box-shadow: 0 8px 22px rgba(124, 58, 237,.45); }
 .login-headline { font-size: 38px; line-height: 1.12; font-weight: 800; letter-spacing: -.02em; margin-top: 8px; }
-.grad-text { background: linear-gradient(90deg, #a5b4fc, #67e8f9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.grad-text { background: linear-gradient(90deg, #C4B5FD, #A78BFA); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .login-feats { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
 .login-feats li { display: flex; gap: 14px; align-items: flex-start; }
 .login-feats .ico { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.15); display: grid; place-items: center; font-size: 17px; }
@@ -414,8 +414,8 @@ body {
 .login-card label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 8px; }
 .login-card input { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-family: var(--font); font-size: 14px; background: transparent; color: var(--text); transition: border-color .15s; }
 .login-card input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--accent-soft); }
-.btn-login { margin-top: 12px; height: 44px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(135deg, #0036B8, #0048F0); color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 8px 20px rgba(0, 72, 240,.35); transition: transform .12s, box-shadow .12s; }
-.btn-login:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 10px 26px rgba(0, 72, 240,.42); }
+.btn-login { margin-top: 12px; height: 44px; border-radius: 10px; border: none; cursor: pointer; background: linear-gradient(135deg, #6D28D9, #7C3AED); color: #fff; font-weight: 700; font-size: 14px; box-shadow: 0 8px 20px rgba(124, 58, 237,.35); transition: transform .12s, box-shadow .12s; }
+.btn-login:hover { filter: brightness(1.07); transform: translateY(-1px); box-shadow: 0 10px 26px rgba(124, 58, 237,.42); }
 .login-err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 12px; padding: 8px 11px; border-radius: 8px; }
 @media (max-width: 900px) { .login-shell { grid-template-columns: 1fr; } .login-left { display: none; } }
 
@@ -497,12 +497,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .profile-head { display: flex; align-items: center; gap: 10px; }
 .avatar.user-profile {
   width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #0036B8, #0048F0); color: #fff;
-  font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(0, 72, 240,.3);
+  background: linear-gradient(135deg, #6D28D9, #7C3AED); color: #fff;
+  font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(124, 58, 237,.3);
   flex-shrink: 0;
 }
 [data-theme="dark"] .avatar.user-profile {
-  background: linear-gradient(135deg, #0048F0, #5C8CFF);
+  background: linear-gradient(135deg, #7C3AED, #A78BFA);
 }
 .profile-info { min-width: 0; flex: 1; }
 .profile-info .name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -587,21 +587,21 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   --card-foreground: #12151D;
   --popover: #FFFFFF;
   --popover-foreground: #12151D;
-  --primary: #0048F0;
+  --primary: #7C3AED;
   --primary-foreground: #FFFFFF;
   --secondary: #EEF1F7;
   --secondary-foreground: #3A4356;
   --muted: #EEF1F7;
   --muted-foreground: #5A6478;
-  --accent: #E8EDFB;
-  --accent-foreground: #0040D8;
-  --accent-soft: #E8EDFB;
-  --accent-2: #0048F0;
+  --accent: #F5F3FF;
+  --accent-foreground: #6D28D9;
+  --accent-soft: #F5F3FF;
+  --accent-2: #7C3AED;
   --destructive: #dc2626;
   --destructive-foreground: #FFFFFF;
   --border: #DDE2EC;
   --input: #DDE2EC;
-  --ring: #0048F0;
+  --ring: #7C3AED;
   --shadow: 0 1px 2px rgb(18 21 29 / .05), 0 2px 8px rgb(18 21 29 / .05);
   --shadow-md: 0 2px 4px rgb(18 21 29 / .06), 0 8px 24px rgb(18 21 29 / .06);
   --shadow-lg: 0 4px 6px rgb(18 21 29 / .06), 0 16px 40px rgb(18 21 29 / .07);
@@ -620,21 +620,21 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   --card-foreground: #E8EBF2;
   --popover: #222635;
   --popover-foreground: #E8EBF2;
-  --primary: #0048F0;
+  --primary: #8B5CF6;
   --primary-foreground: #FFFFFF;
   --secondary: #222635;
   --secondary-foreground: #C2C9D8;
   --muted: #222635;
   --muted-foreground: #6782A0;
-  --accent: rgba(0, 72, 240, .16);
-  --accent-foreground: #5C8CFF;
-  --accent-soft: rgba(0, 72, 240, .16);
-  --accent-2: #0048F0;
+  --accent: rgba(124, 58, 237, .18);
+  --accent-foreground: #A78BFA;
+  --accent-soft: rgba(124, 58, 237, .18);
+  --accent-2: #8B5CF6;
   --destructive: #f87171;
   --destructive-foreground: #12151D;
   --border: #2A2F42;
   --input: #2A2F42;
-  --ring: #0048F0;
+  --ring: #8B5CF6;
   --shadow: 0 1px 2px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.35);
   --shadow-md: 0 2px 4px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.4);
   --shadow-lg: 0 4px 6px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
@@ -666,8 +666,8 @@ code, pre, .mono { font-family: var(--mono); }
 .brand .logo {
   width: 32px; height: 32px; border-radius: 9px;
   font-weight: 800; font-size: 14px;
-  background: linear-gradient(135deg, #0036B8 0%, #0036B8 50%, #0048F0 100%);
-  box-shadow: 0 4px 12px rgba(0, 72, 240,.35), inset 0 1px 0 rgba(255,255,255,.18);
+  background: linear-gradient(135deg, #6D28D9 0%, #6D28D9 50%, #7C3AED 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237,.35), inset 0 1px 0 rgba(255,255,255,.18);
 }
 .brand-text { font-weight: 700; font-size: 14.5px; letter-spacing: -.01em; }
 .brand-text + .sub { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; letter-spacing: .02em; text-transform: uppercase; font-weight: 500; }
@@ -679,8 +679,8 @@ code, pre, .mono { font-family: var(--mono); }
 /* Avatar gradient (assistant + user) */
 .avatar.assistant {
   width: 34px; height: 34px; border-radius: 10px;
-  background: linear-gradient(135deg, #0036B8 0%, #0048F0 100%);
-  box-shadow: 0 4px 12px rgba(0, 72, 240,.35);
+  background: linear-gradient(135deg, #6D28D9 0%, #7C3AED 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237,.35);
   font-size: 11px; font-weight: 700;
 }
 .avatar.user { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); border: 1.5px solid color-mix(in srgb, var(--primary) 30%, transparent); font-size: 11px; font-weight: 700; }

@@ -99,7 +99,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
               key={a.label}
               type="button"
               onClick={() => ask(a.prompt)}
-              className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:border-violet-200 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             >
               <a.icon className="size-3 shrink-0 text-muted-foreground" />
               {a.label}
@@ -108,7 +108,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
           <button
             type="button"
             onClick={() => onNavigate?.("tickets")}
-            className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:border-violet-200 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           >
             <Plus className="size-3 shrink-0 text-muted-foreground" />
             Create IT Ticket
@@ -116,7 +116,7 @@ export default function SystemStatus({ onNavigate }: { onNavigate?: (nav: string
           <button
             type="button"
             onClick={() => onNavigate?.("tickets")}
-            className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-left text-2xs font-medium text-foreground transition hover:border-violet-200 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           >
             <Ticket className="size-3 shrink-0 text-muted-foreground" />
             My tickets

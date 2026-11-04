@@ -137,11 +137,11 @@ export default function PageSidebar({
     <>
       {collapsed ? (
         /* Rail mode: top brand avatar or expand button */
-        <div className="flex flex-col items-center justify-center gap-2 border-b py-3 dark:border-slate-800">
+        <div className="flex flex-col items-center justify-center gap-2 border-b border-white/15 py-3">
           {branding.logo ? (
             <img src={branding.logo} alt="Logo" className="size-8 rounded-xl object-contain" />
           ) : (
-            <div className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-xs font-extrabold text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)]">iTH</div>
+            <div className="grid size-8 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm">iTH</div>
           )}
           {onToggleCollapsed && (
             <button
@@ -149,22 +149,22 @@ export default function PageSidebar({
               onClick={onToggleCollapsed}
               title="Expand sidebar (Ctrl+B)"
               aria-label="Expand sidebar"
-              className="mt-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+              className="mt-1 rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white transition"
             >
               <PanelLeftOpen className="size-4" />
             </button>
           )}
         </div>
       ) : (
-        <div className="flex h-16 items-center justify-between border-b px-4 dark:border-slate-800">
+        <div className="flex h-16 items-center justify-between border-b border-white/15 px-4">
           <div className="flex items-center gap-2.5 min-w-0">
             {branding.logo ? (
               <img src={branding.logo} alt="Company logo" className="size-8 shrink-0 rounded-xl object-contain" />
             ) : (
-              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#4338ca] via-[#7c3aed] to-[#6366f1] text-xs font-extrabold text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)]">iTH</div>
+              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm">iTH</div>
             )}
             <div className="min-w-0">
-              <div className="text-xs font-semibold text-slate-100 truncate">{branding.appName || "IT Help Chatbot"}</div>
+              <div className="text-xs font-semibold text-white truncate">{branding.appName || "IT Help Chatbot"}</div>
             </div>
           </div>
 
@@ -176,7 +176,7 @@ export default function PageSidebar({
               }}
               title="Assistant widget"
               aria-label="Show floating assistant button"
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+              className="rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white transition"
             >
               <Bot className="size-4" />
             </button>
@@ -189,7 +189,7 @@ export default function PageSidebar({
                 onClick={onToggleCollapsed}
                 title="Collapse sidebar (Ctrl+B)"
                 aria-label="Collapse sidebar"
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition"
+                className="rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white transition"
               >
                 <PanelLeftClose className="size-4" />
               </button>
@@ -212,7 +212,7 @@ export default function PageSidebar({
               window.dispatchEvent(new CustomEvent("ith:new-chat"));
               setMobileOpen(false);
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50"
           >
             <Plus className="size-3.5" />
             New Chat
@@ -244,13 +244,16 @@ export default function PageSidebar({
                   "mb-1 flex w-full items-center rounded-lg text-left text-xs font-medium transition",
                   collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                   active === item.id && !locked
-                    ? "bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-text)] font-semibold shadow-xs"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
+                    ? "bg-white text-violet-700 font-semibold shadow-sm"
+                    : "text-white/80 hover:bg-white/10 hover:text-white",
                   locked ? "opacity-60" : "",
                 ].join(" ")}
               >
                 {item.icon}
                 {!collapsed && <span className="flex-1">{item.label}</span>}
+                {active === item.id && !locked && (
+                  <span className="ml-auto size-1.5 shrink-0 rounded-full bg-violet-500" aria-hidden="true" />
+                )}
                 {locked && (
                   <svg viewBox="0 0 24 24" className="size-3.5 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="11" width="18" height="11" rx="2" />
@@ -270,15 +273,15 @@ export default function PageSidebar({
 
         {/* Recent Chat History in Sidebar */}
         {!collapsed && (
-          <div className="mt-4 pt-3 border-t border-[var(--sidebar-border)]/60">
-            <div className="flex items-center justify-between px-2 py-1.5 text-xs font-semibold tracking-wider text-slate-400">
+          <div className="mt-4 pt-3 border-t border-white/15">
+            <div className="flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/60">
               <button
                 type="button"
                 onClick={() => setHistoryOpen(!historyOpen)}
-                className="flex items-center gap-1.5 hover:text-slate-200 transition"
+                className="flex items-center gap-1.5 tracking-[0.14em] hover:text-white transition"
               >
                 <span>History</span>
-                <span className="text-2xs text-slate-500 font-normal">({conversations.length})</span>
+                <span className="text-2xs text-white/50 font-normal">({conversations.length})</span>
                 {historyOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
               </button>
               {conversations.length > 0 && (
@@ -297,7 +300,7 @@ export default function PageSidebar({
                       }
                     }
                   }}
-                  className="rounded p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 transition"
+                  className="rounded p-1 text-white/60 hover:text-rose-200 hover:bg-white/10 transition"
                   title="Delete all history"
                   aria-label="Delete all history"
                 >
@@ -310,14 +313,14 @@ export default function PageSidebar({
               <div className="mt-1 max-h-60 space-y-0.5 overflow-y-auto pr-1">
 
                 {conversations.length === 0 ? (
-                  <p className="px-2 py-2 text-2xs text-slate-500 italic">No recent chats</p>
+                  <p className="px-2 py-2 text-2xs text-white/55 italic">No recent chats</p>
                 ) : (
                   /* S1.3 — date grouping (Newest-first buckets) so a long history
                      reads as a timeline instead of one flat list of near-identical
                      question strings. */
                   groupConversations(conversations).map(([bucket, items]) => (
                     <div key={bucket} className="pb-1">
-                      <div className="sticky top-0 z-10 bg-[var(--card)]/95 px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur-sm">
+                      <div className="sticky top-0 z-10 px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wide text-white/55">
                         {bucket}
                       </div>
                       {items.map((c) => {
@@ -335,17 +338,17 @@ export default function PageSidebar({
                         className={[
                           "flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs transition",
                           isSelected
-                            ? "bg-blue-600/20 text-blue-300 font-semibold border-l-2 border-blue-500 pl-1.5"
-                            : "text-slate-300 hover:bg-slate-800/60 hover:text-white",
+                            ? "bg-white/20 font-semibold text-white"
+                            : "text-white/70 hover:bg-white/10 hover:text-white",
                         ].join(" ")}
                         title={c.title || "Untitled chat"}
                       >
                         <span className="flex items-center gap-1.5 truncate">
-                          {c.is_pinned && <Pin className="size-3 shrink-0 text-sky-400 rotate-45" />}
+                          {c.is_pinned && <Pin className="size-3 shrink-0 text-violet-200 rotate-45" />}
                           <span className="truncate">{c.title || "Untitled chat"}</span>
                           {(_dupes.get((c.title || "Untitled chat").trim().toLowerCase()) ?? 1) > 1 && (
                             <span
-                              className="shrink-0 rounded bg-slate-700/60 px-1 text-3xs font-semibold text-slate-300"
+                              className="shrink-0 rounded bg-white/20 px-1 text-3xs font-semibold text-white/85"
                               title="Sessions with this same title"
                             >
                               ×{_dupes.get((c.title || "Untitled chat").trim().toLowerCase())}
@@ -354,7 +357,7 @@ export default function PageSidebar({
                           {/* The mockup puts a terse age on every row; it is what lets the
                               eye skip a bucket it does not care about. */}
                           <span
-                            className="ml-auto shrink-0 pl-1.5 text-2xs tabular-nums text-slate-500 group-hover:text-slate-400"
+                            className="ml-auto shrink-0 pl-1.5 text-2xs tabular-nums text-white/50 group-hover:text-white/75"
                             title={c.last_at || c.updated_at || ""}
                           >
                             {relativeAge(c.last_at ?? c.updated_at)}
@@ -366,7 +369,7 @@ export default function PageSidebar({
                         <DropdownMenuTrigger asChild>
                           <button
                             type="button"
-                            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 transition"
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 text-white/60 hover:text-white transition"
                             title="Actions"
                           >
                             <MoreHorizontal className="size-3.5" />
@@ -418,15 +421,15 @@ export default function PageSidebar({
           </div>
         )}
       </nav>
-      <div className={"border-t py-4 dark:border-slate-800 " + (collapsed ? "px-2" : "px-4")}>
+      <div className={"border-t border-white/15 py-4 " + (collapsed ? "px-2" : "px-4")}>
         <div className={"flex items-center " + (collapsed ? "flex-col gap-2" : "gap-3")}>
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" title={collapsed ? (userName ?? "User") + " · " + pretty : undefined}>
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-white/20 text-sm font-semibold text-white" title={collapsed ? (userName ?? "User") + " · " + pretty : undefined}>
             {(userName?.charAt(0) ?? "A").toUpperCase()}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-slate-100">{userName ?? "User"}</div>
-              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold", (role === "admin" ? "bg-sky-500/20 text-sky-300" : role === "agent" ? "bg-cyan-500/20 text-cyan-300" : role === "knowledge" ? "bg-teal-500/20 text-teal-300" : "bg-slate-500/20 text-slate-300")].join(" ")}>
+              <div className="truncate text-xs font-semibold text-white">{userName ?? "User"}</div>
+              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold", "bg-white/20 text-white/90"].join(" ")}>
                 {pretty}
               </span>
             </div>
@@ -434,7 +437,7 @@ export default function PageSidebar({
           <button
             onClick={() => onLogout?.()}
             title="Sign out"
-            className={"flex items-center rounded-lg border border-slate-600 text-2xs font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300 " + (collapsed ? "p-2" : "gap-1.5 px-2.5 py-2")}
+            className={"flex items-center rounded-lg border border-white/30 text-2xs font-medium text-white/80 transition hover:border-red-300 hover:bg-red-500/10 hover:text-red-200 " + (collapsed ? "p-2" : "gap-1.5 px-2.5 py-2")}
           >
             <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -467,7 +470,7 @@ export default function PageSidebar({
           </svg>
         </button>
         <div className="flex items-center gap-2">
-          <div className="grid size-8 place-items-center rounded-lg bg-blue-600 text-2xs font-bold text-white">iTH</div>
+          <div className="grid size-8 place-items-center rounded-lg bg-violet-600 text-2xs font-bold text-white">iTH</div>
           <span className="text-xs font-semibold">IT Help</span>
         </div>
         <div className="size-10" />
@@ -477,7 +480,7 @@ export default function PageSidebar({
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-[var(--sidebar-bg)] transition-all border-[var(--sidebar-border)] lg:static lg:z-auto lg:translate-x-0 " + (collapsed ? "w-[72px]" : "w-[250px]"),
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-gradient-to-b from-violet-700 to-violet-900 transition-all border-violet-800/60 lg:static lg:z-auto lg:translate-x-0 " + (collapsed ? "w-[72px]" : "w-[250px]"),
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
