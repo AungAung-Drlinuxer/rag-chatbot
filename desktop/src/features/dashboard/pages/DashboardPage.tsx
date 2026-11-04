@@ -277,8 +277,8 @@ export default function Dashboard({ role }: Props) {
                   onClick={() => setRangeOpen((v) => !v)}
                   title="Reporting window"
                   className={[
-                    "flex h-8 items-center gap-2 rounded-lg border bg-white px-2.5 text-2xs font-medium transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800",
-                    win.kind === "custom" ? "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-300" : "",
+                    "flex h-8 items-center gap-2 rounded-lg border border-[var(--border)] bg-card px-2.5 text-2xs font-medium shadow-sm transition hover:bg-muted",
+                    win.kind === "custom" ? "border-[var(--primary)]/50 text-[var(--accent-foreground)]" : "",
                   ].join(" ")}
                 >
                   <CalendarDays className="size-3.5" />
@@ -286,7 +286,7 @@ export default function Dashboard({ role }: Props) {
                   <ChevronDown className={`size-3 text-muted-foreground transition ${rangeOpen ? "rotate-180" : ""}`} />
                 </button>
                 {rangeOpen && (
-                  <div className="absolute right-0 top-11 z-20 w-64 rounded-xl border bg-white p-1.5 shadow-lg dark:bg-slate-900">
+                  <div className="absolute right-0 top-11 z-20 w-64 rounded-2xl border border-[var(--border)] bg-[var(--popover)] p-1.5 shadow-lg">
                     {([7, 30, 90] as const).map((r) => (
                       <button
                         key={r}
@@ -298,8 +298,8 @@ export default function Dashboard({ role }: Props) {
                           setRangeOpen(false);
                         }}
                         className={[
-                          "block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800",
-                          win.kind === "preset" && win.days === r ? "font-semibold text-blue-600" : "text-slate-700 dark:text-slate-200",
+                          "block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-muted",
+                          win.kind === "preset" && win.days === r ? "font-semibold text-[var(--accent-foreground)]" : "text-foreground",
                         ].join(" ")}
                       >
                         Last {r} days
@@ -311,7 +311,7 @@ export default function Dashboard({ role }: Props) {
                       <p
                         className={[
                           "px-3 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide",
-                          win.kind === "custom" ? "text-blue-600" : "text-muted-foreground",
+                          win.kind === "custom" ? "text-[var(--accent-foreground)]" : "text-muted-foreground",
                         ].join(" ")}
                       >
                         Custom range
@@ -325,7 +325,7 @@ export default function Dashboard({ role }: Props) {
                             value={customFrom}
                             max={todayIso}
                             onChange={(e) => setCustomFrom(e.target.value)}
-                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-xs dark:bg-slate-950"
+                            className="mt-0.5 h-7 w-full rounded-md border border-[var(--border)] bg-card px-2 text-xs"
                           />
                         </label>
                         <label className="block">
@@ -335,12 +335,12 @@ export default function Dashboard({ role }: Props) {
                             value={customTo}
                             max={todayIso}
                             onChange={(e) => setCustomTo(e.target.value)}
-                            className="mt-0.5 h-7 w-full rounded-md border bg-white px-2 text-xs dark:bg-slate-950"
+                            className="mt-0.5 h-7 w-full rounded-md border border-[var(--border)] bg-card px-2 text-xs"
                           />
                         </label>
 
                         {customInvalid && (
-                          <p className="text-2xs leading-tight text-rose-600">
+                          <p className="text-2xs leading-tight text-destructive">
                             {customFrom > todayIso
                               ? "Start date is in the future."
                               : "Start date must be on or before the end date."}
@@ -354,7 +354,7 @@ export default function Dashboard({ role }: Props) {
                             setWin({ kind: "custom", start: customFrom, end: customTo });
                             setRangeOpen(false);
                           }}
-                          className="h-7 w-full rounded-md bg-blue-600 text-xs font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-7 w-full rounded-md bg-primary text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Apply range
                         </button>
@@ -497,7 +497,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Conversations */}
 
-              <Card className="flex min-h-0 flex-col overflow-hidden rounded-xl border-[var(--border)] p-4">
+              <Card className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] p-4 shadow-sm">
 
                 <div className="flex items-start justify-between gap-3">
 
@@ -546,7 +546,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Escalation */}
 
-              <Card className="flex min-h-0 flex-col overflow-hidden rounded-xl border-[var(--border)] p-4">
+              <Card className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] p-4 shadow-sm">
 
                 <div>
                   <h2 className="text-sm font-semibold">
@@ -603,7 +603,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Domains */}
 
-              <Card className="flex min-h-0 flex-col overflow-hidden rounded-xl border-[var(--border)] p-4">
+              <Card className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] p-4 shadow-sm">
 
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -645,7 +645,7 @@ export default function Dashboard({ role }: Props) {
                 CONFIDENCE GATE TREND (v1.1.6 — real meta.decision data)
             ================================================= */}
 
-            <Card className="flex h-[165px] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl p-4">
+            <Card className="flex h-[165px] min-h-0 shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] p-4 shadow-sm">
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-sm font-semibold">Confidence gate trend</h2>
@@ -679,7 +679,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Recent conversations */}
 
-              <Card className="flex flex-col overflow-hidden rounded-xl border-[var(--border)]">
+              <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] shadow-sm">
 
                 <SectionHeader
                   title="Recent conversations"
@@ -731,7 +731,7 @@ export default function Dashboard({ role }: Props) {
                               detail: { user: conversation.user, question: conversation.question },
                             }));
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs font-medium text-[var(--accent-foreground)] transition hover:bg-accent"
                         >
                           <Eye className="size-3.5" />
                           View
@@ -758,7 +758,7 @@ export default function Dashboard({ role }: Props) {
 
                     </colgroup>
 
-                    <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
+                    <thead className="sticky top-0 z-10 bg-muted">
 
                       <tr className="text-left text-2xs text-muted-foreground">
 
@@ -800,7 +800,7 @@ export default function Dashboard({ role }: Props) {
                         (conversation) => (
                           <tr
                             key={`${conversation.time}-${conversation.user}`}
-                            className="border-t hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                            className="border-t hover:bg-muted/50"
                           >
 
                             {/* #8 — date and time on separate lines; the single-line
@@ -843,7 +843,7 @@ export default function Dashboard({ role }: Props) {
                                     detail: { user: conversation.user, question: conversation.question },
                                   }));
                                 }}
-                                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs font-medium text-[var(--accent-foreground)] transition hover:bg-accent"
                               >
                                 <Eye className="size-3.5" />
                                 View
@@ -864,7 +864,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* Recent tickets */}
 
-              <Card className="flex flex-col overflow-hidden rounded-xl border-[var(--border)]">
+              <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] shadow-sm">
 
                 <SectionHeader
                   title="Recent tickets"
@@ -886,10 +886,10 @@ export default function Dashboard({ role }: Props) {
                   {(liveTickets ?? []).map((ticket) => (
                     <div
                       key={ticket.id}
-                      className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                      className="flex items-center gap-3 px-4 py-3.5 transition hover:bg-muted/50"
                     >
 
-                      <div className="w-14 shrink-0 text-2xs font-semibold text-blue-600">
+                      <div className="w-14 shrink-0 text-2xs font-semibold text-[var(--accent-foreground)]">
                         {ticket.id}
                       </div>
 
@@ -916,7 +916,7 @@ export default function Dashboard({ role }: Props) {
 
               {/* System health */}
 
-              <Card className="flex flex-col overflow-hidden rounded-xl border-[var(--border)]">
+              <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] shadow-sm">
 
                 {/* #3 — three items packed into one flex row squeezed the title and
                     wrapped the badge onto two lines. Title + status line stack on the
@@ -961,7 +961,7 @@ export default function Dashboard({ role }: Props) {
                       target="_blank"
                       rel="noreferrer"
                       title="Open full observability in Grafana"
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-2xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-2xs font-medium text-[var(--accent-foreground)] transition hover:bg-accent"
                     >
                       <ExternalLink className="size-3" />
                       Grafana
@@ -983,7 +983,7 @@ export default function Dashboard({ role }: Props) {
                   {/* #11 — guardrail activity is a SECURITY metric, not a dependency,
                       so it gets its own labelled block instead of sitting in the
                       service list pretending to be "Healthy". */}
-                  <div className="mt-auto flex items-center gap-3 bg-slate-50/60 px-5 py-2.5 dark:bg-slate-900/40">
+                  <div className="mt-auto flex items-center gap-3 bg-muted/60 px-5 py-2.5">
                     <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                       <ShieldAlert className="size-3.5" />
                     </div>
@@ -1007,7 +1007,7 @@ export default function Dashboard({ role }: Props) {
                 FOOTER
             ================================================= */}
 
-            <div className="flex shrink-0 flex-col items-center justify-center gap-2 text-2xs text-muted-foreground sm:flex-row">
+            <div className="flex shrink-0 flex-col items-center justify-center gap-2 text-3xs text-muted-foreground sm:flex-row">
 
               <span
                 title={
@@ -1041,7 +1041,7 @@ export default function Dashboard({ role }: Props) {
                 onClick={refreshDashboard}
                 title="Refresh now"
                 aria-label="Refresh dashboard"
-                className="rounded p-0.5 transition hover:text-blue-600"
+                className="rounded p-0.5 transition hover:text-[var(--accent-foreground)]"
               >
                 <RefreshCw className={["size-3", loading ? "animate-spin" : ""].join(" ")} />
               </button>

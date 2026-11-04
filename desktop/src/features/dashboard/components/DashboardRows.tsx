@@ -7,22 +7,30 @@
 import {
   ArrowDownRight,
   ArrowUpRight,
-  CheckCircle2,
-  XCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { Domain, HealthItem } from "@/features/dashboard/lib/dashboardTypes";
 import type { ReactNode } from "react";
 
 /**
- * One figure per KPI card, read top to bottom: muted label, big number, caption.
+ * One figure per KPI card: icon tile in a soft accent square, muted uppercase label,
+ * big number, caption — the reference mockup's KPI panel treatment (rounded-2xl card,
+ * 1px border, subtle shadow).
  *
- * The workspace mockup draws no icon tile and no sparkline on these cards, so neither is
- * rendered — the figure is the whole card. `icon` and `tone` stay in the props (callers
- * still pass them) so the component's public shape is unchanged, but nothing decorative
- * is drawn from them any more.
+ * `tone` colors the icon tile; `icon` sits inside it. Test-pinned label strings pass
+ * through untouched (uppercase is a CSS transform, textContent is unchanged).
  */
+const TONE_TILE: Record<string, string> = {
+  emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  orange: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
+  sky: "bg-[var(--accent-soft)] text-[var(--accent-foreground)]",
+  violet: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+};
+
 export function KpiCard({
+  icon,
+  tone,
   value,
   title,
   change,
@@ -43,9 +51,18 @@ export function KpiCard({
   className?: string;
 }) {
   return (
-    <Card className={["gap-0 rounded-xl border-[var(--border)] px-3.5 py-3 shadow-xs", className ?? ""].join(" ")}>
+    <Card className={["gap-0 rounded-2xl border border-[var(--border)] px-3.5 py-3 shadow-sm", className ?? ""].join(" ")}>
 
-      <div className="truncate text-2xs font-medium text-muted-foreground">
+      {icon && (
+        <span
+          aria-hidden
+          className={["mb-2 grid size-8 place-items-center rounded-xl", TONE_TILE[tone ?? "sky"]].join(" ")}
+        >
+          {icon}
+        </span>
+      )}
+
+      <div className="truncate text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </div>
 
@@ -169,7 +186,7 @@ export function DomainRow({
 
         </div>
 
-        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
 
           <div
             className="h-full rounded-full bg-blue-500"
@@ -226,11 +243,13 @@ export function HealthRow({ item }: { item: HealthItem }) {
       )}
 
       <div className="flex shrink-0 items-center gap-1.5">
-        {healthy ? (
-          <CheckCircle2 className="size-3.5 text-emerald-500" />
-        ) : (
-          <XCircle className="size-3.5 text-red-500" />
-        )}
+        <span
+          aria-hidden
+          className={[
+            "size-1.5 rounded-full",
+            healthy ? "bg-emerald-500" : "bg-rose-500",
+          ].join(" ")}
+        />
         <span className={healthy ? "text-2xs text-emerald-600" : "text-2xs text-red-600"}>
           {item.status}
         </span>
