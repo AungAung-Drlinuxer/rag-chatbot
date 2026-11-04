@@ -8,7 +8,6 @@
 import { useEffect, useState } from "react";
 import { useToast, ToastHost } from "@/shared/useToast";
 import PageSidebar from "@/components/PageSidebar";
-import TopBar from "@/components/TopBar";
 import CommandPalette from "@/components/CommandPalette";
 import { NeedHelpCard } from "@/components/NeedHelpCard";
 import { FloatingChatProvider, FloatingChatPopup } from "@/components/FloatingChat";
@@ -139,12 +138,14 @@ export default function App() {
         <PageSidebar active={active} onNavigate={setNav} userName={userName} role={role}
           displayRole={meDisplay} perms={perms} onLogout={onLogout}
           collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-        {/* The content column is a flex stack so the shell-level top bar sits ABOVE the
-            scroll area rather than inside it: the bar never scrolls, and a page that fills
-            the height (e.g. the dashboard) gets the remaining space, not the full viewport.
-            The chat route keeps its own header, so it gets no top bar. */}
+        {/* The content column is a flex stack: the page scroll area fills it, so a page
+            that fills the height (e.g. the dashboard) gets the remaining space, not the
+            full viewport. There is no shell-level top bar any more — every page leads with
+            its own header block, exactly like the chat column. */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {active !== "chat" && <TopBar navId={active} />}
+          {/* No shell-level top bar (v1.3.0): every workspace page now leads with its own
+              in-page header, the same shape the chat column uses — breadcrumb, title,
+              description and actions in one block that scrolls with the content. */}
           <div data-slot="page-scroll" className={active === "chat" ? "min-w-0 flex-1 overflow-hidden" : "min-w-0 flex-1 overflow-y-auto"}>
             <Suspense fallback={<PageFallback />}>{children}</Suspense>
           </div>

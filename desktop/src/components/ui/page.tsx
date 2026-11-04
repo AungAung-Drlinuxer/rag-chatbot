@@ -15,7 +15,7 @@
  *   header height 72px · content padding p-5 lg:p-8 · max width 1400px
  *   card radius 12px · titles: page=h1(text-xl) section=text-sm
  */
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronRight, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function PageShell({ children, fill = false }: { children: ReactNode; fill?: boolean }) {
@@ -55,6 +55,7 @@ export function PageHeader({
   actions,
   icon,
   eyebrow,
+  breadcrumbs,
 }: {
   title: string;
   badge?: string;
@@ -64,9 +65,9 @@ export function PageHeader({
   /**
    * B-5 — breadcrumb trail, e.g. ["Workspace", "Tickets", "ITHD-22"].
    *
-   * Kept in the props so every page keeps type-checking (the dashboard still passes it),
-   * but NO LONGER rendered here: the trail moved to the shell-level <TopBar>, so it is
-   * drawn once, above the scroll area, on every non-chat page.
+   * Rendered inline above the title (v1.3.0), the same shape the chat column uses, after
+   * the shell-level top bar was removed: every page now carries its own trail, so the
+   * header block scrolls with the content exactly like the chat page's header does.
    */
   breadcrumbs?: string[];
   /** Optional uppercase kicker above the title, e.g. "ADMINISTRATION". */
@@ -75,6 +76,16 @@ export function PageHeader({
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <nav aria-label="Breadcrumb" className="mb-1.5 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+            {breadcrumbs.map((crumb, i) => (
+              <span key={`${crumb}-${i}`} className="flex items-center gap-1.5">
+                {i > 0 && <ChevronRight className="size-3 shrink-0" aria-hidden="true" />}
+                <span className={i === breadcrumbs.length - 1 ? "font-medium text-foreground" : ""}>{crumb}</span>
+              </span>
+            ))}
+          </nav>
+        )}
         {eyebrow && (
           <div className="mb-1.5 text-2xs font-semibold tracking-[0.14em] text-[var(--accent-foreground)]">
             {eyebrow.toUpperCase()}
