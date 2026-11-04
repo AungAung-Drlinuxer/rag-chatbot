@@ -408,6 +408,21 @@ export default function Settings({ role }: { role?: string }) {
             </div>
             )}
 
+            {/* Members choose WHICH tools they use; the connections themselves stay
+                admin-configured, so this deliberately renders without any editor. */}
+            {!isAdmin && active === "general" && (
+              <SectionCard
+                icon={<Plug className="h-5 w-5 text-[var(--primary)]" />}
+                iconTone="bg-[var(--accent)]"
+                title="My integrations"
+                description="Pick the tools you work with. An administrator sets up each connection once."
+              >
+                <div className="p-5">
+                  <IntegrationsConfig variant="personal" />
+                </div>
+              </SectionCard>
+            )}
+
             {/* Branding — admin only (logo on login + sidebar) */}
             {isAdmin && active === "general" && (
             <SectionCard

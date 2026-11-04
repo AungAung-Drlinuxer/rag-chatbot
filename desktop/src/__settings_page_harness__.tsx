@@ -86,7 +86,9 @@ window.fetch = (async (input: any, init?: any) => {
   });
 }) as typeof window.fetch;
 
-createRoot(document.getElementById("root")!).render(<Settings role="admin" />);
+// `?role=user` renders the member view (no Integrations tab, personal opt-in card).
+const HARNESS_ROLE = new URLSearchParams(location.search).get("role") === "user" ? "user" : "admin";
+createRoot(document.getElementById("root")!).render(<Settings role={HARNESS_ROLE} />);
 
 (window as any).__SETTINGS_PAGE__ = {
   /** Nav entries exactly as the sidebar renders them. */

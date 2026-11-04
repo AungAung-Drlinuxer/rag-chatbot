@@ -645,11 +645,12 @@ function ProviderEditor({ provider, onConfigured }: {
    CATALOGUE — the browse view; everything starts OFF
 ============================================================ */
 
-function Catalog({ enabled, status, onToggle, onConfigure }: {
+function Catalog({ enabled, status, onToggle, onConfigure, personal }: {
   enabled: Record<string, boolean>;
   status: Record<string, boolean>;
   onToggle: (key: ProviderKey, next: boolean) => void;
   onConfigure: (key: ProviderKey) => void;
+  personal: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "All">("All");
@@ -732,7 +733,7 @@ function Catalog({ enabled, status, onToggle, onConfigure }: {
 
               <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
                 <StatusPill configured={status[p.key]} />
-                {on ? (
+                {on && !personal ? (
                   <button
                     type="button"
                     onClick={() => onConfigure(p.key)}
@@ -740,6 +741,8 @@ function Catalog({ enabled, status, onToggle, onConfigure }: {
                   >
                     Configure <ChevronRight className="size-3" />
                   </button>
+                ) : on ? (
+                  <span className="text-2xs text-muted-foreground">Set up by your admin</span>
                 ) : (
                   <span className="text-2xs text-muted-foreground/70">{p.category}</span>
                 )}
@@ -757,8 +760,9 @@ function Catalog({ enabled, status, onToggle, onConfigure }: {
 
       <p className="flex items-start gap-1.5 text-2xs leading-relaxed text-muted-foreground">
         <Info className="mt-0.5 size-3 shrink-0" />
-        Switching a provider on adds its configuration panel for you only. It never disables the integration for other
-        users, and switching it off keeps the stored credentials until you remove them inside the panel.
+        {personal
+          ? "Switching a tool on keeps it available in your workspace; the connection itself is configured once by an administrator. Your choices are personal and never affect other people."
+          : "Switching a provider on adds its configuration panel for you only. It never disables the integration for other users, and switching it off keeps the stored credentials until you remove them inside the panel."}
       </p>
     </div>
   );
@@ -768,7 +772,11 @@ function Catalog({ enabled, status, onToggle, onConfigure }: {
    PANEL
 ============================================================ */
 
-export function IntegrationsConfig() {
+export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | "personal" }) {
+  // `personal` is what a non-admin sees: the same per-user opt-in map, but no
+  // credential editor — connections are configured once by an administrator, and
+  // a member only chooses which of the available tools to keep in their workspace.
+  const personal = variant === "personal";
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<ProviderKey | null>(null);
@@ -796,7 +804,8 @@ export function IntegrationsConfig() {
         const first = PROVIDERS.find((p) => clean[p.key]);
         setSelected(first ? first.key : null);
         // Nothing switched on yet is the honest first-run state: open the catalogue.
-        if (!first) setBrowsing(true);
+        // A member's view IS the catalogue, so it starts open either way.
+        if (!first || personal) setBrowsing(true);
       })
       .catch(() => { if (mounted) setBrowsing(true); })
       .finally(() => { if (mounted) setLoading(false); });
@@ -877,7 +886,9 @@ export function IntegrationsConfig() {
               {enabledList.length} of {PROVIDERS.length} integrations enabled
             </p>
             <p className="text-2xs text-muted-foreground">
-              Only enabled providers show a configuration panel — keep the list short.
+              {personal
+                ? "Switch on the tools you use — your choice is saved to your own account."
+                : "Only enabled providers show a configuration panel — keep the list short."}
             </p>
           </div>
         </div>
@@ -891,18 +902,20 @@ export function IntegrationsConfig() {
               <Power className="size-3" /> Turn all off
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setBrowsing((b) => !b)}
-            className={[
-              "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-2xs font-semibold transition",
-              browsing
-                ? "border border-[var(--border)] text-foreground hover:bg-muted/50"
-                : "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90",
-            ].join(" ")}
-          >
-            {browsing ? <><X className="size-3" /> Close catalogue</> : <><Plus className="size-3" /> Add integration</>}
-          </button>
+          {!personal && (
+            <button
+              type="button"
+              onClick={() => setBrowsing((b) => !b)}
+              className={[
+                "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-2xs font-semibold transition",
+                browsing
+                  ? "border border-[var(--border)] text-foreground hover:bg-muted/50"
+                  : "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90",
+              ].join(" ")}
+            >
+              {browsing ? <><X className="size-3" /> Close catalogue</> : <><Plus className="size-3" /> Add integration</>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -912,8 +925,8 @@ export function IntegrationsConfig() {
         </p>
       )}
 
-      {browsing ? (
-        <Catalog enabled={enabled} status={status} onToggle={toggle} onConfigure={(k) => { setSelected(k); setBrowsing(false); }} />
+      {browsing || personal ? (
+        <Catalog enabled={enabled} status={status} onToggle={toggle} personal={personal} onConfigure={(k) => { setSelected(k); setBrowsing(false); }} />
       ) : enabledList.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[var(--border)] px-6 py-12 text-center">
           <div className="mx-auto grid size-11 place-items-center rounded-xl bg-muted text-muted-foreground">
