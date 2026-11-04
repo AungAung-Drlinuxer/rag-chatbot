@@ -71,17 +71,17 @@ interface PanelCardProps {
 
 function PanelCard({ title, subtitle, icon: Icon, children, className = "" }: PanelCardProps) {
   return (
-    <section className={`rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/[0.025] ${className}`}>
+    <section className={`rounded-2xl border border-[var(--border)] bg-card shadow-sm shadow-slate-900/[0.025] ${className}`}>
       {(title || Icon) && (
         <div className="flex items-start gap-3 px-4 pb-0 pt-4">
           {Icon && (
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
               <Icon size={17} aria-hidden="true" />
             </span>
           )}
           <div className="min-w-0">
-            {title && <h2 className="text-sm font-semibold text-slate-900">{title}</h2>}
-            {subtitle && <p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p>}
+            {title && <h2 className="text-sm font-semibold text-foreground">{title}</h2>}
+            {subtitle && <p className="mt-1 text-xs leading-5 text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
       )}
@@ -101,21 +101,21 @@ function ReferenceCard({
 }) {
   const matchPercent = group.max != null ? Math.round(group.max * 100) : null;
   return (
-    <article className="rounded-xl border border-slate-200 bg-white transition hover:border-violet-200">
+    <article className="rounded-xl border border-[var(--border)] bg-card transition hover:border-violet-200">
       <button
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
         className="flex w-full items-start gap-3 p-3 text-left"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-700">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
           <BookOpen size={15} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-semibold leading-5 text-slate-800" title={group.source.title}>
+          <span className="block truncate text-xs font-semibold leading-5 text-foreground" title={group.source.title}>
             {group.source.title}
           </span>
-          <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+          <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
             <span>
               {group.count} {group.count === 1 ? "reference" : "references"}
             </span>
@@ -129,20 +129,20 @@ function ReferenceCard({
         </span>
         <ChevronDown
           size={15}
-          className={`mt-1 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`mt-1 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
         />
       </button>
       {expanded && (
-        <div className="border-t border-slate-100 px-3 pb-3 pt-2.5">
-          <p className="text-[11px] leading-5 text-slate-600 line-clamp-4">
+        <div className="border-t border-[var(--border)] px-3 pb-3 pt-2.5">
+          <p className="text-[11px] leading-5 text-muted-foreground line-clamp-4">
             {group.source.excerpt || "No excerpt available."}
           </p>
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="truncate text-[10px] text-slate-400">
+            <span className="truncate text-[10px] text-muted-foreground">
               Source: {group.source.space || "Knowledge base"}
             </span>
             {matchPercent != null && (
-              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">
+              <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700 dark:bg-violet-500/15 dark:text-violet-300">
                 {matchPercent}% retrieval match
               </span>
             )}
@@ -455,7 +455,7 @@ export default function Chat({
   const healthyServicesCount = services.filter((s) => s.status === "Healthy").length;
 
   return (
-    <div className="h-full bg-slate-50 font-sans text-slate-900 overflow-y-auto">
+    <div className="h-full bg-background font-sans text-foreground overflow-y-auto">
       {/* Mobile Sources Drawer */}
       {mobileSourcesOpen && (
         <div
@@ -464,14 +464,14 @@ export default function Chat({
             if (e.target === e.currentTarget) setMobileSourcesOpen(false);
           }}
         >
-          <aside className="ml-auto h-full w-full max-w-sm overflow-y-auto bg-slate-50 p-4 shadow-2xl">
+          <aside className="ml-auto h-full w-full max-w-sm overflow-y-auto bg-background p-4 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold">Sources & status</h2>
               <button
                 type="button"
                 aria-label="Close sources panel"
                 onClick={() => setMobileSourcesOpen(false)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-white"
+                className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
               >
                 <X size={18} />
               </button>
@@ -485,12 +485,12 @@ export default function Chat({
               >
                 <label className="relative mb-3 block">
                   <span className="sr-only">Filter source references</span>
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     value={sourceQuery}
                     onChange={(e) => setSourceQuery(e.target.value)}
                     placeholder="Filter references…"
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                    className="h-9 w-full rounded-lg border border-[var(--border)] bg-muted/50 pl-9 pr-3 text-xs outline-none transition placeholder:text-muted-foreground focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
                   />
                 </label>
                 <div className="space-y-2">
@@ -503,7 +503,7 @@ export default function Chat({
                     />
                   ))}
                   {sourceGroups.length === 0 && (
-                    <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">
+                    <p className="rounded-xl bg-muted/50 px-3 py-5 text-center text-xs text-muted-foreground">
                       No matching references.
                     </p>
                   )}
@@ -521,12 +521,12 @@ export default function Chat({
           <header className="mb-5 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="min-w-0">
-                <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
+                <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                   <span>Workspace</span>
                   <ChevronRight size={12} />
                   <span>Chat</span>
                 </div>
-                <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">
+                <h1 className="truncate text-lg font-bold tracking-tight text-foreground">
                   {activeTitle}
                 </h1>
               </div>
@@ -534,7 +534,7 @@ export default function Chat({
             <button
               type="button"
               onClick={() => setMobileSourcesOpen(true)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm lg:hidden"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-sm lg:hidden"
             >
               <BookOpen size={15} /> Sources
             </button>
@@ -544,14 +544,14 @@ export default function Chat({
           <div className="flex-1 space-y-5">
             {/* Initial Welcome Card when there are no messages */}
             {messages.length === 0 && (
-              <article className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-4">
+              <article className="rounded-2xl border border-[var(--border)] bg-card shadow-sm p-6 space-y-4">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                     <Bot size={20} />
                   </span>
                   <div>
-                    <h2 className="text-base font-bold text-slate-900">IT Assistant</h2>
-                    <p className="text-xs text-slate-500">
+                    <h2 className="text-base font-bold text-foreground">IT Assistant</h2>
+                    <p className="text-xs text-muted-foreground">
                       Ask any question — answers are grounded in your enterprise knowledge base.
                     </p>
                   </div>
@@ -567,10 +567,10 @@ export default function Chat({
                       key={prompt}
                       type="button"
                       onClick={() => handleSendMessage(undefined, prompt)}
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50 text-left text-xs text-slate-700 transition"
+                      className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] hover:border-violet-200 hover:bg-violet-50 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/10 text-left text-xs text-foreground transition"
                     >
                       <span className="truncate pr-2">{prompt}</span>
-                      <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
+                      <ArrowUpRight size={14} className="shrink-0 text-muted-foreground" />
                     </button>
                   ))}
                 </div>
@@ -594,24 +594,24 @@ export default function Chat({
               const isCurrentFeedback = feedback[m.id];
 
               return (
-                <article key={m.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <article key={m.id} className="rounded-2xl border border-[var(--border)] bg-card shadow-sm">
                   {/* Assistant Card Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-4 sm:px-6">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                         <Bot size={20} />
                       </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-sm font-bold text-slate-900">IT Assistant</h2>
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          <h2 className="text-sm font-bold text-foreground">IT Assistant</h2>
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                             {m.decision === "caution" ? "Cautioned answer" : "Visible answer excerpt"}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-xs text-slate-500">Enterprise Support RAG</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Enterprise Support RAG</p>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-medium text-slate-600">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1.5 text-[10px] font-medium text-muted-foreground">
                       <Clock3 size={12} /> {m.timestamp}
                     </span>
                   </div>
@@ -619,14 +619,14 @@ export default function Chat({
                   {/* Assistant Card Body */}
                   <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
                     <div>
-                      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:text-violet-300">
                         Suggested resolution
                       </p>
-                      <div className="prose prose-slate max-w-none text-sm leading-6 text-slate-700">
+                      <div className="prose prose-slate max-w-none text-sm leading-6 text-foreground">
                         {m.content ? (
                           <MarkdownMessage content={m.content} />
                         ) : (
-                          <div className="flex items-center gap-2 text-slate-400 py-3">
+                          <div className="flex items-center gap-2 text-muted-foreground py-3">
                             <RotateCw className="size-4 animate-spin text-violet-600" />
                             <span>Generating answer from knowledge base…</span>
                           </div>
@@ -638,14 +638,14 @@ export default function Chat({
                     <section aria-labelledby={`validation-${m.id}`}>
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
-                          <h3 id={`validation-${m.id}`} className="text-sm font-bold text-slate-900">
+                          <h3 id={`validation-${m.id}`} className="text-sm font-bold text-foreground">
                             Validation checklist
                           </h3>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-muted-foreground">
                             {checklist.filter((c) => c.done).length} of {checklist.length} checks complete
                           </p>
                         </div>
-                        <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600">
+                        <span className="rounded-lg bg-muted px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground">
                           System checklist
                         </span>
                       </div>
@@ -655,8 +655,8 @@ export default function Chat({
                             key={item.id}
                             className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition ${
                               item.done
-                                ? "border-emerald-200 bg-emerald-50/60"
-                                : "border-slate-200 hover:border-violet-200 hover:bg-violet-50/30"
+                                ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+                                : "border-[var(--border)] hover:border-violet-200 hover:bg-violet-50/30 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/10"
                             }`}
                           >
                             <input
@@ -667,16 +667,16 @@ export default function Chat({
                                   curr.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c))
                                 )
                               }
-                              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300 accent-violet-600"
+                              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--border)] accent-violet-600"
                             />
                             <span
                               className={`min-w-0 flex-1 text-xs leading-5 ${
-                                item.done ? "text-slate-500 line-through" : "text-slate-700"
+                                item.done ? "text-muted-foreground line-through" : "text-foreground"
                               }`}
                             >
                               {item.label}
                               {item.command && (
-                                <code className="ml-1.5 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-violet-800">
+                                <code className="ml-1.5 inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-violet-800">
                                   {item.command}
                                 </code>
                               )}
@@ -689,34 +689,34 @@ export default function Chat({
 
                     {/* Metadata grid cards */}
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="mb-3 flex items-center gap-2 text-slate-700">
+                      <div className="rounded-xl border border-[var(--border)] bg-muted/50 p-4">
+                        <div className="mb-3 flex items-center gap-2 text-foreground">
                           <Users size={15} />
                           <h3 className="text-xs font-bold">Incident routing</h3>
                         </div>
                         <div className="space-y-2.5 text-xs">
                           <div className="flex justify-between gap-3">
-                            <span className="text-slate-500">Owner</span>
-                            <span className="font-semibold text-slate-800">DBA & Support Team</span>
+                            <span className="text-muted-foreground">Owner</span>
+                            <span className="font-semibold text-foreground">DBA & Support Team</span>
                           </div>
                           <div className="flex justify-between gap-3">
-                            <span className="text-slate-500">Jira queue / project</span>
-                            <span className="text-right font-semibold text-slate-800">IT HelpDesk</span>
+                            <span className="text-muted-foreground">Jira queue / project</span>
+                            <span className="text-right font-semibold text-foreground">IT HelpDesk</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="mb-3 flex items-center gap-2 text-slate-700">
+                      <div className="rounded-xl border border-[var(--border)] bg-card p-4">
+                        <div className="mb-3 flex items-center gap-2 text-foreground">
                           <Activity size={15} />
                           <h3 className="text-xs font-bold">Answer metadata</h3>
                         </div>
-                        <p className="text-xs leading-5 text-slate-600">
-                          <strong className="font-semibold text-slate-800">
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          <strong className="font-semibold text-foreground">
                             {m.confidence != null ? `${m.confidence}% answer confidence` : "Grounding verified"}
                           </strong>
                         </p>
-                        <p className="mt-1 text-[11px] text-slate-500">
+                        <p className="mt-1 text-[11px] text-muted-foreground">
                           {m.usage?.total_tokens
                             ? `${m.usage.input_tokens ?? 0} in / ${m.usage.output_tokens ?? 0} out tokens`
                             : "Enterprise RAG pipeline verified"}
@@ -725,7 +725,7 @@ export default function Chat({
                     </div>
 
                     {/* Action buttons footer */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
@@ -733,8 +733,8 @@ export default function Chat({
                           onClick={() => handleFeedback(m.id, 1)}
                           className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                             isCurrentFeedback === "helpful"
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+                              : "border-[var(--border)] text-muted-foreground hover:bg-muted/50"
                           }`}
                         >
                           <ThumbsUp size={14} /> Helpful
@@ -745,8 +745,8 @@ export default function Chat({
                           onClick={() => handleFeedback(m.id, -1)}
                           className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                             isCurrentFeedback === "not-helpful"
-                              ? "border-rose-200 bg-rose-50 text-rose-700"
-                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                              ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-300"
+                              : "border-[var(--border)] text-muted-foreground hover:bg-muted/50"
                           }`}
                         >
                           <ThumbsDown size={14} /> Not helpful
@@ -754,7 +754,7 @@ export default function Chat({
                         <button
                           type="button"
                           onClick={() => copyAnswer(m.content)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                          className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/50"
                         >
                           <Copy size={14} /> Copy answer
                         </button>
@@ -762,7 +762,7 @@ export default function Chat({
                           <button
                             type="button"
                             onClick={() => handleSendMessage(undefined, prevUserMsg)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:bg-muted/50"
                           >
                             <RefreshCw size={14} /> Regenerate
                           </button>
@@ -784,7 +784,7 @@ export default function Chat({
           </div>
 
           {/* Composer Box */}
-          <form onSubmit={handleSendMessage} className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <form onSubmit={handleSendMessage} className="mt-5 rounded-2xl border border-[var(--border)] bg-card p-3 shadow-sm">
             <label htmlFor="user-prompt" className="sr-only">
               Ask a follow-up question
             </label>
@@ -801,14 +801,14 @@ export default function Chat({
               }}
               rows={2}
               placeholder="Ask a follow-up IT question…"
-              className="w-full resize-y border-0 bg-transparent px-2 py-2 text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
+              className="w-full resize-y border-0 bg-transparent px-2 py-2 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
             />
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground">
                 <Bot size={13} /> Auto mode <ChevronDown size={12} />
               </span>
               <div className="flex items-center gap-3">
-                <span className="hidden text-[10px] text-slate-400 sm:inline">
+                <span className="hidden text-[10px] text-muted-foreground sm:inline">
                   Live RAG streaming · Internal KB
                 </span>
                 <button
@@ -838,12 +838,12 @@ export default function Chat({
             >
               <label className="relative mb-3 block">
                 <span className="sr-only">Filter source references</span>
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={sourceQuery}
                   onChange={(e) => setSourceQuery(e.target.value)}
                   placeholder="Filter references…"
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                  className="h-9 w-full rounded-lg border border-[var(--border)] bg-muted/50 pl-9 pr-3 text-xs outline-none transition placeholder:text-muted-foreground focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
                 />
               </label>
               <div className="space-y-2">
@@ -856,7 +856,7 @@ export default function Chat({
                   />
                 ))}
                 {sourceGroups.length === 0 && (
-                  <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">
+                  <p className="rounded-xl bg-muted/50 px-3 py-5 text-center text-xs text-muted-foreground">
                     {latestSources.length === 0
                       ? "No sources yet — ask an IT question to see cited references."
                       : "No matching references found."}
@@ -864,14 +864,14 @@ export default function Chat({
                 )}
               </div>
               {latestSources.length > 0 && (
-                <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2.5 text-[10px] leading-4 text-blue-800">
+                <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2.5 text-[10px] leading-4 text-blue-800 dark:bg-violet-500/12 dark:text-violet-200">
                   Match scores describe retrieval similarity, not answer confidence.
                 </p>
               )}
             </PanelCard>
 
             {/* System Status Card */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card shadow-sm">
               <button
                 type="button"
                 aria-expanded={systemOpen}
@@ -879,12 +879,12 @@ export default function Chat({
                 className="flex w-full items-center justify-between gap-3 p-4 text-left"
               >
                 <span className="flex items-center gap-3">
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                     <ShieldCheck size={17} />
                   </span>
                   <span>
-                    <span className="block text-sm font-semibold text-slate-900">System status</span>
-                    <span className="mt-1 block text-xs text-slate-500">
+                    <span className="block text-sm font-semibold text-foreground">System status</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
                       {services.length > 0
                         ? `${healthyServicesCount} healthy of ${services.length} services`
                         : "Checking dependencies…"}
@@ -893,22 +893,22 @@ export default function Chat({
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-slate-400 transition-transform ${systemOpen ? "rotate-180" : ""}`}
+                  className={`text-muted-foreground transition-transform ${systemOpen ? "rotate-180" : ""}`}
                 />
               </button>
               {systemOpen && (
-                <div className="space-y-1 border-t border-slate-100 p-3">
+                <div className="space-y-1 border-t border-[var(--border)] p-3">
                   {services.length === 0 ? (
-                    <p className="px-2 py-2 text-xs text-slate-400">Loading system status…</p>
+                    <p className="px-2 py-2 text-xs text-muted-foreground">Loading system status…</p>
                   ) : (
                     services.map((svc) => {
                       const isOk = svc.status === "Healthy";
                       return (
                         <div key={svc.key} className="flex items-center justify-between gap-2 rounded-lg px-2 py-2">
-                          <span className="text-[11px] font-medium text-slate-700">{svc.name}</span>
+                          <span className="text-[11px] font-medium text-foreground">{svc.name}</span>
                           <span
                             className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
-                              isOk ? "text-emerald-700" : "text-rose-700"
+                              isOk ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"
                             }`}
                           >
                             <span
@@ -942,10 +942,10 @@ export default function Chat({
                         handleSendMessage(undefined, item.prompt);
                       }
                     }}
-                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-medium text-slate-700 transition hover:border-violet-200 hover:bg-violet-50"
+                    className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] px-3 py-2.5 text-left text-xs font-medium text-foreground transition hover:border-violet-200 hover:bg-violet-50"
                   >
                     {item.label}
-                    <ArrowUpRight size={14} className="text-slate-400" />
+                    <ArrowUpRight size={14} className="text-muted-foreground" />
                   </button>
                 ))}
               </div>
@@ -966,17 +966,17 @@ export default function Chat({
             role="dialog"
             aria-modal="true"
             aria-labelledby="jira-dialog-title"
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-card p-5 shadow-2xl sm:p-6"
           >
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:text-violet-300">
                   Incident Escalation
                 </p>
-                <h2 id="jira-dialog-title" className="mt-1 text-lg font-bold text-slate-950">
+                <h2 id="jira-dialog-title" className="mt-1 text-lg font-bold text-foreground">
                   Create Jira ticket
                 </h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Submit this issue directly to the IT HelpDesk Jira queue.
                 </p>
               </div>
@@ -984,46 +984,46 @@ export default function Chat({
                 type="button"
                 aria-label="Close Jira dialog"
                 onClick={() => setJiraOpen(false)}
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
               >
                 <X size={17} />
               </button>
             </div>
             <form onSubmit={submitJiraTicket} className="space-y-4">
-              <label className="block text-xs font-semibold text-slate-700">
+              <label className="block text-xs font-semibold text-foreground">
                 Summary
                 <input
                   value={jiraSummary}
                   onChange={(e) => setJiraSummary(e.target.value)}
                   required
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm font-normal outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-500">Project</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-800">IT HelpDesk</p>
+                <div className="rounded-xl bg-muted/50 p-3">
+                  <p className="text-[10px] text-muted-foreground">Project</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">IT HelpDesk</p>
                 </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-500">Queue</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-800">Database & Support</p>
+                <div className="rounded-xl bg-muted/50 p-3">
+                  <p className="text-[10px] text-muted-foreground">Queue</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">Database & Support</p>
                 </div>
               </div>
-              <label className="block text-xs font-semibold text-slate-700">
+              <label className="block text-xs font-semibold text-foreground">
                 Description
                 <textarea
                   value={jiraDesc}
                   onChange={(e) => setJiraDesc(e.target.value)}
                   rows={4}
                   required
-                  className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal leading-5 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                  className="mt-1.5 w-full resize-y rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm font-normal leading-5 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
                 />
               </label>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
                 <button
                   type="button"
                   onClick={() => setJiraOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted/50"
                 >
                   Cancel
                 </button>

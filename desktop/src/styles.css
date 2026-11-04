@@ -175,45 +175,47 @@
 }
 
 [data-theme="dark"] {
-  /* v1.0.1 — mockup palette, dark. Values read off the mockup: canvas #12151D,
-     surface #1D2130 / #222635, muted text #6782A0, accent #0048F0.
-     Measured: muted 4.59:1 (AA), white-on-accent 6.59:1 (AA), card lift 1.141:1. */
-  --background: #12151D;
-  --foreground: #E8EBF2;
-  --card: #1D2130;
-  --card-foreground: #E8EBF2;
-  --popover: #222635; --popover-foreground: #E8EBF2;
+  /* v1.3.1 — CHARCOAL-NAVY / PLUM dark theme.
+     Canvas is charcoal with a navy undertone; panels step up through muted plum
+     (--card) into a cooler slate-indigo (--popover / --muted); violet stays the one
+     accent. Measured on --card #1E1A2A: muted text #9C93B4 = 5.4:1 (AA),
+     foreground #EDEAF4 = 13.6:1 (AAA), violet text #C4B5FD = 7.4:1 (AA). */
+  --background: #14121B;
+  --foreground: #EDEAF4;
+  --card: #1E1A2A;
+  --card-foreground: #EDEAF4;
+  --popover: #262134; --popover-foreground: #EDEAF4;
   --primary: #8B5CF6;
   --primary-foreground: #FFFFFF;
-  --secondary: #222635;
-  --secondary-foreground: #C2C9D8;
-  --muted: #222635;
-  --muted-foreground: #6782A0;
-  --accent: rgba(124, 58, 237, 0.18);
-  /* #0048F0 is only 2.77:1 as TEXT on this canvas, so accent TEXT gets a lighter tone
-     while filled buttons keep the mockup's exact blue. */
-  --accent-foreground: #A78BFA;
+  --secondary: #262134;
+  --secondary-foreground: #CFC8DF;
+  --muted: #221E30;
+  --muted-foreground: #9C93B4;
+  --accent: rgba(139, 92, 246, 0.16);
+  /* Accent TEXT is lifted (#C4B5FD) so it clears AA on the plum panels; filled
+     buttons keep the violet #8B5CF6. */
+  --accent-foreground: #C4B5FD;
   --destructive: #f87171;
-  --destructive-foreground: #12151D;
-  --border: #2A2F42;
-  --input: #2A2F42;
+  --destructive-foreground: #14121B;
+  --border: #342C46;
+  --input: #342C46;
   --ring: #8B5CF6;
   /* v0.21.65 — sidebar deeper than main panel (two-tone depth) */
-  --sidebar-bg: #050912;         /* deeper than --background #070B14 */
-  --sidebar-border: #0F1D33;
-  --sidebar-text: #C2C9D8;
-  --sidebar-text-muted: #64748B;
-    --sidebar-hover: rgba(124, 58, 237, 0.16);
-    --sidebar-active-bg: rgba(124, 58, 237, 0.26);
-    --sidebar-active-text: #A78BFA;
-  --topbar-bg: #1D2130;
+  --sidebar-bg: #100E17;         /* deeper than --background #14121B */
+  --sidebar-border: #241E33;
+  --sidebar-text: #CFC8DF;
+  --sidebar-text-muted: #8A82A0;
+    --sidebar-hover: rgba(139, 92, 246, 0.16);
+    --sidebar-active-bg: rgba(139, 92, 246, 0.26);
+    --sidebar-active-text: #C4B5FD;
+  --topbar-bg: #1E1A2A;
   --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.4), 0 4px 6px rgba(0,0,0,.3);
   --shadow-xl: 0 20px 25px rgba(0,0,0,.5), 0 8px 10px rgba(0,0,0,.3);
   --bg: var(--background); --surface: var(--card); --surface-2: var(--muted); --text: var(--foreground);
-  --text-muted: var(--muted-foreground); --accent-2: #8B5CF6; --accent-soft: rgba(124, 58, 237, 0.18);
-  --ok: #22c55e; --warn: #f59e0b; --danger: #ef4444;
+  --text-muted: var(--muted-foreground); --accent-2: #8B5CF6; --accent-soft: rgba(139, 92, 246, 0.16);
+  --ok: #34d399; --warn: #fbbf24; --danger: #f87171;
 }
 
 /* ---- Global ---- */
@@ -311,7 +313,7 @@ body {
 .bubble { padding: 11px 14px; border-radius: 12px; line-height: 1.6; font-size: 14px; }
 .msg.user .bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
 .msg.assistant .bubble { background: var(--card); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
-[data-theme="dark"] .msg.assistant .bubble { background: #131b2e; border-color: #1e293b; }
+[data-theme="dark"] .msg.assistant .bubble { background: var(--card); border-color: var(--border); }
 .meta-row { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--text-muted); align-items: center; }
 .badge {
   display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px;
@@ -389,7 +391,7 @@ body {
   background: var(--card); border: 1px solid var(--border);
 }
 .kb-page .grid > button:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-[data-theme="dark"] .kb-page .grid > button { background: #131b2e; border-color: #1e293b; }
+[data-theme="dark"] .kb-page .grid > button { background: var(--card); border-color: var(--border); }
 
 /* ---- Settings page ---- */
 .set-card { border: none; border-radius: 12px; box-shadow: var(--shadow); background: var(--card); padding: 16px; }
@@ -613,34 +615,34 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   --danger: #dc2626;
 }
 [data-theme="dark"] {
-  --bg: #12151D;
-  --background: #12151D;
-  --foreground: #E8EBF2;
-  --card: #1D2130;
-  --card-foreground: #E8EBF2;
-  --popover: #222635;
-  --popover-foreground: #E8EBF2;
+  --bg: #14121B;
+  --background: #14121B;
+  --foreground: #EDEAF4;
+  --card: #1E1A2A;
+  --card-foreground: #EDEAF4;
+  --popover: #262134;
+  --popover-foreground: #EDEAF4;
   --primary: #8B5CF6;
   --primary-foreground: #FFFFFF;
-  --secondary: #222635;
-  --secondary-foreground: #C2C9D8;
-  --muted: #222635;
-  --muted-foreground: #6782A0;
-  --accent: rgba(124, 58, 237, .18);
-  --accent-foreground: #A78BFA;
-  --accent-soft: rgba(124, 58, 237, .18);
+  --secondary: #262134;
+  --secondary-foreground: #CFC8DF;
+  --muted: #221E30;
+  --muted-foreground: #9C93B4;
+  --accent: rgba(139, 92, 246, .16);
+  --accent-foreground: #C4B5FD;
+  --accent-soft: rgba(139, 92, 246, .16);
   --accent-2: #8B5CF6;
   --destructive: #f87171;
-  --destructive-foreground: #12151D;
-  --border: #2A2F42;
-  --input: #2A2F42;
+  --destructive-foreground: #14121B;
+  --border: #342C46;
+  --input: #342C46;
   --ring: #8B5CF6;
   --shadow: 0 1px 2px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.35);
   --shadow-md: 0 2px 4px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.4);
   --shadow-lg: 0 4px 6px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
   --shadow-xl: 0 12px 28px rgba(0,0,0,.65), 0 32px 80px rgba(0,0,0,.55);
-  --text: #E8EBF2;
-  --text-muted: #6782A0;
+  --text: #EDEAF4;
+  --text-muted: #9C93B4;
   --ok: #34d399;
   --warn: #fbbf24;
   --danger: #f87171;
@@ -805,12 +807,12 @@ code, pre, .mono { font-family: var(--mono); }
 [data-theme="dark"] select option,
 .dark select,
 .dark select option {
-  background-color: #1e293b;
-  color: #f1f5f9;
+  background-color: var(--popover);
+  color: var(--foreground);
 }
 [data-theme="dark"] select option:checked,
 .dark select option:checked {
-  background-color: #172554;
+  background-color: var(--accent);
   color: #f1f5f9;
 }
 
