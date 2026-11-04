@@ -255,7 +255,7 @@ export default function RagPipelineStatus({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [simulate, onSimulateDone]);
+  }, [simulate, onSimulateDone, steps]);
 
   /* ---- resolve the active step from the live backend stage ---------- */
   const liveKey: StageKey | null = useMemo(() => {
@@ -272,7 +272,7 @@ export default function RagPipelineStatus({
       if (telemetry?.[s.key] != null) last = i;
     });
     return last;
-  }, [telemetry]);
+  }, [telemetry, steps]);
   const activeIdx = liveKey
     ? steps.findIndex((s) => s.key === liveKey)
     : lastMeasured;
