@@ -1,73 +1,87 @@
-# === rag-chatbot — Redis Sentinel =========================================
-# 3 sentinels form a Raft group, automatically elect a master after failover.
-# Application connects via `redis-service` ClusterIP which the backend
-# python-redis client resolves through sentinel topology discovery.
-
+# Redis sentinel (redis:7.4, 3 replicas).
+# v1.3.2 — this file now carries the DNS-wait init fix that used to live in a
+# separate, duplicate `30-redis-sentinel-fix.yaml`; that file described the SAME
+# StatefulSet, so having both made `kubectl apply -k` order-dependent.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: redis-sentinel
   namespace: rag-chatbot
 spec:
-  serviceName: redis-sentinel-headless
   replicas: 3
   selector:
     matchLabels:
-      app.kubernetes.io/name: redis
       app.kubernetes.io/component: sentinel
+      app.kubernetes.io/name: redis
+  serviceName: redis-sentinel-headless
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: redis
         app.kubernetes.io/component: sentinel
+        app.kubernetes.io/name: redis
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: redis
-                    app.kubernetes.io/component: sentinel
+      # v1.6.5 fix — sentinels crashed at boot when CoreDNS was not yet ready
+      # (worker node restart). Redis resolves `sentinel monitor` hostnames ONCE
+      # at startup and FATAL-exits on failure. The init wait loop retries until
+      # DNS is live so the server never boots into a FATAL config error.
       initContainers:
         - name: sentinel-config-init
           image: redis:7.4
           imagePullPolicy: IfNotPresent
-          # Sentinel rewrites its config at runtime → needs a WRITABLE /conf.
-          command: ["sh","-c","cp /readonly-config/sentinel.conf /conf/sentinel.conf && chmod 644 /conf/sentinel.conf"]
+          command:
+            - sh
+            - -c
+            - |
+              cp /readonly-config/sentinel.conf /conf/sentinel.conf
+              chmod 644 /conf/sentinel.conf
+              echo "Waiting for master hostname DNS to resolve..."
+              i=0
+              until getent hosts redis-data-0.redis-data-headless.rag-chatbot.svc.cluster.local >/dev/null 2>&1; do
+                i=$((i+1))
+                if [ "$i" -ge 60 ]; then
+                  echo "DNS still unresolved after 120s - continuing anyway"
+                  break
+                fi
+                sleep 2
+              done
+              echo "DNS check done"
           volumeMounts:
-            - { name: conf, mountPath: /conf }
-            - { name: readonly-config, mountPath: /readonly-config }
+            - mountPath: /conf
+              name: conf
+            - mountPath: /readonly-config
+              name: readonly-config
       containers:
         - name: sentinel
           image: redis:7.4
           imagePullPolicy: IfNotPresent
-          command:
-            - redis-server
-            - /conf/sentinel.conf
-            - --sentinel
+          command: ["redis-server", "/conf/sentinel.conf", "--sentinel"]
           ports:
-            - name: sentinel
-              containerPort: 26379
-          volumeMounts:
-            - { name: conf, mountPath: /conf }
-          resources:
-            requests: { cpu: 50m, memory: 64Mi }
-            limits:   { cpu: 200m, memory: 128Mi }
+            - containerPort: 26379
+              name: sentinel
           livenessProbe:
             exec:
-              command: ["redis-cli","-p","26379","ping"]
+              command: ["redis-cli", "-p", "26379", "ping"]
             initialDelaySeconds: 30
             periodSeconds: 15
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - mountPath: /conf
+              name: conf
       volumes:
         - name: conf
           emptyDir: {}
         - name: readonly-config
           configMap:
             name: redis-config
-            items: [{ key: sentinel.conf, path: sentinel.conf }]
+            items:
+              - key: sentinel.conf
+                path: sentinel.conf
 ---
 apiVersion: v1
 kind: Service
@@ -97,18 +111,3 @@ spec:
     - name: sentinel
       port: 26379
       targetPort: sentinel
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis-service
-  namespace: rag-chatbot
-spec:
-  # Points at the redis DATA pods (the current master is discovered via Sentinel).
-  selector:
-    app.kubernetes.io/name: redis
-    app.kubernetes.io/component: data
-  ports:
-    - name: client
-      port: 6379
-      targetPort: client

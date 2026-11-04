@@ -13,7 +13,7 @@ metadata:
     app.kubernetes.io/name: ollama
     app.kubernetes.io/component: ai-runtime
 spec:
-  replicas: 3   # v1.1.8 — scale for concurrent embeddings (models baked in image, pods are stateless)
+  replicas: 1   # v1.3.2 — live runs a single ollama pod (2 vCPU / 12GB node budget)
   strategy:
     type: Recreate
   selector:

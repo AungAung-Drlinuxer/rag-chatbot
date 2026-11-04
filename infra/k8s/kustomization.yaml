@@ -1,0 +1,29 @@
+# Kustomize root for the rag-chatbot namespace.
+# v1.3.2 — moved out of 00-namespace.yaml: `kubectl apply -k infra/k8s` needs a real
+# kustomization.yaml on disk, which the embedded block never provided.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rag-chatbot
+
+# v1.3.2 — `labels` (not the deprecated `commonLabels`): commonLabels also rewrote
+# every Deployment/StatefulSet spec.selector, and selectors are IMMUTABLE, so
+# `kubectl apply -k` against the live cluster failed. These labels are metadata-only.
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rag-chatbot
+
+resources:
+  - postgres/00-secret-app.yaml
+  - postgres/01-secrets-replication.yaml
+  - postgres/10-cluster.yaml
+  - postgres/30-pgadmin.yaml
+  - postgres/40-monitoring.yaml
+  - redis/10-redis-data.yaml
+  - redis/20-sentinel.yaml
+  - ollama/10-ollama.yaml
+  - rerank-svc/10-deployment.yaml
+  - backend/10-deployment.yaml
+  - celery/10-worker.yaml
+  - frontend/10-deployment.yaml
+  - redisinsight/10-deployment.yaml
+  - ingress/10-ingress.yaml

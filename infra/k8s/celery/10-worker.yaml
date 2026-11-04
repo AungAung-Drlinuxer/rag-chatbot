@@ -16,7 +16,8 @@ metadata:
   labels:
     app.kubernetes.io/name: celery-worker
 spec:
-  replicas: 2
+  # v1.3.2 — live runs ONE worker; the old 2 was never applied.
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: celery-worker
@@ -25,7 +26,6 @@ spec:
       labels:
         app.kubernetes.io/name: celery-worker
     spec:
-      serviceAccountName: backend
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -33,7 +33,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: celery-worker
-          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.14
+          image: harbor.drlinuxer.com/rag-chatbot/backend:1.6.104   # matches the running celery pods
           command: ["celery","-A","app.workers.celery_app","worker","-l","info","-Q","celery","--concurrency=2"]
           envFrom:
             - configMapRef: { name: backend-config }
@@ -61,13 +61,13 @@ spec:
       labels:
         app.kubernetes.io/name: celery-beat
     spec:
-      serviceAccountName: backend
+      serviceAccountName: backend   # live beat pod runs under `backend`
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
       containers:
         - name: celery-beat
-          image: harbor.drlinuxer.com/ragchatbot/backend:0.0.14
+          image: harbor.drlinuxer.com/rag-chatbot/backend:1.6.104   # matches the running celery pods
           command: ["celery","-A","app.workers.celery_app","beat","-l","info"]
           envFrom:
             - configMapRef: { name: backend-config }

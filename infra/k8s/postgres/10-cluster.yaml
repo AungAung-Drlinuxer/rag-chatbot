@@ -100,7 +100,7 @@ spec:
       instances: 2
       type: rw
       maxDBConnections: 60
-      imageName: ghcr.io/cloudnative-pg/pgbouncer:1.22.1
+      imageName: ghcr.io/cloudnative-pg/pgbouncer:1.25.1   # matches the running pooler
 
   monitoring:
     enablePodMonitor: false

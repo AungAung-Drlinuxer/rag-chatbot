@@ -170,3 +170,20 @@ spec:
     - name: client
       port: 6379
       targetPort: client
+
+# v1.3.2 — folded in from the one-off `30-redis-service-fix.yaml`:
+# the ClusterIP clients actually connect to (sentinel-aware clients use this).
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: rag-chatbot
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: data
+  ports:
+    - name: client
+      port: 6379
+      targetPort: client
