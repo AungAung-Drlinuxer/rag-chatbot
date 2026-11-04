@@ -179,7 +179,7 @@ export default function App() {
     <FloatingChatProvider>
       {(() => { switch (nav) {
     case "chat":
-      return <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />;
+      return shell("chat", <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />);
     case "dashboard":
       return shell("dashboard", <DashboardPage userName={userName} role={role} />);
     case "articles":
@@ -197,21 +197,7 @@ export default function App() {
     case "settings":
       return shell("settings", <SettingsPage role={role} />);
     default:
-      return (
-        <>
-          <ChatPage userName={userName} role={role} onNavigate={setNav} onLogout={onLogout} />
-          {authed && (
-            <CommandPalette
-              open={paletteOpen}
-              onClose={() => setPaletteOpen(false)}
-              onNavigate={setNav}
-              onOpenConversation={(id) => { setNav("chat"); window.dispatchEvent(new CustomEvent("ith:open-conversation", { detail: id })); }}
-              enabled={perms}
-            />
-          )}
-          <ToastHost toast={toast.toast} />
-        </>
-      );
+      return shell("chat", <ChatPage userName={userName} role={role} displayRole={meDisplay} perms={perms} onNavigate={setNav} onLogout={onLogout} />);
       } })()}
     </FloatingChatProvider>
   );

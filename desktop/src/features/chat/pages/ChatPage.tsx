@@ -10,28 +10,22 @@ import {
   ChevronRight,
   Clock3,
   Copy,
-  LayoutDashboard,
   LifeBuoy,
-  Menu,
-  MessageSquare,
-  Plus,
   RefreshCw,
   Search,
   Send,
-  Settings,
   ShieldCheck,
   Ticket,
   ThumbsDown,
   ThumbsUp,
   Users,
   X,
-  FileText,
   RotateCw,
 } from "lucide-react";
 
 import { submitFeedback } from "@/features/chat/api";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
-import { listConversations, getConversationMessages, type Conv } from "@/features/conversations/api";
+import { getConversationMessages } from "@/features/conversations/api";
 import { createTicketApi } from "@/features/tickets/api";
 import { dashHealth } from "@/features/dashboard/api";
 import MarkdownMessage from "@/components/MarkdownMessage";
@@ -41,30 +35,6 @@ import type { Source, Message } from "@/features/chat/model";
 /* ============================================================
    TYPES & CONSTANTS
 ============================================================ */
-
-const navItems = [
-  { name: "Chat", icon: MessageSquare },
-  { name: "Overview", icon: LayoutDashboard },
-  { name: "Knowledge", icon: BookOpen },
-  { name: "Domains & routing", icon: Activity },
-  { name: "Tickets", icon: Ticket },
-  { name: "Users", icon: Users },
-  { name: "Conversations", icon: MessageSquare },
-  { name: "Audit log", icon: FileText },
-  { name: "Settings", icon: Settings },
-];
-
-const NAV_MAP: Record<string, string> = {
-  "Chat": "chat",
-  "Overview": "dashboard",
-  "Knowledge": "articles",
-  "Domains & routing": "domains",
-  "Tickets": "tickets",
-  "Users": "users",
-  "Conversations": "history",
-  "Audit log": "audits",
-  "Settings": "settings",
-};
 
 interface ServiceHealth {
   key: string;
@@ -86,155 +56,6 @@ const defaultChecklist: ChecklistItem[] = [
   { id: "c3", label: "Service logs contain no new critical errors", done: false },
   { id: "c4", label: "Monitoring returns healthy", done: false },
 ];
-
-/* ============================================================
-   SIDEBAR COMPONENT
-============================================================ */
-
-interface SidebarProps {
-  onNavigate?: (nav: string) => void;
-  closeMobile?: () => void;
-  userName?: string;
-  displayRole?: string;
-  onLogout?: () => void;
-  conversations: Conv[];
-  activeSessionId: string;
-  onSelectConversation: (id: string) => void;
-  onNewChat: () => void;
-}
-
-function Sidebar({
-  onNavigate,
-  closeMobile,
-  userName,
-  displayRole,
-  onLogout,
-  conversations,
-  activeSessionId,
-  onSelectConversation,
-  onNewChat,
-}: SidebarProps) {
-  const handleNav = (name: string) => {
-    const target = NAV_MAP[name] || name;
-    if (onNavigate) onNavigate(target);
-    closeMobile?.();
-  };
-
-  return (
-    <div className="flex h-full flex-col">
-      {/* Brand Header */}
-      <div className="flex items-center gap-3 px-2 pb-6 pt-2">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm">
-          ITH
-        </span>
-        <span className="text-sm font-bold tracking-tight text-white">IT Help Desk</span>
-      </div>
-
-      {/* New conversation button */}
-      <button
-        type="button"
-        onClick={() => {
-          onNewChat();
-          closeMobile?.();
-        }}
-        className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-3 text-sm font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50"
-      >
-        <Plus size={17} />
-        New conversation
-      </button>
-
-      {/* Workspace Navigation */}
-      <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
-        Workspace
-      </p>
-      <nav aria-label="Workspace navigation" className="space-y-1">
-        {navItems.map(({ name, icon: Icon }) => {
-          const active = name === "Chat";
-          return (
-            <button
-              key={name}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              onClick={() => handleNav(name)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium transition ${
-                active
-                  ? "bg-white text-violet-700 shadow-sm"
-                  : "text-white/80 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <Icon size={17} aria-hidden="true" />
-              {name}
-              {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-500" />}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Recent Conversations List */}
-      <div className="mt-6 flex min-h-0 flex-1 flex-col border-t border-white/15 pt-4">
-        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-white/60">
-          Recent conversations
-        </p>
-        <div className="flex-1 space-y-1 overflow-y-auto pr-1">
-          {conversations.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-white/50">No conversations yet</p>
-          ) : (
-            conversations.slice(0, 15).map((conv) => {
-              const isSelected = conv.session_id === activeSessionId;
-              return (
-                <button
-                  key={conv.session_id}
-                  type="button"
-                  onClick={() => {
-                    onSelectConversation(conv.session_id);
-                    closeMobile?.();
-                  }}
-                  className={`block w-full truncate rounded-lg px-3 py-2 text-left text-xs transition ${
-                    isSelected
-                      ? "bg-white/20 font-semibold text-white"
-                      : "text-white/70 hover:bg-white/10 hover:text-white"
-                  }`}
-                  title={conv.title || "New conversation"}
-                >
-                  {conv.title || "New conversation"}
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* User profile footer */}
-      <div className="mt-auto border-t border-white/15 pt-4">
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20 text-xs font-bold text-white">
-              {(userName || "AD").slice(0, 2).toUpperCase()}
-            </span>
-            <div className="min-w-0 truncate">
-              <span className="block truncate text-xs font-semibold text-white">
-                {userName || "Administrator"}
-              </span>
-              <span className="block truncate text-[10px] text-white/65">
-                {displayRole || "Workspace admin"}
-              </span>
-            </div>
-          </div>
-          {onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Sign out"
-              className="shrink-0 rounded-lg p-1.5 text-xs text-white/70 transition hover:bg-white/10 hover:text-white"
-            >
-              Sign out
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ============================================================
    PANEL CARD & REFERENCE CARD (RIGHT SIDEBAR)
@@ -333,7 +154,7 @@ function ReferenceCard({
 }
 
 /* ============================================================
-   MAIN CHAT WORKSPACE
+   MAIN CHAT WORKSPACE COMPONENT
 ============================================================ */
 
 interface ChatProps {
@@ -346,12 +167,8 @@ interface ChatProps {
 }
 
 export default function Chat({
-  userName,
-  displayRole,
   onNavigate,
-  onLogout,
 }: ChatProps) {
-  const [conversations, setConversations] = useState<Conv[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(() => crypto.randomUUID());
   const [activeTitle, setActiveTitle] = useState<string>("Database support");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -360,7 +177,6 @@ export default function Chat({
   const [latestSources, setLatestSources] = useState<Source[]>([]);
   const [services, setServices] = useState<ServiceHealth[]>([]);
   const [systemOpen, setSystemOpen] = useState(true);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileSourcesOpen, setMobileSourcesOpen] = useState(false);
   const [sourceQuery, setSourceQuery] = useState("");
   const [expandedReferences, setExpandedReferences] = useState<string[]>([]);
@@ -374,21 +190,11 @@ export default function Chat({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<{ role: string; content: string }[]>([]);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const notify = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(""), 3500);
-  };
-
-  // Load real conversations
-  const loadConversations = () => {
-    listConversations()
-      .then((data: any) => {
-        if (data?.conversations) {
-          setConversations(data.conversations);
-        }
-      })
-      .catch(() => {});
   };
 
   // Load system health
@@ -403,7 +209,6 @@ export default function Chat({
   };
 
   useEffect(() => {
-    loadConversations();
     loadHealth();
     const t = window.setInterval(loadHealth, 60_000);
     return () => window.clearInterval(t);
@@ -417,9 +222,6 @@ export default function Chat({
   // Load a conversation by session ID
   const openConversation = async (sessionId: string) => {
     setActiveSessionId(sessionId);
-    const conv = conversations.find((c) => c.session_id === sessionId);
-    if (conv) setActiveTitle(conv.title || "Conversation");
-
     try {
       const res: any = await getConversationMessages(sessionId);
       if (res?.messages) {
@@ -436,7 +238,11 @@ export default function Chat({
         setMessages(loaded);
         historyRef.current = loaded.map((m) => ({ role: m.role, content: m.content }));
 
-        // Update right sidebar sources from the latest assistant message
+        const firstUser = loaded.find((m) => m.role === "user");
+        if (firstUser?.content) {
+          setActiveTitle(firstUser.content.slice(0, 40));
+        }
+
         const lastWithSources = [...loaded].reverse().find((m) => m.sources && m.sources.length > 0);
         if (lastWithSources?.sources) {
           setLatestSources(lastWithSources.sources);
@@ -458,13 +264,45 @@ export default function Chat({
     setLatestSources([]);
     historyRef.current = [];
     setInput("");
+    window.setTimeout(() => composerRef.current?.focus(), 50);
   };
+
+  // Listen to events from PageSidebar & CommandPalette
+  useEffect(() => {
+    const handleOpen = (e: any) => {
+      if (e?.detail) openConversation(e.detail);
+    };
+    const handleNew = () => {
+      startNewChat();
+    };
+    const handleAsk = (e: any) => {
+      if (typeof e?.detail === "string" && e.detail) {
+        setInput(e.detail);
+        window.setTimeout(() => composerRef.current?.focus(), 50);
+      }
+    };
+
+    window.addEventListener("ith:open-conversation", handleOpen);
+    window.addEventListener("ith:new-chat", handleNew);
+    window.addEventListener("ith:ask", handleAsk);
+
+    return () => {
+      window.removeEventListener("ith:open-conversation", handleOpen);
+      window.removeEventListener("ith:new-chat", handleNew);
+      window.removeEventListener("ith:ask", handleAsk);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Send message through real RAG pipeline
   const handleSendMessage = async (event?: React.FormEvent, directQuestion?: string) => {
     event?.preventDefault();
     const question = (directQuestion ?? input).trim();
     if (!question || isTyping) return;
+
+    if (messages.length === 0) {
+      setActiveTitle(question.slice(0, 40));
+    }
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -519,7 +357,7 @@ export default function Chat({
           onApprovalRequest: () => {},
           onDone: () => {
             setIsTyping(false);
-            loadConversations();
+            window.dispatchEvent(new CustomEvent("ith:refresh-conversations"));
           },
         }
       );
@@ -617,41 +455,7 @@ export default function Chat({
   const healthyServicesCount = services.filter((s) => s.status === "Healthy").length;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* Mobile Sidebar Drawer */}
-      {mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/35 md:hidden"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setMobileNavOpen(false);
-          }}
-        >
-          <aside className="flex h-full w-72 flex-col bg-gradient-to-b from-violet-700 to-violet-900 p-4 shadow-2xl">
-            <div className="mb-3 flex justify-end">
-              <button
-                type="button"
-                aria-label="Close navigation"
-                onClick={() => setMobileNavOpen(false)}
-                className="rounded-lg p-2 text-white hover:bg-white/10"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <Sidebar
-              onNavigate={onNavigate}
-              closeMobile={() => setMobileNavOpen(false)}
-              userName={userName}
-              displayRole={displayRole}
-              onLogout={onLogout}
-              conversations={conversations}
-              activeSessionId={activeSessionId}
-              onSelectConversation={openConversation}
-              onNewChat={startNewChat}
-            />
-          </aside>
-        </div>
-      )}
-
+    <div className="h-full bg-slate-50 font-sans text-slate-900 overflow-y-auto">
       {/* Mobile Sources Drawer */}
       {mobileSourcesOpen && (
         <div
@@ -710,469 +514,444 @@ export default function Chat({
         </div>
       )}
 
-      {/* Desktop Layout: Left Sidebar + Center Main + Right Panel */}
-      <div className="flex min-h-screen">
-        <aside className="sticky top-0 hidden h-screen w-[230px] shrink-0 flex-col bg-gradient-to-b from-violet-700 to-violet-900 p-4 md:flex">
-          <Sidebar
-            onNavigate={onNavigate}
-            userName={userName}
-            displayRole={displayRole}
-            onLogout={onLogout}
-            conversations={conversations}
-            activeSessionId={activeSessionId}
-            onSelectConversation={openConversation}
-            onNewChat={startNewChat}
-          />
-        </aside>
+      {/* Main Container */}
+      <div className="mx-auto grid max-w-[1700px] grid-cols-1 gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:px-7 lg:py-6">
+        <section className="min-w-0 flex flex-col min-h-[calc(100vh-3rem)]">
+          {/* Header */}
+          <header className="mb-5 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="min-w-0">
+                <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
+                  <span>Workspace</span>
+                  <ChevronRight size={12} />
+                  <span>Chat</span>
+                </div>
+                <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">
+                  {activeTitle}
+                </h1>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileSourcesOpen(true)}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm lg:hidden"
+            >
+              <BookOpen size={15} /> Sources
+            </button>
+          </header>
 
-        {/* Center Main Chat Workspace */}
-        <main className="min-w-0 flex-1">
-          <div className="mx-auto grid max-w-[1700px] grid-cols-1 gap-5 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:px-7 lg:py-6">
-            <section className="min-w-0 flex flex-col min-h-[calc(100vh-3rem)]">
-              {/* Header */}
-              <header className="mb-5 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <button
-                    type="button"
-                    aria-label="Open navigation"
-                    onClick={() => setMobileNavOpen(true)}
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm md:hidden"
-                  >
-                    <Menu size={18} />
-                  </button>
-                  <div className="min-w-0">
-                    <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-500">
-                      <span>Workspace</span>
-                      <ChevronRight size={12} />
-                      <span>Chat</span>
-                    </div>
-                    <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">
-                      {activeTitle}
-                    </h1>
+          {/* Chat Message Scroll Area */}
+          <div className="flex-1 space-y-5">
+            {/* Initial Welcome Card when there are no messages */}
+            {messages.length === 0 && (
+              <article className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700">
+                    <Bot size={20} />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">IT Assistant</h2>
+                    <p className="text-xs text-slate-500">
+                      Ask any question — answers are grounded in your enterprise knowledge base.
+                    </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMobileSourcesOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm lg:hidden"
-                >
-                  <BookOpen size={15} /> Sources
-                </button>
-              </header>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {[
+                    "Database is down — how to check PostgreSQL status?",
+                    "How do I reset my VPN password?",
+                    "Troubleshoot Kubernetes pod crashing in production",
+                    "Check system status and active outages",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => handleSendMessage(undefined, prompt)}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50 text-left text-xs text-slate-700 transition"
+                    >
+                      <span className="truncate pr-2">{prompt}</span>
+                      <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
+                    </button>
+                  ))}
+                </div>
+              </article>
+            )}
 
-              {/* Chat Message Scroll Area */}
-              <div className="flex-1 space-y-5">
-                {/* Initial Welcome Card when there are no messages */}
-                {messages.length === 0 && (
-                  <article className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-4">
-                    <div className="flex items-center gap-3">
+            {/* Rendered Messages */}
+            {messages.map((m, idx) => {
+              if (m.role === "user") {
+                return (
+                  <div key={m.id} className="flex justify-end">
+                    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 px-4 py-3 text-sm font-medium text-white shadow-sm">
+                      {m.content}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Assistant Card
+              const prevUserMsg = messages[idx - 1]?.role === "user" ? messages[idx - 1].content : undefined;
+              const isCurrentFeedback = feedback[m.id];
+
+              return (
+                <article key={m.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  {/* Assistant Card Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-3">
                       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700">
                         <Bot size={20} />
                       </span>
-                      <div>
-                        <h2 className="text-base font-bold text-slate-900">IT Assistant</h2>
-                        <p className="text-xs text-slate-500">
-                          Ask any question — answers are grounded in your enterprise knowledge base.
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-sm font-bold text-slate-900">IT Assistant</h2>
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            {m.decision === "caution" ? "Cautioned answer" : "Visible answer excerpt"}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-500">Enterprise Support RAG</p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-medium text-slate-600">
+                      <Clock3 size={12} /> {m.timestamp}
+                    </span>
+                  </div>
+
+                  {/* Assistant Card Body */}
+                  <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
+                    <div>
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
+                        Suggested resolution
+                      </p>
+                      <div className="prose prose-slate max-w-none text-sm leading-6 text-slate-700">
+                        {m.content ? (
+                          <MarkdownMessage content={m.content} />
+                        ) : (
+                          <div className="flex items-center gap-2 text-slate-400 py-3">
+                            <RotateCw className="size-4 animate-spin text-violet-600" />
+                            <span>Generating answer from knowledge base…</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Validation checklist */}
+                    <section aria-labelledby={`validation-${m.id}`}>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 id={`validation-${m.id}`} className="text-sm font-bold text-slate-900">
+                            Validation checklist
+                          </h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {checklist.filter((c) => c.done).length} of {checklist.length} checks complete
+                          </p>
+                        </div>
+                        <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600">
+                          System checklist
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {checklist.map((item) => (
+                          <label
+                            key={item.id}
+                            className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition ${
+                              item.done
+                                ? "border-emerald-200 bg-emerald-50/60"
+                                : "border-slate-200 hover:border-violet-200 hover:bg-violet-50/30"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item.done}
+                              onChange={() =>
+                                setChecklist((curr) =>
+                                  curr.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c))
+                                )
+                              }
+                              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300 accent-violet-600"
+                            />
+                            <span
+                              className={`min-w-0 flex-1 text-xs leading-5 ${
+                                item.done ? "text-slate-500 line-through" : "text-slate-700"
+                              }`}
+                            >
+                              {item.label}
+                              {item.command && (
+                                <code className="ml-1.5 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-violet-800">
+                                  {item.command}
+                                </code>
+                              )}
+                            </span>
+                            {item.done && <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />}
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+
+                    {/* Metadata grid cards */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mb-3 flex items-center gap-2 text-slate-700">
+                          <Users size={15} />
+                          <h3 className="text-xs font-bold">Incident routing</h3>
+                        </div>
+                        <div className="space-y-2.5 text-xs">
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Owner</span>
+                            <span className="font-semibold text-slate-800">DBA & Support Team</span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Jira queue / project</span>
+                            <span className="text-right font-semibold text-slate-800">IT HelpDesk</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="mb-3 flex items-center gap-2 text-slate-700">
+                          <Activity size={15} />
+                          <h3 className="text-xs font-bold">Answer metadata</h3>
+                        </div>
+                        <p className="text-xs leading-5 text-slate-600">
+                          <strong className="font-semibold text-slate-800">
+                            {m.confidence != null ? `${m.confidence}% answer confidence` : "Grounding verified"}
+                          </strong>
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {m.usage?.total_tokens
+                            ? `${m.usage.input_tokens ?? 0} in / ${m.usage.output_tokens ?? 0} out tokens`
+                            : "Enterprise RAG pipeline verified"}
                         </p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                      {[
-                        "Database is down — how to check PostgreSQL status?",
-                        "How do I reset my VPN password?",
-                        "Troubleshoot Kubernetes pod crashing in production",
-                        "Check system status and active outages",
-                      ].map((prompt) => (
+
+                    {/* Action buttons footer */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
-                          key={prompt}
                           type="button"
-                          onClick={() => handleSendMessage(undefined, prompt)}
-                          className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-violet-200 hover:bg-violet-50 text-left text-xs text-slate-700 transition"
+                          aria-pressed={isCurrentFeedback === "helpful"}
+                          onClick={() => handleFeedback(m.id, 1)}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                            isCurrentFeedback === "helpful"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                          }`}
                         >
-                          <span className="truncate pr-2">{prompt}</span>
-                          <ArrowUpRight size={14} className="shrink-0 text-slate-400" />
+                          <ThumbsUp size={14} /> Helpful
                         </button>
-                      ))}
-                    </div>
-                  </article>
-                )}
-
-                {/* Rendered Messages */}
-                {messages.map((m, idx) => {
-                  if (m.role === "user") {
-                    return (
-                      <div key={m.id} className="flex justify-end">
-                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 px-4 py-3 text-sm font-medium text-white shadow-sm">
-                          {m.content}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // Assistant Card
-                  const prevUserMsg = messages[idx - 1]?.role === "user" ? messages[idx - 1].content : undefined;
-                  const isCurrentFeedback = feedback[m.id];
-
-                  return (
-                    <article key={m.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                      {/* Assistant Card Header */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700">
-                            <Bot size={20} />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h2 className="text-sm font-bold text-slate-900">IT Assistant</h2>
-                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                {m.decision === "caution" ? "Cautioned answer" : "Visible answer excerpt"}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 text-xs text-slate-500">Enterprise Support RAG</p>
-                          </div>
-                        </div>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[10px] font-medium text-slate-600">
-                          <Clock3 size={12} /> {m.timestamp}
-                        </span>
-                      </div>
-
-                      {/* Assistant Card Body */}
-                      <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
-                        <div>
-                          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
-                            Suggested resolution
-                          </p>
-                          <div className="prose prose-slate max-w-none text-sm leading-6 text-slate-700">
-                            {m.content ? (
-                              <MarkdownMessage content={m.content} />
-                            ) : (
-                              <div className="flex items-center gap-2 text-slate-400 py-3">
-                                <RotateCw className="size-4 animate-spin text-violet-600" />
-                                <span>Generating answer from knowledge base…</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Validation checklist */}
-                        <section aria-labelledby={`validation-${m.id}`}>
-                          <div className="mb-3 flex items-center justify-between gap-3">
-                            <div>
-                              <h3 id={`validation-${m.id}`} className="text-sm font-bold text-slate-900">
-                                Validation checklist
-                              </h3>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {checklist.filter((c) => c.done).length} of {checklist.length} checks complete
-                              </p>
-                            </div>
-                            <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600">
-                              System checklist
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {checklist.map((item) => (
-                              <label
-                                key={item.id}
-                                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition ${
-                                  item.done
-                                    ? "border-emerald-200 bg-emerald-50/60"
-                                    : "border-slate-200 hover:border-violet-200 hover:bg-violet-50/30"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={item.done}
-                                  onChange={() =>
-                                    setChecklist((curr) =>
-                                      curr.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c))
-                                    )
-                                  }
-                                  className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300 accent-violet-600"
-                                />
-                                <span
-                                  className={`min-w-0 flex-1 text-xs leading-5 ${
-                                    item.done ? "text-slate-500 line-through" : "text-slate-700"
-                                  }`}
-                                >
-                                  {item.label}
-                                  {item.command && (
-                                    <code className="ml-1.5 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-violet-800">
-                                      {item.command}
-                                    </code>
-                                  )}
-                                </span>
-                                {item.done && <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" />}
-                              </label>
-                            ))}
-                          </div>
-                        </section>
-
-                        {/* Metadata grid cards */}
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-slate-700">
-                              <Users size={15} />
-                              <h3 className="text-xs font-bold">Incident routing</h3>
-                            </div>
-                            <div className="space-y-2.5 text-xs">
-                              <div className="flex justify-between gap-3">
-                                <span className="text-slate-500">Owner</span>
-                                <span className="font-semibold text-slate-800">DBA & Support Team</span>
-                              </div>
-                              <div className="flex justify-between gap-3">
-                                <span className="text-slate-500">Jira queue / project</span>
-                                <span className="text-right font-semibold text-slate-800">IT HelpDesk</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-xl border border-slate-200 bg-white p-4">
-                            <div className="mb-3 flex items-center gap-2 text-slate-700">
-                              <Activity size={15} />
-                              <h3 className="text-xs font-bold">Answer metadata</h3>
-                            </div>
-                            <p className="text-xs leading-5 text-slate-600">
-                              <strong className="font-semibold text-slate-800">
-                                {m.confidence != null ? `${m.confidence}% answer confidence` : "Grounding verified"}
-                              </strong>
-                            </p>
-                            <p className="mt-1 text-[11px] text-slate-500">
-                              {m.usage?.total_tokens
-                                ? `${m.usage.input_tokens ?? 0} in / ${m.usage.output_tokens ?? 0} out tokens`
-                                : "Enterprise RAG pipeline verified"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Action buttons footer */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              aria-pressed={isCurrentFeedback === "helpful"}
-                              onClick={() => handleFeedback(m.id, 1)}
-                              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                                isCurrentFeedback === "helpful"
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                              }`}
-                            >
-                              <ThumbsUp size={14} /> Helpful
-                            </button>
-                            <button
-                              type="button"
-                              aria-pressed={isCurrentFeedback === "not-helpful"}
-                              onClick={() => handleFeedback(m.id, -1)}
-                              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                                isCurrentFeedback === "not-helpful"
-                                  ? "border-rose-200 bg-rose-50 text-rose-700"
-                                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                              }`}
-                            >
-                              <ThumbsDown size={14} /> Not helpful
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => copyAnswer(m.content)}
-                              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                            >
-                              <Copy size={14} /> Copy answer
-                            </button>
-                            {prevUserMsg && (
-                              <button
-                                type="button"
-                                onClick={() => handleSendMessage(undefined, prevUserMsg)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                              >
-                                <RefreshCw size={14} /> Regenerate
-                              </button>
-                            )}
-                          </div>
+                        <button
+                          type="button"
+                          aria-pressed={isCurrentFeedback === "not-helpful"}
+                          onClick={() => handleFeedback(m.id, -1)}
+                          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                            isCurrentFeedback === "not-helpful"
+                              ? "border-rose-200 bg-rose-50 text-rose-700"
+                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <ThumbsDown size={14} /> Not helpful
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyAnswer(m.content)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                        >
+                          <Copy size={14} /> Copy answer
+                        </button>
+                        {prevUserMsg && (
                           <button
                             type="button"
-                            onClick={() => openJiraForMessage(m, prevUserMsg)}
-                            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700"
+                            onClick={() => handleSendMessage(undefined, prevUserMsg)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
                           >
-                            <Ticket size={15} /> Create Jira ticket
+                            <RefreshCw size={14} /> Regenerate
                           </button>
-                        </div>
+                        )}
                       </div>
-                    </article>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Composer Box */}
-              <form onSubmit={handleSendMessage} className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <label htmlFor="user-prompt" className="sr-only">
-                  Ask a follow-up question
-                </label>
-                <textarea
-                  id="user-prompt"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Ask a follow-up IT question…"
-                  className="w-full resize-y border-0 bg-transparent px-2 py-2 text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600">
-                    <Bot size={13} /> Auto mode <ChevronDown size={12} />
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <span className="hidden text-[10px] text-slate-400 sm:inline">
-                      Live RAG streaming · Internal KB
-                    </span>
-                    <button
-                      type="submit"
-                      disabled={!input.trim() || isTyping}
-                      className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      <Send size={14} /> Send
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => openJiraForMessage(m, prevUserMsg)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700"
+                      >
+                        <Ticket size={15} /> Create Jira ticket
+                      </button>
+                    </div>
                   </div>
+                </article>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Composer Box */}
+          <form onSubmit={handleSendMessage} className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <label htmlFor="user-prompt" className="sr-only">
+              Ask a follow-up question
+            </label>
+            <textarea
+              ref={composerRef}
+              id="user-prompt"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              rows={2}
+              placeholder="Ask a follow-up IT question…"
+              className="w-full resize-y border-0 bg-transparent px-2 py-2 text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600">
+                <Bot size={13} /> Auto mode <ChevronDown size={12} />
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="hidden text-[10px] text-slate-400 sm:inline">
+                  Live RAG streaming · Internal KB
+                </span>
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isTyping}
+                  className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Send size={14} /> Send
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        {/* Right Context Sidebar */}
+        <aside className="hidden min-w-0 lg:block">
+          <div className="sticky top-6 space-y-4">
+            {/* Sources Card */}
+            <PanelCard
+              title="Sources"
+              subtitle={
+                latestSources.length > 0
+                  ? `${latestSources.length} references across ${sourceGroups.length} titles`
+                  : "No sources yet"
+              }
+              icon={BookOpen}
+            >
+              <label className="relative mb-3 block">
+                <span className="sr-only">Filter source references</span>
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={sourceQuery}
+                  onChange={(e) => setSourceQuery(e.target.value)}
+                  placeholder="Filter references…"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+              <div className="space-y-2">
+                {sourceGroups.map((g) => (
+                  <ReferenceCard
+                    key={g.key}
+                    group={g}
+                    expanded={expandedReferences.includes(g.key)}
+                    onToggle={() => toggleReference(g.key)}
+                  />
+                ))}
+                {sourceGroups.length === 0 && (
+                  <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">
+                    {latestSources.length === 0
+                      ? "No sources yet — ask an IT question to see cited references."
+                      : "No matching references found."}
+                  </p>
+                )}
+              </div>
+              {latestSources.length > 0 && (
+                <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2.5 text-[10px] leading-4 text-blue-800">
+                  Match scores describe retrieval similarity, not answer confidence.
+                </p>
+              )}
+            </PanelCard>
+
+            {/* System Status Card */}
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <button
+                type="button"
+                aria-expanded={systemOpen}
+                onClick={() => setSystemOpen((curr) => !curr)}
+                className="flex w-full items-center justify-between gap-3 p-4 text-left"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+                    <ShieldCheck size={17} />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">System status</span>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {services.length > 0
+                        ? `${healthyServicesCount} healthy of ${services.length} services`
+                        : "Checking dependencies…"}
+                    </span>
+                  </span>
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`text-slate-400 transition-transform ${systemOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {systemOpen && (
+                <div className="space-y-1 border-t border-slate-100 p-3">
+                  {services.length === 0 ? (
+                    <p className="px-2 py-2 text-xs text-slate-400">Loading system status…</p>
+                  ) : (
+                    services.map((svc) => {
+                      const isOk = svc.status === "Healthy";
+                      return (
+                        <div key={svc.key} className="flex items-center justify-between gap-2 rounded-lg px-2 py-2">
+                          <span className="text-[11px] font-medium text-slate-700">{svc.name}</span>
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
+                              isOk ? "text-emerald-700" : "text-rose-700"
+                            }`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${isOk ? "bg-emerald-500" : "bg-rose-500"}`}
+                            />
+                            {svc.status}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-              </form>
+              )}
             </section>
 
-            {/* Right Context Sidebar */}
-            <aside className="hidden min-w-0 lg:block">
-              <div className="sticky top-6 space-y-4">
-                {/* Sources Card */}
-                <PanelCard
-                  title="Sources"
-                  subtitle={
-                    latestSources.length > 0
-                      ? `${latestSources.length} references across ${sourceGroups.length} titles`
-                      : "No sources yet"
-                  }
-                  icon={BookOpen}
-                >
-                  <label className="relative mb-3 block">
-                    <span className="sr-only">Filter source references</span>
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      value={sourceQuery}
-                      onChange={(e) => setSourceQuery(e.target.value)}
-                      placeholder="Filter references…"
-                      className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
-                    />
-                  </label>
-                  <div className="space-y-2">
-                    {sourceGroups.map((g) => (
-                      <ReferenceCard
-                        key={g.key}
-                        group={g}
-                        expanded={expandedReferences.includes(g.key)}
-                        onToggle={() => toggleReference(g.key)}
-                      />
-                    ))}
-                    {sourceGroups.length === 0 && (
-                      <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-xs text-slate-500">
-                        {latestSources.length === 0
-                          ? "No sources yet — ask an IT question to see cited references."
-                          : "No matching references found."}
-                      </p>
-                    )}
-                  </div>
-                  {latestSources.length > 0 && (
-                    <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2.5 text-[10px] leading-4 text-blue-800">
-                      Match scores describe retrieval similarity, not answer confidence.
-                    </p>
-                  )}
-                </PanelCard>
-
-                {/* System Status Card */}
-                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {/* Quick actions Card */}
+            <PanelCard title="Quick actions" subtitle="Shortcuts for common requests" icon={LifeBuoy}>
+              <div className="space-y-2">
+                {[
+                  { label: "Reset password", prompt: "How do I reset my password?" },
+                  { label: "Check service status", prompt: "What is the current health status of all IT services?" },
+                  { label: "My tickets", nav: "tickets" },
+                ].map((item) => (
                   <button
+                    key={item.label}
                     type="button"
-                    aria-expanded={systemOpen}
-                    onClick={() => setSystemOpen((curr) => !curr)}
-                    className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                    onClick={() => {
+                      if (item.nav && onNavigate) {
+                        onNavigate(item.nav);
+                      } else if (item.prompt) {
+                        handleSendMessage(undefined, item.prompt);
+                      }
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-medium text-slate-700 transition hover:border-violet-200 hover:bg-violet-50"
                   >
-                    <span className="flex items-center gap-3">
-                      <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
-                        <ShieldCheck size={17} />
-                      </span>
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">System status</span>
-                        <span className="mt-1 block text-xs text-slate-500">
-                          {services.length > 0
-                            ? `${healthyServicesCount} healthy of ${services.length} services`
-                            : "Checking dependencies…"}
-                        </span>
-                      </span>
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`text-slate-400 transition-transform ${systemOpen ? "rotate-180" : ""}`}
-                    />
+                    {item.label}
+                    <ArrowUpRight size={14} className="text-slate-400" />
                   </button>
-                  {systemOpen && (
-                    <div className="space-y-1 border-t border-slate-100 p-3">
-                      {services.length === 0 ? (
-                        <p className="px-2 py-2 text-xs text-slate-400">Loading system status…</p>
-                      ) : (
-                        services.map((svc) => {
-                          const isOk = svc.status === "Healthy";
-                          return (
-                            <div key={svc.key} className="flex items-center justify-between gap-2 rounded-lg px-2 py-2">
-                              <span className="text-[11px] font-medium text-slate-700">{svc.name}</span>
-                              <span
-                                className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
-                                  isOk ? "text-emerald-700" : "text-rose-700"
-                                }`}
-                              >
-                                <span
-                                  className={`h-1.5 w-1.5 rounded-full ${isOk ? "bg-emerald-500" : "bg-rose-500"}`}
-                                />
-                                {svc.status}
-                              </span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                {/* Quick actions Card */}
-                <PanelCard title="Quick actions" subtitle="Shortcuts for common requests" icon={LifeBuoy}>
-                  <div className="space-y-2">
-                    {[
-                      { label: "Reset password", prompt: "How do I reset my password?" },
-                      { label: "Check service status", prompt: "What is the current health status of all IT services?" },
-                      { label: "My tickets", nav: "tickets" },
-                    ].map((item) => (
-                      <button
-                        key={item.label}
-                        type="button"
-                        onClick={() => {
-                          if (item.nav && onNavigate) {
-                            onNavigate(item.nav);
-                          } else if (item.prompt) {
-                            handleSendMessage(undefined, item.prompt);
-                          }
-                        }}
-                        className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs font-medium text-slate-700 transition hover:border-violet-200 hover:bg-violet-50"
-                      >
-                        {item.label}
-                        <ArrowUpRight size={14} className="text-slate-400" />
-                      </button>
-                    ))}
-                  </div>
-                </PanelCard>
+                ))}
               </div>
-            </aside>
+            </PanelCard>
           </div>
-        </main>
+        </aside>
       </div>
 
       {/* Jira Ticket Modal */}
