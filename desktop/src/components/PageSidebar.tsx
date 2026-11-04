@@ -137,11 +137,11 @@ export default function PageSidebar({
     <>
       {collapsed ? (
         /* Rail mode: top brand avatar or expand button */
-        <div className="flex flex-col items-center justify-center gap-2 border-b border-white/15 py-3">
+        <div className="flex flex-col items-center justify-center gap-2 border-b border-white/15 dark:border-[var(--sidebar-border)] py-3">
           {branding.logo ? (
             <img src={branding.logo} alt="Logo" className="size-8 rounded-xl object-contain" />
           ) : (
-            <div className="grid size-8 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm">iTH</div>
+            <div className="grid size-8 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm dark:bg-[var(--primary)] dark:text-white">iTH</div>
           )}
           {onToggleCollapsed && (
             <button
@@ -156,12 +156,12 @@ export default function PageSidebar({
           )}
         </div>
       ) : (
-        <div className="flex h-16 items-center justify-between border-b border-white/15 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-white/15 dark:border-[var(--sidebar-border)] px-4">
           <div className="flex items-center gap-2.5 min-w-0">
             {branding.logo ? (
               <img src={branding.logo} alt="Company logo" className="size-8 shrink-0 rounded-xl object-contain" />
             ) : (
-              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm">iTH</div>
+              <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-white text-xs font-extrabold text-violet-700 shadow-sm dark:bg-[var(--primary)] dark:text-white">iTH</div>
             )}
             <div className="min-w-0">
               <div className="text-xs font-semibold text-white truncate">{branding.appName || "IT Help Chatbot"}</div>
@@ -212,7 +212,7 @@ export default function PageSidebar({
               window.dispatchEvent(new CustomEvent("ith:new-chat"));
               setMobileOpen(false);
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50 dark:bg-[var(--primary)] dark:text-white dark:hover:bg-violet-500"
           >
             <Plus className="size-3.5" />
             New conversation
@@ -222,7 +222,7 @@ export default function PageSidebar({
 
       <nav className={"flex-1 py-3 " + (collapsed ? "px-2" : "px-3")}>
         {!collapsed && (
-          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
+          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55 dark:text-[var(--sidebar-text-muted)]">
             Workspace
           </p>
         )}
@@ -249,7 +249,7 @@ export default function PageSidebar({
                   "mb-1 flex w-full items-center rounded-lg text-left text-xs font-medium transition",
                   collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
                   active === item.id && !locked
-                    ? "bg-white text-violet-700 font-semibold shadow-sm"
+                    ? "bg-white text-violet-700 font-semibold shadow-sm dark:bg-[var(--sidebar-active-bg)] dark:text-white"
                     : "text-white/80 hover:bg-white/10 hover:text-white",
                   locked ? "opacity-60" : "",
                 ].join(" ")}
@@ -278,15 +278,15 @@ export default function PageSidebar({
 
         {/* Recent Chat History in Sidebar */}
         {!collapsed && (
-          <div className="mt-4 pt-3 border-t border-white/15">
-            <div className="flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/60">
+          <div className="mt-4 pt-3 border-t border-white/15 dark:border-[var(--sidebar-border)]">
+            <div className="flex items-center justify-between px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/60 dark:text-[var(--sidebar-text-muted)]">
               <button
                 type="button"
                 onClick={() => setHistoryOpen(!historyOpen)}
                 className="flex items-center gap-1.5 tracking-[0.14em] hover:text-white transition"
               >
                 <span>History</span>
-                <span className="text-2xs text-white/50 font-normal">({conversations.length})</span>
+                <span className="text-2xs text-white/50 font-normal dark:text-[var(--sidebar-text-muted)]">({conversations.length})</span>
                 {historyOpen ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
               </button>
               {conversations.length > 0 && (
@@ -343,7 +343,7 @@ export default function PageSidebar({
                         className={[
                           "flex-1 truncate rounded-md px-2 py-1.5 text-left text-xs transition",
                           isSelected
-                            ? "bg-white/20 font-semibold text-white"
+                            ? "bg-white/20 font-semibold text-white dark:bg-[var(--sidebar-active-bg)]"
                             : "text-white/70 hover:bg-white/10 hover:text-white",
                         ].join(" ")}
                         title={c.title || "Untitled chat"}
@@ -426,15 +426,15 @@ export default function PageSidebar({
           </div>
         )}
       </nav>
-      <div className={"border-t border-white/15 py-4 " + (collapsed ? "px-2" : "px-4")}>
+      <div className={"border-t border-white/15 dark:border-[var(--sidebar-border)] py-4 " + (collapsed ? "px-2" : "px-4")}>
         <div className={"flex items-center " + (collapsed ? "flex-col gap-2" : "gap-3")}>
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-white/20 text-sm font-semibold text-white" title={collapsed ? (userName ?? "User") + " · " + pretty : undefined}>
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-white/20 text-sm font-semibold text-white dark:bg-[var(--primary)]" title={collapsed ? (userName ?? "User") + " · " + pretty : undefined}>
             {(userName?.charAt(0) ?? "A").toUpperCase()}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
               <div className="truncate text-xs font-semibold text-white">{userName ?? "User"}</div>
-              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold", "bg-white/20 text-white/90"].join(" ")}>
+              <span className={["mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold", "bg-white/20 text-white/90 dark:bg-[var(--sidebar-active-bg)] dark:text-white"].join(" ")}>
                 {pretty}
               </span>
             </div>
@@ -464,7 +464,7 @@ export default function PageSidebar({
       )}
 
       {/* Mobile top bar */}
-      <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-4 lg:hidden dark:border-slate-800 dark:bg-slate-900">
+      <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-4 lg:hidden">
         <button
           onClick={() => setMobileOpen(true)}
           className="grid size-10 place-items-center rounded-lg hover:bg-muted"
@@ -485,7 +485,7 @@ export default function PageSidebar({
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-gradient-to-b from-violet-700 to-violet-900 transition-all border-violet-800/60 lg:static lg:z-auto lg:translate-x-0 " + (collapsed ? "w-[72px]" : "w-[250px]"),
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-gradient-to-b from-violet-700 to-violet-900 transition-all border-violet-800/60 dark:bg-none dark:bg-[var(--sidebar-bg)] dark:border-[var(--sidebar-border)] lg:static lg:z-auto lg:translate-x-0 " + (collapsed ? "w-[72px]" : "w-[250px]"),
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
