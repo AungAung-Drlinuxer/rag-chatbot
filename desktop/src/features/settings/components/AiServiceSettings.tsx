@@ -5,15 +5,18 @@
  * write-only API key, and the model (auto-detected from the provider's catalogue). It also
  * owns the two retrieval knobs that live in the backend runtime, because they are the same
  * decision — "how does the assistant answer" — and splitting them across two screens with
- * two different save buttons was the thing that made the old layout confusing.
+ * two different save buttons is what made the old layout confusing.
  *
  * One section, one Save. Nothing here is stored on the device.
+ *
+ * v1.7.1 — rebuilt on the shared SettingsKit: a status hero, then Provider / Model /
+ * Retrieval panels, then one action bar. Logic is unchanged; only the presentation and
+ * a broken `aria-label` on the manual model input were touched.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertCircle, CheckCircle2, ChevronDown, Database, Eye, EyeOff, ExternalLink, Gauge,
-  Info, KeyRound, Layers, Loader2, Lock, Pencil, RefreshCw, Save, Search, ShieldCheck,
-  Sparkles, Trash2, XCircle,
+  AlertCircle, CheckCircle2, ChevronDown, Gauge, Info, KeyRound, Layers, Loader2, Lock,
+  Pencil, RefreshCw, Save, Search, ShieldCheck, Sparkles, Trash2, XCircle,
 } from "lucide-react";
 
 import {
@@ -21,6 +24,10 @@ import {
   putIntegrationSettings, putRuntime, testIntegration,
 } from "@/features/settings/api";
 import { LLM_PRESETS, presetFor, providerLabel } from "../llmProviders";
+import {
+  BTN_DANGER, BTN_GHOST, BTN_PRIMARY, Eyebrow, Field, FieldGrid, INPUT, INPUT_MONO, Panel,
+  Pill, Row,
+} from "./SettingsKit";
 
 type Msg = { ok: boolean; text: string } | null;
 
@@ -195,6 +202,11 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function clear() {
+    if (!window.confirm(
+      "Remove the stored provider credentials?\n\n" +
+      "The key is write-only, so this is the only way to revoke it. The assistant stops " +
+      "answering until a new key is saved."
+    )) return;
     setClearing(true);
     setMsg(null);
     try {
@@ -215,25 +227,25 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
   // ---- read-only view for non-admins -----------------------------------------------
   if (!isAdmin) {
     return (
-      <Card icon={<Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-        tone="bg-indigo-50 dark:bg-indigo-950/40"
-        title="AI Assistant" description="How the assistant answers your questions.">
-        <Row label="AI provider" hint="Managed by your IT administrators.">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            {providerLabel(provider)}
-          </span>
+      <Panel
+        icon={<Sparkles className="size-4.5" />}
+        title="AI Assistant"
+        description="How the assistant answers your questions. Managed by your IT administrators."
+      >
+        <Row title="AI provider" hint="Configured centrally — you do not need a key.">
+          <span className="text-xs font-medium text-foreground">{providerLabel(provider)}</span>
         </Row>
-        <Row label="Model" hint="The model currently answering.">
-          <span className="font-mono text-xs text-slate-600 dark:text-slate-300">{storedModel || "—"}</span>
+        <Row title="Model" hint="The model currently answering.">
+          <span className="font-mono text-xs text-muted-foreground">{storedModel || "—"}</span>
         </Row>
-      </Card>
+      </Panel>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-background p-6 text-xs text-slate-500 dark:text-slate-400">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading the AI service configuration…
+      <div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-card p-6 text-xs text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" /> Loading the AI service configuration…
       </div>
     );
   }
@@ -241,223 +253,252 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-4">
       {/* ---- status hero ---------------------------------------------------------- */}
-      <div className="rounded-xl border border-[var(--border)] bg-gradient-to-br from-indigo-50 to-transparent p-5 dark:from-indigo-950/30">
+      <section className="rounded-2xl border border-[var(--border)] bg-card p-5 text-card-foreground shadow-xs">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-                {providerLabel(provider)}
-              </h3>
-              {tokenSet ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3 w-3" /> Key stored
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                  <AlertCircle className="h-3 w-3" /> No API key
-                </span>
-              )}
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--accent)] text-[var(--accent-foreground)]">
+              <Sparkles className="size-5" />
             </div>
-            <p className="mt-1.5 truncate font-mono text-xs text-slate-600 dark:text-slate-300" title={storedModel}>
-              {storedModel || "no model selected"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {models.length > 0
-                ? `${models.length} model${models.length === 1 ? "" : "s"} detected`
-                : tokenSet
-                  ? "detecting models…"
-                  : "add an API key to detect models"}
-              {" · "}top {topK} chunks · {Math.round((Number(threshold) || 0.75) * 100)}% gate
-            </p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold tracking-tight text-foreground">{providerLabel(provider)}</h2>
+                {tokenSet ? (
+                  <Pill tone="ok"><CheckCircle2 className="size-3" /> Key stored</Pill>
+                ) : (
+                  <Pill tone="warn"><AlertCircle className="size-3" /> No API key</Pill>
+                )}
+              </div>
+              <p className="mt-1 truncate font-mono text-xs text-foreground/80" title={storedModel}>
+                {storedModel || "no model selected"}
+              </p>
+              <p className="mt-1 text-2xs leading-relaxed text-muted-foreground">
+                {models.length > 0
+                  ? `${models.length} model${models.length === 1 ? "" : "s"} detected`
+                  : tokenSet ? "detecting models…" : "add an API key to detect models"}
+                {" · "}top {topK} chunks · {Math.round((Number(threshold) || 0.75) * 100)}% confidence gate
+              </p>
+            </div>
           </div>
-          <a href={preset.docs} target="_blank" rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-800/60">
-            Provider docs <ExternalLink className="h-3 w-3" />
+          <a
+            href={preset.docs}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] px-2.5 py-1.5 text-2xs font-medium text-foreground transition hover:bg-muted/50"
+          >
+            Provider docs
           </a>
         </div>
-      </div>
+      </section>
 
       {/* ---- provider ------------------------------------------------------------- */}
-      <Card icon={<Database className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-        tone="bg-indigo-50 dark:bg-indigo-950/40"
-        title="Provider"
-        description="Which service generates the answers, and the credential it uses.">
-
-        <div className="px-5 py-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {/* provider */}
+      <Panel
+        icon={<KeyRound className="size-4.5" />}
+        title="Provider & credentials"
+        description="Which service generates the answers, and the key it authenticates with."
+      >
+        <div className="space-y-3 p-5">
+          <FieldGrid>
             <Field label="AI provider" hint={preset.note}>
               <div className="relative">
-                <select value={form.provider || provider}
+                <select
+                  value={form.provider || provider}
                   onChange={(e) => applyProvider(e.target.value)}
-                  className="h-9 w-full appearance-none rounded-lg border border-[var(--border)] bg-background px-3 pr-9 text-xs font-medium text-foreground outline-none focus:border-blue-500" aria-label="AI provider">
+                  aria-label="AI provider"
+                  className={`${INPUT} appearance-none pr-9 font-medium`}
+                >
                   {LLM_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               </div>
             </Field>
 
-            {/* base url */}
-            <Field label="Base URL" badge={isConfigured("base_url") ? "Configured" : undefined}>
+            <Field
+              label="Base URL"
+              badge={isConfigured("base_url") ? <Pill tone="ok"><Lock className="size-3" /> Configured</Pill> : undefined}
+            >
               <ValueInput field="base_url" placeholder="https://api.cline.bot/api/v1" />
             </Field>
+          </FieldGrid>
+
+          <div className="rounded-xl border border-[var(--border)] bg-muted/25 p-4">
+            <Field
+              label="API key"
+              icon={<KeyRound className="size-3" />}
+              badge={tokenSet ? <Pill tone="ok"><Lock className="size-3" /> Saved — not retrievable</Pill> : undefined}
+            >
+              <ValueInput field="api_key" placeholder="your provider API key" secret />
+            </Field>
+            <p className="mt-2 flex items-start gap-1.5 text-2xs leading-relaxed text-muted-foreground">
+              <ShieldCheck className="mt-0.5 size-3 shrink-0 text-[var(--ok)]" />
+              Write-only: stored server-side and never returned. Leave blank to keep the current key.
+            </p>
           </div>
         </div>
+      </Panel>
 
-        {/* api key — its own row, because it is the one field that is a secret */}
-        <div className="border-t border-slate-100 px-5 py-4 dark:border-slate-800">
-          <Field label="API key" icon={<KeyRound className="h-3 w-3" />}
-            badge={tokenSet ? "Saved — not retrievable" : undefined}>
-            <ValueInput field="api_key" placeholder="your provider API key" secret />
-          </Field>
-          <p className="mt-1.5 flex items-start gap-1 text-xs leading-4 text-slate-400">
-            <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
-            Write-only: stored server-side and never returned. Leave blank to keep the current key.
-          </p>
-        </div>
-
-        {/* model */}
-        <div className="border-t border-slate-100 px-5 py-4 dark:border-slate-800">
-          <Field label="Model" badge={models.length ? `${models.length} detected` : undefined}>
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-[200px] flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" />
-                  <input type="text" value={modelQuery}
-                    onChange={(e) => setModelQuery(e.target.value)}
-                    placeholder={models.length ? `Filter ${models.length} models…` : "No models detected yet"}
-                    disabled={!models.length}
-                    className="h-9 w-full rounded-lg border border-[var(--border)] bg-background py-2 pl-9 pr-3 text-xs text-foreground outline-none focus:border-blue-500 disabled:opacity-60"  aria-label="Search models"/>
-                </div>
-                <button type="button" onClick={() => void loadModels()} disabled={loadingModels}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800">
-                  <RefreshCw className={`h-3.5 w-3.5 ${loadingModels ? "animate-spin" : ""}`} />
-                  {loadingModels ? "Detecting…" : models.length ? "Re-detect" : "Detect models"}
-                </button>
-              </div>
-
-              {models.length > 0 && (
-                <div className="max-h-56 overflow-y-auto rounded-lg border border-[var(--border)]">
-                  {filteredModels.length === 0 ? (
-                    <p className="px-3 py-3 text-xs text-slate-400">No model matches “{modelQuery}”.</p>
-                  ) : filteredModels.map((m) => {
-                    const on = selectedModel === m.id;
-                    return (
-                      <button key={m.id} type="button" onClick={() => setForm({ ...form, model: m.id })}
-                        className={[
-                          "flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-xs",
-                          on ? "bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200"
-                             : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60",
-                        ].join(" ")}>
-                        <span className="truncate">{m.id}</span>
-                        {on && <CheckCircle2 className="ml-auto size-3 shrink-0 text-indigo-600" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              <input type="text" value={form.model || ""}
-                onChange={(e) => setForm({ ...form, model: e.target.value })}
-                placeholder="or type a model id"
-                spellCheck={false} autoComplete="off"
-                className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-blue-500"  aria-label="{m.id}"/>
-
-              {modelsError && (
-                <p className="flex items-start gap-1 text-xs text-rose-600">
-                  <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" /> {modelsError}
-                  <button type="button" onClick={() => void loadModels()} className="ml-1 underline hover:no-underline">retry</button>
-                </p>
-              )}
-              {!modelsError && models.length > 0 && (
-                <p className="flex items-center gap-1 text-xs text-slate-400">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                  {models.length} model{models.length === 1 ? "" : "s"} auto-detected
-                  {modelsSource === "clinepass" ? " from the ClinePass catalogue" : " from the provider"}
-                  {modelQuery && ` — ${filteredModels.length} match “${modelQuery}”`}
-                </p>
-              )}
+      {/* ---- model ---------------------------------------------------------------- */}
+      <Panel
+        icon={<Layers className="size-4.5" />}
+        title="Model"
+        description="Picked from the provider's live catalogue — or typed by id if it is not listed."
+        actions={models.length ? <Pill tone="muted">{models.length} detected</Pill> : undefined}
+      >
+        <div className="space-y-3 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={modelQuery}
+                onChange={(e) => setModelQuery(e.target.value)}
+                placeholder={models.length ? `Filter ${models.length} models…` : "No models detected yet"}
+                disabled={!models.length}
+                aria-label="Search models"
+                className={`${INPUT} pl-9 disabled:opacity-60`}
+              />
             </div>
+            <button type="button" onClick={() => void loadModels()} disabled={loadingModels} className={BTN_GHOST}>
+              <RefreshCw className={`size-3.5 ${loadingModels ? "animate-spin" : ""}`} />
+              {loadingModels ? "Detecting…" : models.length ? "Re-detect" : "Detect models"}
+            </button>
+          </div>
+
+          {models.length > 0 && (
+            <div className="max-h-60 overflow-y-auto rounded-xl border border-[var(--border)] bg-background">
+              {filteredModels.length === 0 ? (
+                <p className="px-3 py-3 text-2xs text-muted-foreground">No model matches “{modelQuery}”.</p>
+              ) : filteredModels.map((m) => {
+                const on = selectedModel === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setForm({ ...form, model: m.id })}
+                    aria-pressed={on}
+                    className={[
+                      "flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-xs transition",
+                      on
+                        ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    <span className="truncate">{m.id}</span>
+                    {on && <CheckCircle2 className="ml-auto size-3 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <Field label="Model id" hint="Use this when the catalogue is unavailable or the model is brand new.">
+            <input
+              type="text"
+              value={form.model || ""}
+              onChange={(e) => setForm({ ...form, model: e.target.value })}
+              placeholder="or type a model id"
+              spellCheck={false}
+              autoComplete="off"
+              aria-label="Model id"
+              className={INPUT_MONO}
+            />
           </Field>
+
+          {modelsError && (
+            <p className="flex items-start gap-1 text-2xs text-[var(--danger)]">
+              <AlertCircle className="mt-0.5 size-3 shrink-0" /> {modelsError}
+              <button type="button" onClick={() => void loadModels()} className="ml-1 underline hover:no-underline">retry</button>
+            </p>
+          )}
+          {!modelsError && models.length > 0 && (
+            <p className="flex items-center gap-1 text-2xs text-muted-foreground">
+              <CheckCircle2 className="size-3 text-[var(--ok)]" />
+              {models.length} model{models.length === 1 ? "" : "s"} auto-detected
+              {modelsSource === "clinepass" ? " from the ClinePass catalogue" : " from the provider"}
+              {modelQuery && ` — ${filteredModels.length} match “${modelQuery}”`}
+            </p>
+          )}
         </div>
-      </Card>
+      </Panel>
 
       {/* ---- retrieval ------------------------------------------------------------ */}
-      <Card icon={<Layers className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
-        tone="bg-sky-50 dark:bg-sky-950/40"
+      <Panel
+        icon={<Gauge className="size-4.5" />}
         title="Retrieval & answer behaviour"
-        description="Shared backend settings — they change the assistant for everyone once saved.">
-
-        <div className="px-5 py-4">
-          <div className="flex items-start justify-between gap-6">
-            <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-white">
-                <Gauge className="h-3.5 w-3.5 text-slate-400" /> Confidence threshold
-              </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Minimum confidence required before an answer is returned. Below it, the
-                assistant escalates instead of guessing.
-              </p>
-            </div>
-            <span className="shrink-0 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
+        description="Shared backend settings — they change the assistant for everyone once saved."
+      >
+        <div className="p-5">
+          <Eyebrow hint="Below this the assistant escalates instead of guessing">Confidence threshold</Eyebrow>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min="50"
+              max="100"
+              step="5"
+              value={Math.round((Number(threshold) || 0.75) * 100)}
+              onChange={(e) => setThreshold(String(Number(e.target.value) / 100))}
+              aria-label="Confidence threshold"
+              className="h-1.5 flex-1 accent-[var(--primary)]"
+            />
+            <span className="shrink-0 rounded-lg bg-[var(--accent)] px-2.5 py-1 text-xs font-semibold text-[var(--accent-foreground)] tabular-nums">
               {Math.round((Number(threshold) || 0.75) * 100)}%
             </span>
           </div>
-          <input type="range" min="50" max="100" step="5"
-            value={Math.round((Number(threshold) || 0.75) * 100)}
-            onChange={(e) => setThreshold(String(Number(e.target.value) / 100))}
-            aria-label="Confidence threshold"
-            className="mt-4 w-full accent-indigo-600" />
-          <div className="mt-1 flex justify-between text-xs text-slate-400">
+          <div className="mt-1 flex justify-between text-2xs text-muted-foreground/70">
             <span>50%</span><span>75%</span><span>100%</span>
           </div>
         </div>
 
-        <Row label="Top K results" hint="Knowledge chunks retrieved per question.">
-          <input type="number" min={1} max={20} value={topK}
+        <Row title="Top K results" hint="Knowledge chunks retrieved per question.">
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={topK}
             onChange={(e) => setTopK(e.target.value)}
             aria-label="Top K results"
-            className="h-9 w-24 rounded-lg border border-[var(--border)] bg-background px-3 text-sm text-foreground outline-none focus:border-sky-500" />
+            className={`${INPUT} w-24 text-center`}
+          />
         </Row>
-      </Card>
+      </Panel>
 
       {/* ---- actions -------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-background p-4">
-        <button type="button" onClick={save} disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-card p-4">
+        <button type="button" onClick={save} disabled={saving} className={BTN_PRIMARY}>
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
           Save AI settings
         </button>
-        <button type="button" onClick={test} disabled={testing}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-800">
-          {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+        <button type="button" onClick={test} disabled={testing} className={BTN_GHOST}>
+          {testing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
           Test connection
         </button>
         {(tokenSet || fieldsSet.length > 0) && (
-          <button type="button" onClick={clear} disabled={clearing}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3.5 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30"
-            title="Revoke the stored credentials — the only way to remove a write-only value">
-            {clearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          <button
+            type="button"
+            onClick={clear}
+            disabled={clearing}
+            className={`ml-auto ${BTN_DANGER}`}
+            title="Revoke the stored credentials — the only way to remove a write-only value"
+          >
+            {clearing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
             Remove stored credentials
           </button>
         )}
-        {dirty && !msg && (
-          <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-            <Info className="h-3 w-3" /> Unsaved changes
-          </span>
-        )}
-        {msg && (
-          <span className={["inline-flex items-center gap-1 text-xs", msg.ok ? "text-emerald-600" : "text-rose-600"].join(" ")}>
-            {msg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-            {msg.text}
-          </span>
-        )}
-        {updatedAt && !msg && (
-          <span className="ml-auto text-xs text-slate-400">
-            Last saved {new Date(updatedAt).toLocaleString()}
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {dirty && !msg && (
+            <span className="inline-flex items-center gap-1 text-2xs text-[var(--warn)]">
+              <Info className="size-3" /> Unsaved changes
+            </span>
+          )}
+          {msg && (
+            <span className={`inline-flex items-center gap-1 text-xs ${msg.ok ? "text-[var(--ok)]" : "text-[var(--danger)]"}`}>
+              {msg.ok ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
+              {msg.text}
+            </span>
+          )}
+          {updatedAt && !msg && (
+            <span className="text-2xs text-muted-foreground">Last saved {new Date(updatedAt).toLocaleString()}</span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -473,15 +514,18 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
     if (configured && !editable(field)) {
       return (
         <div className="flex items-center gap-2">
-          <div className="flex h-9 flex-1 items-center gap-2 rounded-lg border border-[var(--border)] bg-slate-50 px-3 dark:bg-slate-900/60">
-            <Lock className="h-3 w-3 shrink-0 text-slate-400" />
-            <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
-            <span className="ml-auto text-2xs text-slate-400">write-only</span>
+          <div className="flex h-9 flex-1 items-center gap-2 rounded-xl border border-[var(--border)] bg-muted/40 px-3">
+            <Lock className="size-3 shrink-0 text-muted-foreground" />
+            <span className="select-none font-mono text-xs tracking-widest text-muted-foreground">••••••••</span>
+            <span className="ml-auto text-2xs text-muted-foreground">write-only</span>
           </div>
-          <button type="button" onClick={() => setReplacing({ ...replacing, [field]: true })}
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-            title="Enter a new value">
-            <Pencil className="h-3.5 w-3.5" /> Replace
+          <button
+            type="button"
+            onClick={() => setReplacing({ ...replacing, [field]: true })}
+            className={BTN_GHOST}
+            title="Enter a new value"
+          >
+            <Pencil className="size-3.5" /> Replace
           </button>
         </div>
       );
@@ -490,28 +534,40 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
     return (
       <div>
         <div className="relative">
-          <input type={isSec && !show ? "password" : "text"}
+          <input
+            type={isSec && !show ? "password" : "text"}
             value={form[field] || ""}
             onChange={(e) => setForm({ ...form, [field]: e.target.value })}
             placeholder={isSec && tokenSet ? "leave blank to keep current" : placeholder}
-            autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
-            data-1p-ignore data-lpignore="true"
-            className="h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 pr-10 font-mono text-xs text-foreground outline-none focus:border-blue-500 placeholder:font-sans"  aria-label="Credential value"/>
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            aria-label={field}
+            className={`${INPUT_MONO} pr-10 placeholder:font-sans`}
+          />
           {isSec && (
-            <button type="button" aria-label={show ? `Hide ${field}` : `Reveal ${field}`}
+            <button
+              type="button"
+              aria-label={show ? `Hide ${field}` : `Reveal ${field}`}
               onClick={() => setRevealed({ ...revealed, [field]: !show })}
-              className="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600">
-              {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
+            >
+              {show ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           )}
         </div>
         {configured && (
-          <button type="button"
+          <button
+            type="button"
             onClick={() => {
               setReplacing({ ...replacing, [field]: false });
               const n = { ...form }; delete n[field]; setForm(n);
             }}
-            className="mt-1 text-xs text-slate-400 underline hover:text-slate-600 dark:hover:text-slate-300">
+            className="mt-1 text-2xs text-muted-foreground underline hover:text-foreground"
+          >
             Keep the stored value
           </button>
         )}
@@ -520,52 +576,10 @@ export function AiServiceSettings({ isAdmin }: { isAdmin: boolean }) {
   }
 }
 
-/* ---------------------------------------------------------------- presentational */
-
-function Card({ icon, tone, title, description, children }: {
-  icon: React.ReactNode; tone: string; title: string; description: string; children: React.ReactNode;
-}) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-background">
-      <div className="flex items-start gap-3 border-b border-slate-100 p-5 dark:border-slate-800">
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tone}`}>{icon}</div>
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p>
-        </div>
-      </div>
-      {children}
-    </section>
-  );
+/* Eye icons kept local so the import list above stays focused on the section's own verbs. */
+function EyeIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-3.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>;
 }
-
-function Row({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 px-5 py-4 dark:border-slate-800">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-900 dark:text-white">{label}</p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
-      </div>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, hint, badge, icon, children }: {
-  label: string; hint?: string; badge?: string; icon?: React.ReactNode; children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-        {icon}{label}
-        {badge && (
-          <span className="inline-flex items-center gap-1 text-2xs text-emerald-600">
-            <Lock className="h-3 w-3" />{badge}
-          </span>
-        )}
-      </label>
-      {children}
-      {hint && <p className="text-xs leading-4 text-slate-400">{hint}</p>}
-    </div>
-  );
+function EyeOffIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-3.5"><path d="M3 3l18 18" /><path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" /><path d="M9.4 5.5A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.7 17.7 0 0 1-3.2 4.2M6.2 6.7A17.6 17.6 0 0 0 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.8-.8" /></svg>;
 }

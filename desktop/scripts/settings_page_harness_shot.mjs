@@ -117,7 +117,8 @@ for (const label of SECTIONS) {
     // The section now owns provider + credentials + model detection + retrieval, with one
     // Save. These assertions pin each of those, because the previous version of this section
     // could not store an API key at all.
-    for (const need of ["Provider", "Retrieval & answer behaviour"]) {
+    // v1.7.1 — the provider card is now titled "Provider & credentials" (key lives with it).
+    for (const need of ["Provider & credentials", "Model", "Retrieval & answer behaviour"]) {
       if (!panel.headings.includes(need)) {
         report.problems.push(fail(`AI service is missing the "${need}" card`));
       }

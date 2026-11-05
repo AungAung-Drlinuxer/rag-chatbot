@@ -810,6 +810,9 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
       .catch(() => { if (mounted) setBrowsing(true); })
       .finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
+    // `personal` only decides whether the catalogue opens first; re-running on its
+    // change would refetch the user's toggles and discard their current selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markConfigured = useCallback((key: ProviderKey, configured: boolean) => {

@@ -4,29 +4,27 @@ import {
   Building2,
   Check,
   Globe,
-  Mail,
   Link2,
   Monitor,
   RotateCcw,
   Save,
   Settings as SettingsIcon,
   ShieldCheck,
-  Lock,
-  Pencil,
   Plug,
   BookOpen,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageShell, PageHeader } from "@/components/ui/page";
+import { Panel, Row, Segmented } from "../components/SettingsKit";
 
 import { dashHealth } from "@/features/dashboard/api";
 import { IntegrationsConfig } from "../components/IntegrationsConfig";
 import { BrandingSettings } from "../components/BrandingSettings";
 import { AiServiceSettings } from "../components/AiServiceSettings";
+import { EmailServerSettings } from "../components/EmailServerSettings";
 import { Image as ImageIcon } from "lucide-react";
 import {
   getMySettings, updateMySettings, getIntegrationSettings,
-  getSmtpSettings, putSmtpSettings, sendTestEmail,
 } from "@/features/settings/api";
 
 /* v1.6.90 — Settings re-skinned to the workspace mockup:
@@ -41,43 +39,33 @@ import {
    SHARED ROW COMPONENTS (reference style)
 ============================================================ */
 
+/** The single switch used across Preferences — same geometry as every other panel. */
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-pressed={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+        checked ? "border-transparent bg-[var(--primary)]" : "border-[var(--border)] bg-muted"}`}
+    >
+      <span className={`size-3.5 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[18px]" : "translate-x-[3px]"}`} />
+    </button>
+  );
+}
+
 function ToggleRow({ checked, onChange, title, description }: {
   checked: boolean; onChange: (value: boolean) => void; title: string; description?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 px-6 py-3.5">
-      <div className="min-w-0 pr-4">
-        <p className="text-xs font-semibold text-slate-900 dark:text-white">{title}</p>
-        {description && <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{description}</p>}
-      </div>
-      <div className="shrink-0">
-      <button type="button" onClick={() => onChange(!checked)} aria-pressed={checked}
-        className={`relative flex h-5.5 w-10 items-center rounded-full transition-colors ${
-          checked ? "bg-[var(--primary)]" : "bg-muted ring-1 ring-[var(--border)]"}`}>
-        <span className={`size-4.5 rounded-full bg-white shadow-xs transition-transform ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
-      </button>
-      </div>
-    </div>
+    <Row title={title} hint={description}>
+      <Toggle checked={checked} onChange={onChange} label={title} />
+    </Row>
   );
 }
-
-function SelectRow({ label, description, value, onChange, options, width = "w-52" }: {
-  label: string; description: string; value: string; onChange: (v: string) => void; options: string[]; width?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-6 px-6 py-3.5">
-      <div className="min-w-0 pr-4">
-        <p className="text-xs font-semibold text-slate-900 dark:text-white">{label}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-      </div>
-      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}
-        className={`${width} h-9 rounded-xl border border-[var(--border)] bg-background px-3 text-xs text-foreground outline-none transition focus:border-[var(--primary)]`}>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
-}
-
 
 /* Grouped settings navigation (v1.6.75). The four groups are the four TABS the
  * mockup renders as a horizontal row. Only panels that HAVE content are listed:
@@ -101,22 +89,14 @@ const SETTINGS_NAV: { group: string; items: { id: string; label: string; icon: R
   },
 ];
 
-function SectionCard({ icon, iconTone, title, description, children }: {
-  icon: React.ReactNode; iconTone: string; title: string; description: string; children: React.ReactNode;
+function SectionCard({ icon, title, description, children }: {
+  icon: React.ReactNode; iconTone?: string; title: string; description: string; children: React.ReactNode;
 }) {
+  // Delegates to the shared Panel so every section in Settings has one header anatomy.
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-card text-card-foreground shadow-xs">
-      <div className="border-b border-[var(--border)] px-6 py-4.5 bg-muted/20">
-        <div className="flex items-center gap-3.5">
-          <div className={`flex size-9 items-center justify-center rounded-xl ${iconTone}`}>{icon}</div>
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-          </div>
-        </div>
-      </div>
-      <div className="divide-y divide-[var(--border)]">{children}</div>
-    </section>
+    <Panel icon={icon} title={title} description={description}>
+      {children}
+    </Panel>
   );
 }
 
@@ -310,66 +290,112 @@ export default function Settings({ role }: { role?: string }) {
         <main className="flex flex-1 items-start gap-8">
           <div className="min-w-0 flex-1 space-y-4">
 
-            {/* Personal chat preferences: every control changes message rendering. */}
+            {/* ---- Answers: every control here changes how a message is rendered. ---- */}
             {active === "general" && (
-            <SectionCard icon={<Bot className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
-              iconTone="bg-sky-50 dark:bg-sky-950/40"
-              title="Chat" description="Choose how answers appear in your desktop app.">
-              <SelectRow label="Chat font size" description="Text size used throughout the conversation"
-                value={String(chatFontSize)} onChange={(v) => {
-                  const size = Number(v);
-                  setChatFontSize(size);
-                  applyThemeNow(darkMode, compact, animations, size);
-                }} options={["12", "14", "16", "18"]} />
-              <ToggleRow checked={sourceCitations} onChange={setSourceCitations}
-                title="Show source citations"
-                description="Show referenced knowledge articles with assistant answers." />
-              <ToggleRow checked={showTokenUsage} onChange={setShowTokenUsage}
-                title="Show token usage"
-                description="Show input and output token counts below assistant answers." />
-              <ToggleRow checked={markdownRendering} onChange={setMarkdownRendering}
-                title="Format Markdown"
-                description="Render headings, lists, tables, links, and code blocks in answers." />
-            </SectionCard>
+              <SectionCard
+                icon={<Bot className="size-4.5" />}
+                title="Chat"
+                description="Choose how answers appear in your desktop app."
+              >
+                <Row title="Chat font size" hint="Text size used throughout the conversation.">
+                  <Segmented
+                    label="Chat font size"
+                    value={String(chatFontSize)}
+                    options={[
+                      { value: "12", label: "12" },
+                      { value: "14", label: "14" },
+                      { value: "16", label: "16" },
+                      { value: "18", label: "18" },
+                    ]}
+                    onChange={(v) => {
+                      const size = Number(v);
+                      setChatFontSize(size);
+                      applyThemeNow(darkMode, compact, animations, size);
+                    }}
+                  />
+                </Row>
+                <ToggleRow checked={sourceCitations} onChange={setSourceCitations}
+                  title="Show source citations"
+                  description="Show referenced knowledge articles with assistant answers." />
+                <ToggleRow checked={showTokenUsage} onChange={setShowTokenUsage}
+                  title="Show token usage"
+                  description="Show input and output token counts below assistant answers." />
+                <ToggleRow checked={markdownRendering} onChange={setMarkdownRendering}
+                  title="Format Markdown"
+                  description="Render headings, lists, tables, links, and code blocks in answers." />
+              </SectionCard>
             )}
 
             {/* ==================== APPEARANCE ==================== */}
             {active === "general" && (
-            <SectionCard icon={<Monitor className="h-5 w-5 text-violet-600 dark:text-violet-400" />}
-              iconTone="bg-violet-50 dark:bg-violet-950/40"
-              title="Appearance" description="Customize how the application looks.">
-              <div>
-                <div className="flex items-center justify-between gap-6 px-6 py-3.5">
-                  <div className="min-w-0 pr-4">
-                    <p className="text-xs font-semibold text-slate-900 dark:text-white">Theme mode</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Choose between light and dark interface</p>
-                  </div>
-                  <div className="flex rounded-xl border border-[var(--border)] bg-muted/40 p-1">
-                    {(["light", "dark"] as const).map((option) => (
-                      <button key={option} type="button"
-                        onClick={() => {
-                          setDarkMode(option === "dark");
-                          applyThemeNow(option === "dark", compact, animations, chatFontSize);
-                        }}
-                        className={`rounded-lg px-3.5 py-1.5 text-xs font-medium capitalize transition ${
-                          (option === "dark") === darkMode
-                            ? "bg-background text-foreground shadow-xs font-semibold"
-                            : "text-muted-foreground hover:text-foreground"}`}>
-                        {option}
-                      </button>
-                    ))}
+              <SectionCard
+                icon={<Monitor className="size-4.5" />}
+                title="Appearance"
+                description="Customize how the application looks."
+              >
+                <div className="px-5 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground">Theme mode</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Choose between light and dark interface</p>
+                    </div>
+                    <div className="flex gap-2" role="group" aria-label="Theme mode">
+                      {(["light", "dark"] as const).map((option) => {
+                        const on = (option === "dark") === darkMode;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setDarkMode(option === "dark");
+                              applyThemeNow(option === "dark", compact, animations, chatFontSize);
+                            }}
+                            aria-pressed={on}
+                            className={[
+                              "w-[104px] rounded-xl border p-1.5 text-left transition",
+                              on
+                                ? "border-[var(--primary)] ring-2 ring-[var(--primary)]/20"
+                                : "border-[var(--border)] hover:border-[var(--primary)]/40",
+                            ].join(" ")}
+                          >
+                            {/* miniature of the actual workspace chrome, so the choice is visible
+                                before it is applied rather than described in words */}
+                            <span
+                              className={[
+                                "flex h-12 w-full gap-1 overflow-hidden rounded-lg border p-1",
+                                option === "dark"
+                                  ? "border-[#342C46] bg-[#14121B]"
+                                  : "border-[#E3E1EA] bg-[#F7F8FC]",
+                              ].join(" ")}
+                              aria-hidden
+                            >
+                              <span className={["w-3 rounded-sm", option === "dark" ? "bg-[#100E17]" : "bg-gradient-to-b from-[#7C3AED] to-[#5B21B6]"].join(" ")} />
+                              <span className="flex flex-1 flex-col gap-1">
+                                <span className={["h-1.5 w-2/3 rounded-sm", option === "dark" ? "bg-[#9C93B4]" : "bg-[#C4B5FD]"].join(" ")} />
+                                <span className={["h-1.5 w-full rounded-sm", option === "dark" ? "bg-[#342C46]" : "bg-[#E3E1EA]"].join(" ")} />
+                                <span className={["h-1.5 w-4/5 rounded-sm", option === "dark" ? "bg-[#342C46]" : "bg-[#E3E1EA]"].join(" ")} />
+                              </span>
+                            </span>
+                            <span className="mt-1 flex items-center gap-1 px-0.5 text-2xs font-medium capitalize text-foreground">
+                              {option}
+                              {on && <Check className="size-3 text-[var(--primary)]" />}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-                <div className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
-                  <ToggleRow checked={compact} onChange={(v) => { setCompact(v); applyThemeNow(darkMode, v, animations, chatFontSize); }} title="Compact mode"
-                    description="Reduce space between elements." />
-                  <ToggleRow checked={animations} onChange={(v) => {
+                <Row title="Compact mode" hint="Reduce space between elements.">
+                  <Toggle checked={compact} onChange={(v) => { setCompact(v); applyThemeNow(darkMode, v, animations, chatFontSize); }} label="Compact mode" />
+                </Row>
+                <Row title="Animations" hint="Interface transitions and motion.">
+                  <Toggle checked={animations} onChange={(v) => {
                     setAnimations(v);
                     applyThemeNow(darkMode, compact, v, chatFontSize);
-                  }} title="Animations" description="Interface transitions and motion." />
-                </div>
-              </div>
-            </SectionCard>
+                  }} label="Animations" />
+                </Row>
+              </SectionCard>
             )}
 
             {/* ==================== INTEGRATIONS ==================== */}
@@ -438,7 +464,7 @@ export default function Settings({ role }: { role?: string }) {
             )}
 
             {/* Mail (SMTP) — admin only; the Email server tab */}
-            {isAdmin && active === "notifications" && <MailSettings />}
+            {isAdmin && active === "notifications" && <EmailServerSettings />}
 
 
             {/* ==================== AI ASSISTANT ==================== */}
@@ -531,243 +557,6 @@ export default function Settings({ role }: { role?: string }) {
 /* ============================================================
    INTEGRATIONS STATUS CARDS + EDITOR + SYSTEM HEALTH (live)
 ============================================================ */
-
-/* ============================================================
-   MAIL (SMTP) — real settings via /api/settings/smtp (admin only)
-============================================================ */
-
-function MailSettings() {
-  const [form, setForm] = useState({
-    host: "", port: 587, username: "", password: "", from: "",
-    use_tls: true, enabled: true,
-  });
-  const [alerts, setAlerts] = useState<Record<string, boolean>>({
-    approval_request: true, ticket_created: true, ticket_status_change: true,
-  });
-  const [passwordSet, setPasswordSet] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [testTo, setTestTo] = useState("");
-  const [testing, setTesting] = useState(false);
-  const [testMsg, setTestMsg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // v1.6.35 — which mail fields already hold a stored (write-only) value
-  const [smtpSet, setSmtpSet] = useState<string[]>([]);
-  const [replacingSmtp, setReplacingSmtp] = useState<Record<string, boolean>>({});
-  const smtpConfigured = (k: string) => smtpSet.includes(k);
-  const smtpEditable = (k: string) => !smtpConfigured(k) || !!replacingSmtp[k] || !!form[k as "host" | "username" | "from"];
-
-  useEffect(() => {
-    getSmtpSettings()
-      .then((d) => {
-        const s = d.smtp ?? {};
-        const set: string[] = (d as any).fields_set ?? [];
-        setSmtpSet(set);
-        // v1.6.35 — sensitive fields (host / username / from-address / password)
-        // are write-only and come back masked, so they are NEVER loaded into the
-        // form. Only operational knobs are seeded. Typing a value replaces it.
-        setForm({
-          host: "", port: Number(s.port) || 587,
-          username: "", password: "",
-          from: "", use_tls: s.use_tls !== false,
-          enabled: s.enabled !== false,
-        });
-        if (s.alerts && typeof s.alerts === "object")
-          setAlerts({ approval_request: true, ticket_created: true, ticket_status_change: true, ...s.alerts });
-        setPasswordSet(!!s.password_set);
-      })
-      .catch(() => setError("Failed to load mail settings"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function save() {
-    // A stored (masked) field counts as satisfied — it is write-only, so the
-    // admin is not asked to retype the host just to flip a toggle.
-    const hostOk = !!form.host.trim() || smtpConfigured("host");
-    const fromOk = !!form.from.trim() || smtpConfigured("from_address") || smtpConfigured("from");
-    if (!hostOk || !fromOk) { setError("Host and from-address are required."); return; }
-    setSaving(true); setError(null);
-    try {
-      const body: Record<string, unknown> = {
-        port: Number(form.port) || 587, use_tls: form.use_tls, enabled: form.enabled,
-        alerts,
-      };
-      // Only send fields the admin actually typed; blank keeps the stored value.
-      // A masked value is never sent (it would overwrite the real one).
-      const MASK_CHARS = "•";
-      for (const [k, v] of [
-        ["host", form.host], ["username", form.username],
-        ["from_address", form.from], ["password", form.password],
-      ] as const) {
-        const val = (v || "").trim();
-        if (val && !val.includes(MASK_CHARS)) body[k] = val;
-      }
-      await putSmtpSettings(body);
-      setPasswordSet(true);
-      setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
-    } catch (err: any) {
-      setError(err?.message || "Save failed");
-    } finally { setSaving(false); }
-  }
-
-  /** v1.6.35 — a stored mail field is shown as a mask; Replace unlocks the input. */
-  const writeOnlyRow = (
-    fieldKey: string,
-    label: string,
-    value: string,
-    onChange: (v: string) => void,
-    placeholder: string,
-    type = "text",
-  ) => (
-    <label className="block">
-      <span className={labelCls}>
-        {label}
-        {smtpConfigured(fieldKey) && (
-          <span className="ml-2 inline-flex items-center gap-1 text-2xs text-emerald-600">
-            <Lock className="h-3 w-3" /> saved — not retrievable
-          </span>
-        )}
-      </span>
-      {smtpConfigured(fieldKey) && !smtpEditable(fieldKey) ? (
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
-            <Lock className="h-3 w-3 shrink-0 text-slate-400" />
-            <span className="select-none font-mono text-xs tracking-widest text-slate-400">••••••••</span>
-            <span className="ml-auto text-2xs text-slate-400">write-only</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setReplacingSmtp({ ...replacingSmtp, [fieldKey]: true })}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            title="Enter a new value"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Replace
-          </button>
-        </div>
-      ) : (
-        <input className={inputCls} type={type} value={value} placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)} />
-      )}
-    </label>
-  );
-
-  async function sendTest() {
-    const to = (testTo.trim() || form.username || form.from);
-    if (!to) { setError("Enter a recipient for the test email."); return; }
-    setTesting(true); setTestMsg(null); setError(null);
-    try {
-      const r = await sendTestEmail(to);
-      setTestMsg(r.ok ? `Test email sent to ${r.to} — check inbox (and spam) in a minute.` : "Send failed");
-    } catch (err: any) {
-      setTestMsg(null);
-      setError(err?.message || "Test failed — check SMTP settings first");
-    } finally { setTesting(false); }
-  }
-
-  const inputCls = "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-white";
-  const labelCls = "mb-1.5 block text-2xs font-semibold uppercase tracking-wide text-muted-foreground";
-
-  return (
-    <section className="overflow-hidden rounded-xl border bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/40">
-            <Mail className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Mail (SMTP)</h2>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Outgoing email server used for alert notifications.</p>
-          </div>
-        </div>
-      </div>
-      <div className="space-y-4 p-5">
-        {loading && <p className="text-xs text-muted-foreground">Loading mail settings…</p>}
-        {!loading && (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {writeOnlyRow("host", "SMTP host", form.host,
-                (v) => setForm({ ...form, host: v }), "smtp.gmail.com")}
-              <label className="block">
-                <span className={labelCls}>Port</span>
-                <input className={inputCls} type="number" value={form.port}
-                  onChange={(e) => setForm({ ...form, port: Number(e.target.value) || 587 })} />
-              </label>
-              {writeOnlyRow("username", "Username", form.username,
-                (v) => setForm({ ...form, username: v }), "you@gmail.com")}
-              <label className="block">
-                <span className={labelCls}>
-                  Password {passwordSet && <span className="text-emerald-600">(saved — leave blank to keep)</span>}
-                </span>
-                <input className={inputCls} type="password" value={form.password} placeholder="16-char app password"
-                  onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              </label>
-              <div className="block sm:col-span-2">
-                {writeOnlyRow("from_address", "From address", form.from,
-                  (v) => setForm({ ...form, from: v }), "you@gmail.com")}
-              </div>
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              <ToggleRow checked={form.enabled} onChange={(v) => setForm({ ...form, enabled: v })}
-                title="Enable outgoing mail" description="Master switch — when off, no alert emails are sent." />
-              <ToggleRow checked={form.use_tls} onChange={(v) => setForm({ ...form, use_tls: v })}
-                title="Use TLS (STARTTLS)" description="Recommended — encrypts the SMTP connection (port 587)." />
-            </div>
-
-            {/* which events send alert mails */}
-            <div className="pt-2">
-              <p className="mb-2 text-xs font-semibold text-slate-900 dark:text-white">Alert emails — send on these events</p>
-              <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-b border-[var(--border)]">
-                <ToggleRow checked={!!alerts.approval_request}
-                  onChange={(v) => setAlerts({ ...alerts, approval_request: v })}
-                  title="Escalation awaiting approval"
-                  description="Sent to administrators when a LangGraph human-in-the-loop approval is requested." />
-                <ToggleRow checked={!!alerts.ticket_created}
-                  onChange={(v) => setAlerts({ ...alerts, ticket_created: v })}
-                  title="Ticket created"
-                  description="Sent to the requester when a Jira ticket is opened (chat escalation or Tickets page)." />
-                <ToggleRow checked={!!alerts.ticket_status_change}
-                  onChange={(v) => setAlerts({ ...alerts, ticket_status_change: v })}
-                  title="Ticket status changed"
-                  description="Sent to the requester when Jira status moves (open → pending → resolved…)." />
-              </div>
-            </div>
-
-            {/* test row — stacks cleanly on mobile */}
-            <div className="rounded-xl border border-[var(--border)] bg-muted/30 p-4">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-                <label className="block min-w-0">
-                  <span className={labelCls}>Send test email to</span>
-                  <input className={inputCls} value={testTo} placeholder={form.username || "you@drlinuxer.com"}
-                    onChange={(e) => setTestTo(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") sendTest(); }} />
-                </label>
-                <button onClick={sendTest} disabled={testing}
-                  className="h-10 shrink-0 rounded-xl border px-5 text-xs font-semibold transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800">
-                  {testing ? "Sending…" : "Send test"}
-                </button>
-                <button onClick={save} disabled={saving}
-                  className="h-10 shrink-0 rounded-xl bg-[var(--primary)] px-5 text-xs font-semibold text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50">
-                  {saving ? "Saving…" : "Save mail settings"}
-                </button>
-              </div>
-              <p className="mt-2 text-2xs leading-4 text-muted-foreground">
-                Gmail: use a 16-character App Password (Google Account → Security → 2-Step Verification → App passwords),
-                not your normal password. Host smtp.gmail.com, port 587, TLS on.
-              </p>
-            </div>
-            {saved && <p className="text-xs font-medium text-emerald-600">Mail settings saved ✓</p>}
-            {testMsg && <p className="text-xs font-medium text-emerald-600">{testMsg}</p>}
-            {error && <p className="text-xs font-medium text-red-600">{error}</p>}
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
 
 function IntegrationStatusCards() {
   const [services, setServices] = useState<any[]>([]);
