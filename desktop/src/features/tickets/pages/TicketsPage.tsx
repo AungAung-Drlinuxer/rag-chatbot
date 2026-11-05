@@ -8,7 +8,6 @@ import {
   Clock3,
   Filter,
   Plus,
-  Search,
   Ticket as TicketIcon,
   MessageSquare,
   UserRound,
@@ -22,7 +21,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageShell, PageHeader } from "@/components/ui/page";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,13 +59,15 @@ import {
   relTime,
 } from "@/features/tickets/model";
 import {
-  StatCard,
   MetaRow,
   StatusBadge,
   PriorityBadge,
   ActivityItem,
   RefreshIcon,
 } from "@/features/tickets/components/presentational";
+import { TicketStats, type TicketTotals } from "@/features/tickets/components/TicketStats";
+import { TicketToolbar } from "@/features/tickets/components/TicketToolbar";
+import { TicketTable, type SortKey } from "@/features/tickets/components/TicketTable";
 
 /**
  * Tickets — the support-request queue, restyled to the workspace mockup.
@@ -271,9 +271,9 @@ export default function Tickets({
   }, [selected?.id]);
 
   // B-9 — column sorting (the mockup's five columns, in the mockup's order)
-  const [sortKey, setSortKey] = useState<null | "id" | "subject" | "status" | "priority" | "requester">(null);
+  const [sortKey, setSortKey] = useState<null | SortKey>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const toggleSort = (k: NonNullable<typeof sortKey>) => {
+  const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(k); setSortDir("desc"); }
   };
@@ -342,38 +342,15 @@ export default function Tickets({
     [sortedTickets, safePage],
   );
 
-  const SortTh = ({ k, label, className = "px-4 py-3" }: { k: NonNullable<typeof sortKey>; label: string; className?: string }) => (
-    <th className={className + " font-semibold text-muted-foreground"}>
-      <button
-        type="button"
-        onClick={() => toggleSort(k)}
-        className={"inline-flex items-center gap-1 transition hover:text-foreground " + (sortKey === k ? "text-foreground" : "")}
-        aria-sort={sortKey === k ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-      >
-        {label}
-        <svg viewBox="0 0 12 12" className={"size-2.5 transition " + (sortKey === k ? (sortDir === "asc" ? "rotate-180" : "") : "opacity-30")}>
-          <path d="M6 9L2 4h8z" fill="currentColor" />
-        </svg>
-      </button>
-    </th>
-  );
-
-  const stats = useMemo(() => {
+  // Each figure is the exact set its card filters to — a card that says 4 and then shows
+  // 3 rows is worse than no card. Closed tickets therefore have no card of their own.
+  const stats: TicketTotals = useMemo(() => {
     const list = tickets ?? [];
-
     return {
       total: list.length,
-      open: list.filter(
-        (t) => t.status === "open"
-      ).length,
-      pending: list.filter(
-        (t) => t.status === "pending"
-      ).length,
-      resolved: list.filter(
-        (t) =>
-          t.status === "resolved" ||
-          t.status === "closed"
-      ).length,
+      open: list.filter((t) => t.status === "open").length,
+      pending: list.filter((t) => t.status === "pending").length,
+      resolved: list.filter((t) => t.status === "resolved").length,
     };
   }, [tickets]);
 
@@ -460,8 +437,6 @@ export default function Tickets({
     setPriorityFilter("all");
     setPage(1);
   }
-
-  const hasFilters = query.trim() !== "" || statusFilter !== "all" || priorityFilter !== "all";
 
   async function createTicket() {
     if (!newTicket.subject.trim()) {
@@ -665,47 +640,12 @@ function SyncMenu({
       <main className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-5">
 
-          {/* =================================================
-              KPI CARDS — one figure each, counted from the loaded list.
-              Every card is a one-click filter, as the mockup's preview is.
-          ================================================= */}
-          <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-            <StatCard
-              label="All tickets"
-              value={stats.total}
-              description="Total tickets in this preview"
-              accent="blue"
-              title="Show every ticket"
-              onClick={() => { setStatusFilter("all"); setPage(1); }}
-            />
-
-            <StatCard
-              label="Open"
-              value={stats.open}
-              description="Require attention"
-              accent="blue"
-              title="Show open tickets only"
-              onClick={() => { setStatusFilter("open"); setPage(1); }}
-            />
-
-            <StatCard
-              label="Pending"
-              value={stats.pending}
-              description="Awaiting a response"
-              accent="amber"
-              title="Show tickets awaiting the requester to reply or confirm a fix"
-              onClick={() => { setStatusFilter("pending"); setPage(1); }}
-            />
-
-            <StatCard
-              label="Resolved"
-              value={stats.resolved}
-              description="Successfully completed"
-              accent="emerald"
-              title="Show resolved tickets only"
-              onClick={() => { setStatusFilter("resolved"); setPage(1); }}
-            />
-          </section>
+          {/* Metric summary — one figure each, counted from the loaded queue. */}
+          <TicketStats
+            totals={stats}
+            activeStatus={statusFilter}
+            onPick={(next) => { setStatusFilter(next); setPage(1); }}
+          />
 
           {/* =================================================
               SUPPORT REQUESTS PANEL
@@ -782,55 +722,16 @@ function SyncMenu({
                   : `${filteredTickets.length} matching tickets`}
             </p>
 
-            {/* Toolbar: search (flex 1) + status + priority + Reset */}
-            <div className="flex flex-wrap items-center gap-2.5 border-y border-[var(--border)] px-5 py-4">
-              <div className="relative min-w-[200px] flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={query}
-                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                  placeholder="Search ID, subject, or requester..."
-                  className="h-9 w-full rounded-lg border border-[var(--border)] bg-background pl-9 pr-3 text-xs outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
-                  aria-label="Search tickets"
-                />
-              </div>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                className="h-9 min-w-[130px] rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
-                aria-label="Filter by status"
-              >
-                <option value="all">All statuses</option>
-                <option value="open">Open</option>
-                <option value="pending">Pending</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </select>
-
-              <select
-                value={priorityFilter}
-                onChange={(e) => { setPriorityFilter(e.target.value); setPage(1); }}
-                className="h-9 min-w-[130px] rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
-                aria-label="Filter by priority"
-              >
-                <option value="all">All priorities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="h-9 rounded-lg border border-[var(--border)] bg-card px-3.5 text-xs font-semibold transition hover:bg-muted"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
+            <TicketToolbar
+              filters={{ query, status: statusFilter, priority: priorityFilter }}
+              onChange={(patch) => {
+                if (patch.query !== undefined) setQuery(patch.query);
+                if (patch.status !== undefined) setStatusFilter(patch.status);
+                if (patch.priority !== undefined) setPriorityFilter(patch.priority);
+                setPage(1);
+              }}
+              onReset={resetFilters}
+            />
 
             {tickets === null ? (
               <div className="space-y-2 p-4">
@@ -868,179 +769,19 @@ function SyncMenu({
                 onAction={tickets.length === 0 ? undefined : resetFilters}
               />
             ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[820px] table-fixed text-xs">
-                    <colgroup>
-                      <col className="w-[12%]" />
-                      <col className="w-[38%]" />
-                      <col className="w-[16%]" />
-                      <col className="w-[16%]" />
-                      <col className="w-[18%]" />
-                    </colgroup>
-                    <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-muted/60">
-                      <tr className="text-left text-2xs uppercase tracking-wide">
-                        <SortTh k="id" label="Ticket" className="border-l-2 border-l-transparent px-5 py-3" />
-                        <SortTh k="subject" label="Subject" />
-                        <SortTh k="status" label="Status" />
-                        <SortTh k="priority" label="Priority" />
-                        <SortTh k="requester" label="Requester" />
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {pageRows.map(
-                        (ticket) => {
-                          const status =
-                            statusMeta(ticket.status);
-
-                          const priority =
-                            priorityMeta(ticket.priority);
-
-                          const rowSelected = selected?.id === ticket.id;
-
-                          return (
-                            <tr
-                              key={ticket.id}
-                              aria-selected={rowSelected}
-                              className={[
-                                "border-t border-[var(--border)]/60 transition",
-                                rowSelected ? "bg-[var(--accent-soft)]" : "hover:bg-muted/40",
-                              ].join(" ")}
-                            >
-                              <td className={[
-                                "truncate border-l-2 px-5 py-3.5",
-                                rowSelected ? "border-l-[var(--primary)]" : "border-l-transparent",
-                              ].join(" ")}>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelected(
-                                      ticket
-                                    )
-                                  }
-                                  className="font-semibold text-[var(--accent-foreground)] hover:underline"
-                                >
-                                  {ticket.id}
-                                </button>
-                              </td>
-
-                              <td className="px-4 py-3.5">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelected(
-                                      ticket
-                                    )
-                                  }
-                                  className="block w-full text-left"
-                                >
-                                  <div className="truncate font-medium text-foreground">
-                                    {
-                                      ticket.subject
-                                    }
-                                  </div>
-
-                                  <div className="mt-1 flex items-center gap-2 text-2xs text-muted-foreground">
-                                    <span>
-                                      {
-                                        ticket.category
-                                      }
-                                    </span>
-
-                                    <span>
-                                      •
-                                    </span>
-
-                                    <span
-                                      className={
-                                        ticket.assignee
-                                          ? ""
-                                          : "italic text-muted-foreground/70"
-                                      }
-                                    >
-                                      {ticket.assignee ??
-                                        "Unassigned"}
-                                    </span>
-                                  </div>
-                                </button>
-                              </td>
-
-                              <td className="px-4 py-3.5">
-                                <Badge
-                                  variant="outline"
-                                  className={[
-                                    "rounded-lg text-2xs",
-                                    status.className,
-                                  ].join(" ")}
-                                >
-                                  {status.label}
-                                </Badge>
-                              </td>
-
-                              <td className="px-4 py-3.5">
-                                <span
-                                  className={[
-                                    "inline-flex items-center gap-1.5 font-medium",
-                                    priority.className,
-                                  ].join(" ")}
-                                >
-                                  <span
-                                    className={[
-                                      "size-1.5 rounded-full",
-                                      priority.dot,
-                                    ].join(" ")}
-                                  />
-
-                                  {
-                                    priority.label
-                                  }
-                                </span>
-                              </td>
-
-                              <td className="truncate px-4 py-3.5 text-muted-foreground" title={ticket.requester}>
-                                {
-                                  ticket.requester
-                                }
-                              </td>
-                            </tr>
-                          );
-                        }
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Range footer + pager, as the mockup shows. */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3.5">
-                  <span className="text-xs text-muted-foreground">
-                    {pageCount <= 1
-                      ? `Showing all ${filteredTickets.length} ticket${filteredTickets.length === 1 ? "" : "s"}`
-                      : `Showing ${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredTickets.length)} of ${filteredTickets.length} tickets`}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      aria-label="Previous page"
-                      disabled={safePage <= 1}
-                      onClick={() => setPage(Math.max(1, safePage - 1))}
-                      className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
-                    >
-                      ‹
-                    </button>
-                    <span className="px-1 text-xs text-muted-foreground">{safePage} / {pageCount}</span>
-                    <button
-                      type="button"
-                      aria-label="Next page"
-                      disabled={safePage >= pageCount}
-                      onClick={() => setPage(Math.min(pageCount, safePage + 1))}
-                      className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
-                    >
-                      ›
-                    </button>
-                  </div>
-                </div>
-              </>
+              <TicketTable
+                rows={pageRows}
+                total={filteredTickets.length}
+                selectedId={selected?.id ?? null}
+                onSelect={setSelected}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+                page={safePage}
+                pageCount={pageCount}
+                pageSize={PAGE_SIZE}
+                onPage={setPage}
+              />
             )}
           </section>
         </div>{/* end left column */}
@@ -1048,7 +789,28 @@ function SyncMenu({
         {/* ==========================================================
             TICKET DETAIL — persistent right panel (split-pane)
         ========================================================== */}
-        <aside className="sticky top-6 hidden max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-card text-card-foreground shadow-xs xl:block">
+        {/* Below xl this becomes a bottom sheet instead of disappearing: the detail panel is
+            where status, comments and attachments are edited, so a phone user needs it too. */}
+        {selected && (
+          <div
+            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px] xl:hidden"
+            onClick={() => setSelected(null)}
+            aria-hidden
+          />
+        )}
+        <aside
+          className={[
+            "overflow-y-auto bg-card text-card-foreground",
+            selected
+              ? "fixed inset-x-0 bottom-0 z-50 max-h-[85svh] rounded-t-2xl border-t border-[var(--border)] shadow-2xl xl:sticky xl:top-6 xl:inset-auto xl:z-auto xl:max-h-[calc(100vh-3rem)] xl:rounded-xl xl:border xl:shadow-xs"
+              : "sticky top-6 hidden max-h-[calc(100vh-3rem)] rounded-xl border border-[var(--border)] shadow-xs xl:block",
+          ].join(" ")}
+        >
+          {selected && (
+            <div className="sticky top-0 z-10 flex justify-center bg-card pt-2 xl:hidden">
+              <span className="h-1 w-10 rounded-full bg-[var(--border)]" aria-hidden />
+            </div>
+          )}
           {!selected ? (
             <div className="flex h-64 flex-col items-center justify-center gap-3 p-8 text-center">
               <div className="grid size-12 place-items-center rounded-2xl bg-muted">
