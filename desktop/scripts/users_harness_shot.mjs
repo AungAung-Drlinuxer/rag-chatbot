@@ -170,8 +170,8 @@ try {
       !/Workspace\s*\/\s*Users/.test(header.crumb), `"${header.crumb}"`);
     check("eyebrow + h1 + description", header.eyebrow && header.h1 === "Users" && header.desc, `h1="${header.h1}"`);
     check("header carries the member-count badge", header.badge);
-    check('"Add user" is the primary (brand) button', header.addPrimary === "rgb(0, 72, 240)", `bg=${header.addPrimary}`);
-    check('"Export CSV" is secondary, not brand-filled', header.exportSecondary !== "rgb(0, 72, 240)", `bg=${header.exportSecondary}`);
+check('"Add user" is the primary (brand) button', /rgb\(139, 92, 246\)|rgb\(124, 58, 237\)/.test(header.addPrimary), `bg=${header.addPrimary}`);
+check('"Export CSV" is secondary, not brand-filled', !/rgb\(139, 92, 246\)|rgb\(124, 58, 237\)/.test(header.exportSecondary), `bg=${header.exportSecondary}`);
 
     // --- summary cards: 4-up, equal width, numbers from the data ---------------
     const fixture = await page.evaluate(() => window.__USR_FIXTURE__);
@@ -336,8 +336,8 @@ try {
       const r = aside.getBoundingClientRect();
       return { width: Math.round(r.width), right: Math.round(r.right), viewport: window.innerWidth };
     });
-    check("overlay is a right-hand slide-over (440px, flush to the edge)",
-      slide?.width === 440 && slide?.right === slide?.viewport, JSON.stringify(slide));
+    check("overlay is a right-hand slide-over (480px, flush to the edge)",
+      slide?.width === 480 && slide?.right === slide?.viewport, JSON.stringify(slide));
 
     await page.select('aside select[aria-label="Role"]', "User");
     await sleep(350);
@@ -389,7 +389,7 @@ try {
     // --- destructive actions are gated by the confirm dialog ------------------
     await clearReqs();
     await page.evaluate(() => {
-      const b = [...document.querySelectorAll("aside button")].find((x) => /Disable user/.test(x.textContent || ""));
+      const b = [...document.querySelectorAll("aside button")].find((x) => /Deactivate account/.test(x.textContent || ""));
       if (b instanceof HTMLElement) b.click();
     });
     await sleep(350);

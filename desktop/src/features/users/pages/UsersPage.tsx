@@ -1,11 +1,19 @@
 import {
+  AtSign,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  Clock,
   Download,
+  Laptop,
+  Mail,
   Printer,
   AlertTriangle,
   Check,
   KeyRound,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   SearchX,
   Shield,
@@ -34,12 +42,19 @@ import {
   listUsers,
   listDepartments,
   getUserPermissions,
-  setUserPassword,
   createUser as createUserApi,
   resetUserAccess,
   updateUserRole,
   updateUserStatus,
 } from "@/features/users/api";
+import {
+  LocalPasswordForm,
+  MetaGrid,
+  MetaItem,
+  NoticeCard,
+  PermissionMatrix,
+  SectionHeading,
+} from "@/features/users/components/UserDetailParts";
 
 /* ============================================================
    TYPES
@@ -862,9 +877,9 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
 
   async function handleStatusChange() {
     setBusy(true); setError(null);
-    const shouldEnable = user.status === "Disabled" || user.status === "Inactive";
+    const enabling = user.status === "Disabled" || user.status === "Inactive";
     try {
-      const response = await updateUserStatus(user.username, shouldEnable);
+      const response = await updateUserStatus(user.username, enabling);
       onUserUpdated?.({ ...user, status: response.status as UserStatus });
     } catch (err: any) {
       setError(err?.message || "Failed to update account status.");
@@ -872,237 +887,314 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
   }
 
   const isAdUser = user.source === "ad" || user.id?.startsWith("ad:");
-  const shouldEnable = user.status === "Disabled" || user.status === "Inactive";
+
+  const roleLabel = user.role;
+  const deactivated = user.status === "Disabled" || user.status === "Inactive";
+
+  const permissionRows = RBAC_CAPABILITIES.map((capability) => {
+    const enabled = !!previewPerms[capability.key];
+    return {
+      key: capability.key,
+      label: capability.label,
+      enabled,
+      changed: roleChanged && enabled !== !!permissions[capability.key],
+    };
+  });
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-slate-950/25 backdrop-blur-[1px]" onClick={onClose} />
-      <aside className="absolute right-0 top-0 flex h-full w-full max-w-[440px] flex-col border-l border-[var(--border)] bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-          <div>
-            <div className="text-sm font-semibold">User details</div>
-            <div className="mt-0.5 text-2xs text-muted-foreground">Account and access information</div>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 transition hover:bg-[var(--muted)]" aria-label="Close">
-            <X className="size-4" />
-          </button>
-        </div>
+      <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-[1px]" onClick={onClose} aria-hidden />
 
-        <div className="flex-1 overflow-y-auto">
-          {/* person header */}
-          <div className="border-b border-[var(--border)] px-5 py-5">
-            <div className="flex items-center gap-4">
-              <span className={["grid size-14 shrink-0 place-items-center rounded-full text-sm font-bold", avatarTone(user.name)].join(" ")}>
-                {getInitials(user.name)}
-              </span>
-              <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold">{user.name}</h2>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground" title={user.email}>
-                  @{user.username} · {user.email}
-                </p>
-                <div className="mt-2"><StatusBadge status={user.status} /></div>
-              </div>
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={`User details for ${user.name}`}
+        className="absolute inset-y-0 right-0 flex h-full w-full max-w-[480px] flex-col border-l border-[var(--border)] bg-card shadow-2xl"
+      >
+        {/* ---------- header: who this is, at a glance ---------- */}
+        <header className="shrink-0 border-b border-[var(--border)] px-4 pb-4 pt-4 sm:px-5">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">User details</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid size-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="mt-2 flex items-center gap-3">
+            <span className={["grid size-12 shrink-0 place-items-center rounded-2xl text-sm font-bold", avatarTone(user.name)].join(" ")} aria-hidden>
+              {getInitials(user.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-base font-semibold leading-tight" title={user.name}>{user.name}</h2>
+              <p className="mt-0.5 truncate font-mono text-2xs text-muted-foreground" title={user.email}>@{user.username}</p>
             </div>
           </div>
 
-          <div className="space-y-7 p-5">
-            {/* ACCOUNT */}
-            <DrawerSection title="Account" icon={<UsersIcon className="size-4" />}>
-              <div className="divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)]">
-                <InfoRow label="Email" value={user.email} />
-                <InfoRow label="Department" value={user.department || "—"} />
-                <InfoRow label="Account type" value={isAdUser ? "Active Directory" : "Local"} />
-                <InfoRow label="Joined" value={formatDateTime(user.joined)} />
-                <InfoRow label="Last login" value={formatDateTime(user.lastLogin)} />
-              </div>
-            </DrawerSection>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <StatusBadge status={user.status} />
+            <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-muted/50 px-2 py-1 text-2xs font-medium">
+              <Shield className="size-3 text-muted-foreground" aria-hidden />
+              {roleLabel}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-muted/50 px-2 py-1 text-2xs font-medium text-muted-foreground">
+              {isAdUser ? <Building2 className="size-3" aria-hidden /> : <Laptop className="size-3" aria-hidden />}
+              {isAdUser ? "Directory account" : "Local account"}
+            </span>
+          </div>
+        </header>
 
-            {/* ACCESS */}
-            <DrawerSection title="Workspace role" icon={<Shield className="size-4" />}>
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-2xs font-medium text-muted-foreground">Role</label>
-                  <select value={selectedRole}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="space-y-6 px-4 py-4 sm:px-5">
+            {/* ---------- account metadata ---------- */}
+            <section aria-labelledby="account-heading">
+              <SectionHeading
+                icon={<UsersIcon className="size-3.5" />}
+                title="Account"
+                hint="Identity and source of record."
+              />
+              <MetaGrid>
+                <MetaItem icon={<Mail className="size-3" aria-hidden />} label="Email" value={user.email} title={user.email} />
+                <MetaItem icon={<Building2 className="size-3" aria-hidden />} label="Department" value={user.department || "—"} />
+                <MetaItem
+                  icon={isAdUser ? <Building2 className="size-3" aria-hidden /> : <Laptop className="size-3" aria-hidden />}
+                  label="Account type"
+                  value={isAdUser ? "Active Directory" : "Local"}
+                />
+                <MetaItem icon={<AtSign className="size-3" aria-hidden />} label="Username" value={user.username} mono />
+                <MetaItem icon={<CalendarDays className="size-3" aria-hidden />} label="Joined" value={formatDateTime(user.joined)} />
+                <MetaItem icon={<Clock className="size-3" aria-hidden />} label="Last login" value={formatDateTime(user.lastLogin)} />
+              </MetaGrid>
+            </section>
+
+            {/* ---------- role + permissions ---------- */}
+            <section aria-labelledby="access-heading">
+              <SectionHeading
+                icon={<Shield className="size-3.5" />}
+                title="Workspace role"
+                hint="One role decides the default capabilities; explicit grants can extend them."
+              />
+
+              <div className="rounded-xl border border-[var(--border)] bg-background/40 p-3">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <label htmlFor="user-role" className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Role
+                  </label>
+                  {roleChanged ? (
+                    <span className="rounded-full border border-[var(--warn)]/40 bg-[var(--warn)]/10 px-2 py-0.5 text-[10px] font-semibold text-foreground">
+                      Preview: {selectedRole}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-[var(--border)] bg-[var(--muted)] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      Current: {user.role}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <select
+                    id="user-role"
+                    value={selectedRole}
                     onChange={(event) => { setSelectedRole(event.target.value as UserRole); setRoleSaved(false); }}
-                    className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-xs font-medium outline-none transition focus:border-[var(--primary)]" aria-label="Role">
+                    aria-label="Role"
+                    className="h-10 w-full appearance-none rounded-lg border border-[var(--border)] bg-background pl-3 pr-9 text-xs font-medium outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15"
+                  >
                     <option value="Administrator">Administrator</option>
                     <option value="IT Support">IT Support</option>
                     <option value="Knowledge Manager">Knowledge Manager</option>
                     <option value="User">User</option>
                   </select>
-                  <p className="mt-1.5 text-2xs leading-4 text-muted-foreground">
-                    {ROLE_DESCRIPTIONS[selectedRole]}
-                  </p>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
                 </div>
+                <p className="mt-1.5 text-2xs leading-4 text-muted-foreground">{ROLE_DESCRIPTIONS[selectedRole]}</p>
 
-                <div>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-2xs font-medium text-muted-foreground">Permissions</span>
-                    {roleChanged ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-3xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                        Preview: {selectedRole}
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-3xs font-semibold text-[var(--accent-foreground)]">
-                        Current: {user.role}
-                      </span>
-                    )}
+                {roleChanged && (
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-[var(--warn)]/30 bg-[var(--warn)]/8 px-2 py-1.5">
+                    <span className="text-2xs text-muted-foreground">Changing from {user.role} to {selectedRole}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedRole(user.role); setRoleSaved(false); }}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold text-[var(--accent-foreground)] transition hover:bg-[var(--accent-soft)]"
+                    >
+                      <RotateCcw className="size-3" aria-hidden /> Undo
+                    </button>
                   </div>
-                  <div className="overflow-hidden rounded-xl border border-[var(--border)]">
-                    {loadingPermissions ? (
-                      <div className="space-y-2 p-3">
-                        <Skeleton className="h-7 w-full" /><Skeleton className="h-7 w-full" />
-                        <Skeleton className="h-7 w-full" /><Skeleton className="h-7 w-full" />
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-[var(--border)]">
-                        {RBAC_CAPABILITIES.map((capability) => {
-                          const enabled = previewPerms[capability.key];
-                          const changed = roleChanged && enabled !== !!permissions[capability.key];
-                          return (
-                            <div key={capability.key} data-slot="permission-row" data-enabled={enabled ? "true" : "false"}
-                              className={["flex items-center gap-2.5 px-3 py-2.5",
-                              changed ? "bg-amber-50/60 dark:bg-amber-950/20" : ""].join(" ")}>
-                              <span className={["grid size-5 shrink-0 place-items-center rounded-full",
-                                enabled ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                  : "bg-[var(--muted)] text-muted-foreground"].join(" ")}>
-                                {enabled ? <Check className="size-3" /> : <X className="size-3" />}
-                              </span>
-                              <span className={["text-2xs", enabled ? "font-medium text-foreground" : "text-muted-foreground"].join(" ")}>
-                                {capability.label}
-                              </span>
-                              {changed && (
-                                <span className={["ml-auto rounded-full px-1.5 py-0.5 text-3xs font-semibold",
-                                  enabled ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                    : "bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300"].join(" ")}>
-                                  {enabled ? "+ new" : "− removed"}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  {/* Say which of the two lists is on screen. The preview is the
-                      role's default matrix; the current list came from the API. */}
-                  <p className="mt-2 text-2xs leading-4 text-muted-foreground">
-                    {roleChanged
-                      ? "Role defaults plus this account's explicit grants — nothing is saved until you apply the change."
-                      : "Effective permissions reported by the permissions endpoint."}
-                  </p>
-                </div>
+                )}
+              </div>
 
-                <div className="flex items-center justify-end gap-2">
-                  {roleSaved && <span className="mr-auto text-2xs font-medium text-emerald-600">Access updated ✓</span>}
-                  {error && <span className="mr-auto max-w-[190px] truncate text-2xs text-red-600" title={error}>{error}</span>}
-                  <button type="button" onClick={saveRole} disabled={savingRole || !roleChanged}
-                    className="rounded-lg bg-[var(--primary)] px-4 py-2.5 text-2xs font-semibold text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
-                    {savingRole ? "Saving..." : "Save access changes"}
-                  </button>
+              <div className="mt-3">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <h4 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Capabilities</h4>
+                  <span className="text-2xs text-muted-foreground">
+                    {roleChanged ? "Preview — nothing saved yet" : "Effective from the permissions API"}
+                  </span>
                 </div>
-                <p className="text-2xs leading-4 text-muted-foreground">
-                  Writes the role override through <code className="font-mono">PATCH /api/users/…/role</code>;
-                  it takes effect the next time this user signs in.
+                <PermissionMatrix rows={permissionRows} loading={loadingPermissions} />
+                <p className="mt-2 text-2xs leading-4 text-muted-foreground">
+                  {roleChanged
+                    ? "Role defaults plus this account's explicit grants. Apply below to persist."
+                    : "Reported by the permissions endpoint for this account."}
                 </p>
               </div>
-            </DrawerSection>
+            </section>
 
-            {/* DIRECTORY */}
-            <DrawerSection title="Directory" icon={<UserCog className="size-4" />}>
-              <div className="space-y-4">
-                <InfoRow label="Source" value={isAdUser ? "Active Directory" : "Local"} />
-                <div>
-                  <div className="mb-2 text-2xs font-medium">Groups</div>
-                  {user.groups.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {user.groups.map((group) => (
-                        <span key={group} className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-2xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-                          {group}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-[var(--border)] p-4 text-center text-2xs text-muted-foreground">
-                      No directory groups assigned.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </DrawerSection>
-
-            {/* SECURITY */}
-            <DrawerSection title="Security" icon={<KeyRound className="size-4" />}>
+            {/* ---------- directory ---------- */}
+            <section aria-labelledby="directory-heading">
+              <SectionHeading
+                icon={<UserCog className="size-3.5" />}
+                title="Directory"
+                hint={isAdUser ? "Groups and identity come from Active Directory." : "This account is not linked to a directory."}
+              />
               {isAdUser ? (
-                <div className="rounded-xl bg-amber-50 p-3.5 dark:bg-amber-950/30">
-                  <div className="flex gap-3">
-                    <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                      <KeyRound className="size-4" />
-                    </div>
-                    <div>
-                      <div className="text-2xs font-semibold text-amber-900 dark:text-amber-200">Managed by Active Directory</div>
-                      <p className="mt-1 text-2xs leading-4 text-amber-800 dark:text-amber-300">
-                        This password is managed in Active Directory and cannot be changed here.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <NoticeCard
+                  tone="warning"
+                  icon={<Building2 className="size-3.5" />}
+                  title="Managed by Active Directory"
+                  footer={
+                    <p className="rounded-lg bg-card/60 px-2 py-1.5 text-2xs leading-4 text-muted-foreground">
+                      Change the account in AD, then run a directory sync. Local edits here are overwritten on the
+                      next sync.
+                    </p>
+                  }
+                >
+                  Name, group membership and password are owned by AD. This drawer can change the workspace role only.
+                </NoticeCard>
               ) : (
-                <div className="space-y-3">
-                  {/* The local branch is NOT read-only: PUT /users/{u}/password really
-                      writes, so the callout says that instead of claiming nothing happens. */}
-                  <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 p-3.5">
-                    <div className="flex gap-3">
-                      <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
-                        <KeyRound className="size-4" />
-                      </div>
-                      <div>
-                        <div className="text-2xs font-semibold text-foreground">Local account</div>
-                        <p className="mt-1 text-2xs leading-4 text-muted-foreground">
-                          This password is stored by this application — a change below is applied immediately.
-                        </p>
-                      </div>
-                    </div>
+                <NoticeCard tone="info" icon={<Laptop className="size-3.5" />} title="Local account">
+                  Created and stored by this application. Nothing here is synchronised to a directory.
+                </NoticeCard>
+              )}
+
+              <div className="mt-2">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Groups ({user.groups.length})
+                </p>
+                {user.groups.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {user.groups.map((group) => (
+                      <span
+                        key={group}
+                        className="rounded-md border border-[var(--border)] bg-muted/50 px-2 py-1 font-mono text-2xs text-foreground"
+                      >
+                        {group}
+                      </span>
+                    ))}
                   </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-[var(--border)] px-2.5 py-2 text-2xs text-muted-foreground">
+                    No directory groups assigned.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* ---------- security ---------- */}
+            <section aria-labelledby="security-heading">
+              <SectionHeading icon={<KeyRound className="size-3.5" />} title="Security" hint="Password and access recovery." />
+              {isAdUser ? (
+                <NoticeCard
+                  tone="warning"
+                  icon={<KeyRound className="size-3.5" />}
+                  title="Managed by Active Directory"
+                  footer={
+                    <button
+                      type="button"
+                      disabled
+                      title="Passwords are changed in Active Directory"
+                      className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 text-2xs font-semibold text-muted-foreground opacity-70"
+                    >
+                      <KeyRound className="size-3" aria-hidden /> Password changes happen in AD
+                    </button>
+                  }
+                >
+                  This password is managed in Active Directory and cannot be changed here. Use Reset access to force a
+                  fresh sign-in after an AD change.
+                </NoticeCard>
+              ) : (
+                <div className="space-y-2">
+                  <NoticeCard tone="info" icon={<Laptop className="size-3.5" />} title="Local account">
+                    This password is stored by this application — a change below is applied immediately.
+                  </NoticeCard>
                   <LocalPasswordForm username={user.username} />
                 </div>
               )}
-            </DrawerSection>
+            </section>
 
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-2xs leading-4 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-                {error}
+            {(roleSaved || error) && (
+              <div
+                role="status"
+                className={[
+                  "flex items-start gap-2 rounded-xl border px-3 py-2 text-2xs",
+                  error
+                    ? "border-[var(--danger)]/35 bg-[var(--danger)]/8 text-[var(--danger)]"
+                    : "border-[var(--ok)]/35 bg-[var(--ok)]/8 text-[var(--ok)]",
+                ].join(" ")}
+              >
+                {error ? <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden /> : <Check className="mt-px size-3.5 shrink-0" aria-hidden />}
+                <span className="min-w-0 break-words">{error ?? "Access updated"}</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="border-t border-[var(--border)] bg-card p-4">
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" disabled={busy} onClick={() => setConfirmKind("reset")}
-              className="flex items-center justify-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2.5 text-2xs font-semibold transition hover:bg-[var(--muted)] disabled:opacity-50">
-              <RefreshCw className="size-3.5" /> Reset access
+        {/* ---------- footer actions: destructive left, routine right ---------- */}
+        <footer className="shrink-0 border-t border-[var(--border)] bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => { if (deactivated) { void handleStatusChange(); } else { setConfirmKind("disable"); } }}
+              className={[
+                "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-2xs font-semibold transition disabled:opacity-50",
+                deactivated
+                  ? "border-[var(--ok)]/40 bg-[var(--ok)]/10 text-[var(--ok)] hover:bg-[var(--ok)]/15"
+                  : "border-[var(--danger)]/40 bg-[var(--danger)]/8 text-[var(--danger)] hover:bg-[var(--danger)]/15",
+              ].join(" ")}
+            >
+              {deactivated ? <UserCheck className="size-3.5" aria-hidden /> : <UserX className="size-3.5" aria-hidden />}
+              {deactivated ? "Reactivate account" : "Deactivate account"}
             </button>
-            <button type="button" disabled={busy}
-              onClick={() => { if (shouldEnable) { void handleStatusChange(); } else { setConfirmKind("disable"); } }}
-              className={["flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-2xs font-semibold transition disabled:opacity-50",
-                shouldEnable
-                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300"
-                  : "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"].join(" ")}>
-              {shouldEnable ? <><UserCheck className="size-3.5" /> Enable user</> : <><UserX className="size-3.5" /> Disable user</>}
-            </button>
-          </div>
-        </div>
 
-        {/* Disabling revokes access immediately (the backend invalidates the token),
-            and reset-access forces a fresh sign-in — both ask first. */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmKind("reset")}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] bg-card px-3 text-2xs font-semibold transition hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className="size-3.5" aria-hidden /> Reset access
+              </button>
+              <button
+                type="button"
+                onClick={saveRole}
+                disabled={savingRole || !roleChanged}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 text-2xs font-semibold text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Check className="size-3.5" aria-hidden />
+                {savingRole ? "Saving…" : "Save access changes"}
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-2 text-center text-[10px] text-muted-foreground sm:text-left">
+            {roleChanged
+              ? `Unsaved role change: ${user.role} → ${selectedRole}`
+              : "Role changes take effect the next time this user signs in."}
+          </p>
+        </footer>
+
+        {/* Deactivation revokes access immediately (the backend invalidates the token);
+            reset-access forces a fresh sign-in — both ask first. */}
         <ConfirmDialog
           open={confirmKind === "disable"}
           destructive
           busy={busy}
-          title={`Disable ${user.name}?`}
-          description="They are signed out straight away and cannot sign in again until an administrator re-enables the account."
-          confirmLabel="Disable user"
+          title={`Deactivate ${user.name}?`}
+          description="They are signed out straight away and cannot sign in again until an administrator reactivates the account."
+          confirmLabel="Deactivate account"
           onCancel={() => setConfirmKind(null)}
           onConfirm={() => { setConfirmKind(null); void handleStatusChange(); }}
         />
@@ -1119,72 +1211,6 @@ function UserDrawer({ user, onClose, onUserUpdated }: {
     </div>
   );
 }
-
-/* ============================================================
-   DRAWER SECTION / INFO ROW
-============================================================ */
-
-function DrawerSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
-  return (
-    <section>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-[var(--accent-foreground)]">{icon}</span>
-        <h3 className="text-xs font-bold uppercase tracking-wide">{title}</h3>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex min-h-[40px] items-center justify-between gap-4 px-3">
-      <span className="shrink-0 text-2xs text-muted-foreground">{label}</span>
-      <span className="max-w-[245px] truncate text-right text-2xs font-medium" title={value}>{value}</span>
-    </div>
-  );
-}
-
-/* ============================================================
-   LOCAL PASSWORD
-============================================================ */
-
-function LocalPasswordForm({ username }: { username: string }) {
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function savePassword() {
-    if (password.length < 8) return;
-    setBusy(true); setMessage(null); setError(null);
-    try {
-      await setUserPassword(username, password);
-      setPassword("");
-      setMessage("Password updated ✓");
-    } catch (err: any) {
-      setError(err?.message || "Failed to update password.");
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div className="space-y-2">
-      <input type="password" value={password} onChange={(event) => setPassword(event.target.value)}
-        placeholder="New password (min 8 characters)"
-        className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-2xs outline-none transition placeholder:text-muted-foreground focus:border-[var(--primary)]"  aria-label="New password"/>
-      <div className="flex items-center justify-between gap-2">
-        {message && <span className="text-2xs font-medium text-emerald-600">{message}</span>}
-        {error && <span className="text-2xs text-red-600">{error}</span>}
-        <button type="button" onClick={savePassword} disabled={busy || password.length < 8}
-          className="ml-auto rounded-lg bg-[var(--primary)] px-4 py-2 text-2xs font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-40">
-          {busy ? "Updating..." : "Update password"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
 
 /* ============================================================
    ADD USER MODAL
