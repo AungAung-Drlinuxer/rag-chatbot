@@ -73,6 +73,13 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
+  // Mutations are recorded instead of sent, so the form harness can assert the payload.
+  const sent = (window as any).__sent ?? ((window as any).__sent = []);
+  if (path.startsWith("/api/admin/domains") && init?.method && init.method !== "GET") {
+    sent.push({ method: init.method, path, body: init.body ? JSON.parse(String(init.body)) : null });
+    return json({ status: "ok", id: 99, domain_key: "probe", kb_pages_migrated: 3 });
+  }
+
   if (path === "/api/admin/domains") {
     if (new URLSearchParams(location.search).get("scenario") === "error") {
       return json({ detail: "domains service unavailable" }, 503);

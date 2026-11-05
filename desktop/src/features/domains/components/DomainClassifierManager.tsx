@@ -1,18 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
-import { AlertCircle, BookOpen, Plus, Upload } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
-import {
-  ClassifierDomainItem,
-  createClassifierDomain,
-  updateClassifierDomain,
-  deleteClassifierDomain,
-  renameClassifierDomain,
-} from "@/features/domains/api";
-import { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/domainMeta";
+/**
+ * Domain list manager.
+ *
+ * The manager owns three things only: the list, which domain is being edited, and the
+ * delete confirmation. Creating and updating live in `DomainFormSheet`, which is the
+ * single place that knows how a domain is described and validated.
+ */
+import { useEffect, useState } from "react";
+import { AlertCircle, Plus } from "lucide-react";
+
+import { ClassifierDomainItem, deleteClassifierDomain } from "@/features/domains/api";
+import { DomainFormSheet, type DomainFormMode } from "@/features/domains/components/DomainFormSheet";
 import { DomainRoutingItem } from "@/features/domains/components/DomainRoutingItem";
+
+// Presentation metadata lives in one place; re-exported for older imports.
+export { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/domainMeta";
 
 interface Props {
   domains: ClassifierDomainItem[];
@@ -20,12 +21,9 @@ interface Props {
   canManage: boolean;
   /** The page owns the panel chrome, so the manager can render just the list. */
   hideHeader?: boolean;
-  /** Bump this number to open the create slide-over from the page header. */
+  /** Bump this number to open the create sheet from the page header. */
   openCreateSignal?: number;
 }
-
-// Presentation metadata lives in one place; re-exported for older imports.
-export { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/domainMeta";
 
 export function DomainClassifierManager({
   domains,
@@ -34,440 +32,124 @@ export function DomainClassifierManager({
   hideHeader = false,
   openCreateSignal = 0,
 }: Props) {
-  const [editingDomain, setEditingDomain] = useState<ClassifierDomainItem | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  const [sheet, setSheet] = useState<{ mode: DomainFormMode; domain: ClassifierDomainItem | null } | null>(null);
+  const [deleting, setDeleting] = useState<ClassifierDomainItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Form states
-  const [domainKey, setDomainKey] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [description, setDescription] = useState("");
-  const [jiraProject, setJiraProject] = useState("");
-  const [keywordsText, setKeywordsText] = useState("");
-  const [selectedIcon, setSelectedIcon] = useState("BookOpen");
-  const [selectedColor, setSelectedColor] = useState("blue");
-  const [customIcon, setCustomIcon] = useState<string | null>(null);
-  const [isActive, setIsActive] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCustomIconUpload = (file: File) => {
-    if (!["image/png", "image/jpeg"].includes(file.type)) {
-      setError("Only PNG or JPG images are allowed for custom icon.");
-      return;
-    }
-    if (file.size > 1 * 1024 * 1024) {
-      setError("Custom icon size cannot exceed 1 MB.");
-      return;
-    }
-    setError(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      if (dataUrl) {
-        setCustomIcon(dataUrl);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const startCreate = () => {
-    setIsCreating(true);
-    setEditingDomain(null);
-    setDomainKey("");
-    setDisplayName("");
-    setDescription("");
-    setJiraProject("");
-    setKeywordsText("");
-    setSelectedIcon("BookOpen");
-    setSelectedColor("blue");
-    setCustomIcon(null);
-    setIsActive(true);
-    setError(null);
-  };
-
-  // The page header owns the "Add domain" button; it bumps openCreateSignal to open this form.
   useEffect(() => {
-    if (openCreateSignal > 0) startCreate();
+    if (openCreateSignal > 0) setSheet({ mode: "create", domain: null });
   }, [openCreateSignal]);
 
-  const startEdit = (d: ClassifierDomainItem) => {
-    setEditingDomain(d);
-    setIsCreating(false);
-    setDomainKey(d.domain_key);
-    setDisplayName(d.display_name);
-    setDescription(d.description || "");
-    setJiraProject(d.jira_project || "");
-    setKeywordsText(d.keywords.join(", "));
-    setSelectedIcon(d.icon || "BookOpen");
-    setSelectedColor(d.color || "blue");
-    setCustomIcon(d.custom_icon || null);
-    setIsActive(d.is_active);
-    setError(null);
-  };
-
-  const cancelForm = () => {
-    setIsCreating(false);
-    setEditingDomain(null);
-    setError(null);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const kwList = keywordsText
-      .split(/[\n,]+/)
-      .map((k) => k.trim().toLowerCase())
-      .filter((k) => k.length > 0);
-
+  async function confirmDelete() {
+    if (!deleting) return;
+    setBusy(true);
+    setDeleteError(null);
     try {
-      if (isCreating) {
-        if (!domainKey.trim() || !displayName.trim()) {
-          throw new Error("Domain key and Display name are required.");
-        }
-        await createClassifierDomain({
-          domain_key: domainKey.trim().toLowerCase(),
-          display_name: displayName.trim(),
-          description: description.trim() || undefined,
-          keywords: kwList,
-          jira_project: jiraProject.trim() || undefined,
-          icon: selectedIcon,
-          color: selectedColor,
-          custom_icon: customIcon || undefined,
-          is_active: isActive,
-        });
-      } else if (editingDomain) {
-        // Rename first if the key changed (atomic cascade), then update the rest.
-        if (domainKey.trim().toLowerCase() !== editingDomain.domain_key) {
-          if (
-            !confirm(
-              `Rename domain key "${editingDomain.domain_key}" → "${domainKey.trim().toLowerCase()}"?\n\n` +
-                "This migrates all KB pages and stored vector metadata in one transaction and cannot be undone."
-            )
-          ) {
-            setLoading(false);
-            return;
-          }
-          await renameClassifierDomain(editingDomain.id, domainKey.trim().toLowerCase());
-        }
-        await updateClassifierDomain(editingDomain.id, {
-          display_name: displayName.trim(),
-          description: description.trim() || undefined,
-          keywords: kwList,
-          jira_project: jiraProject.trim() || undefined,
-          icon: selectedIcon,
-          color: selectedColor,
-          custom_icon: customIcon || "",
-          is_active: isActive,
-        });
-      }
+      await deleteClassifierDomain(deleting.id);
+      setDeleting(null);
       onRefresh();
-      cancelForm();
     } catch (err: any) {
-      setError(err.message || "Failed to save domain");
+      setDeleteError(err?.message || "Could not delete this domain.");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
-
-  const handleDelete = async (d: ClassifierDomainItem) => {
-    if (!confirm(`Are you sure you want to delete domain "${d.display_name}"?`)) return;
-    try {
-      await deleteClassifierDomain(d.id);
-      onRefresh();
-    } catch (err: any) {
-      alert(err.message || "Failed to delete domain");
-    }
-  };
-
-  const PreviewIconComp = ICON_OPTIONS[selectedIcon]?.icon || BookOpen;
-  const previewColorDef = COLOR_OPTIONS[selectedColor] || COLOR_OPTIONS.blue;
+  }
 
   return (
-    <div className="space-y-4">
-      {/* Header bar — hidden when the page renders its own panel heading */}
+    <div>
       {!hideHeader && (
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">Configured Routing Domains</h4>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time keyword triggers, domain classifier thresholds, custom icons/colors, and Jira escalation project mapping.
-          </p>
-        </div>
-        {canManage && !isCreating && !editingDomain && (
-          <button
-            type="button"
-            onClick={startCreate}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] text-xs font-medium transition shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Domain
-          </button>
-        )}
-      </div>
-      )}
-
-      {/* Form (Create / Edit) — right-side slide-over */}
-      <Dialog open={!!(isCreating || editingDomain)} onOpenChange={(o) => { if (!o) cancelForm(); }}>
-        <DialogContent side="right" className="gap-0 p-0">
-        <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-[var(--border)] px-6 py-4 pr-12">
-            <h5 className="text-sm font-semibold text-foreground">
-              {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
-            </h5>
-            <p className="mt-0.5 text-xs text-muted-foreground">Changes apply immediately to the classification engine & Knowledge Base</p>
-          </div>
-
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          {error && (
-            <div className="flex items-center gap-2 p-2.5 text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="flex items-center gap-2 text-xs font-medium text-foreground mb-1">
-                Domain Key (Unique Identifier)
-                {!isCreating && domainKey !== (editingDomain?.domain_key || "") && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 text-2xs font-semibold text-amber-700 dark:text-amber-300">
-                    <AlertCircle className="size-3" /> Rename — cascades to KB & vectors
-                  </span>
-                )}
-              </label>
-              <input
-                type="text"
-                value={domainKey}
-                onChange={(e) => setDomainKey(e.target.value.toLowerCase())}
-                placeholder="e.g. help_desk, inventory, hr"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground font-mono"
-                required
-               aria-label="Rename — cascades to KB & vectors"/>
-              {!isCreating && (
-                <p className="text-2xs text-muted-foreground mt-1">
-                  Editing the key renames it across the classifier engine, KB pages, and stored vector metadata in one atomic transaction.
-                  Confluence space-bound keys cannot be renamed here.
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-foreground mb-1">
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Help Desk & End-User Support"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
-                required
-               aria-label="Display Name"/>
-            </div>
-          </div>
-
-          {/* Icon and Color Picker with Live Preview & Custom Icon Upload */}
-          <div className="grid grid-cols-1 gap-4 rounded-xl border border-[var(--border)] bg-background p-4">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-1">
-                  Built-in Icon
-                </label>
-                <select
-                  disabled={!!customIcon}
-                  value={selectedIcon}
-                  onChange={(e) => setSelectedIcon(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground outline-none disabled:opacity-50" aria-label="Built-in Icon">
-                  {Object.entries(ICON_OPTIONS).map(([key, opt]) => (
-                    <option key={key} value={key}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-1">
-                  Custom Icon Upload (PNG/JPG)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleCustomIconUpload(file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition"
-                  >
-                    <Upload className="size-3.5" />
-                    {customIcon ? "Change Image" : "Upload Image"}
-                  </button>
-                  {customIcon && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomIcon(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                      className="px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <p className="text-2xs text-muted-foreground mt-1">
-                  Optional. Overrides the built-in icon with your custom logo.
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-foreground mb-1">
-                Accent Theme Color
-              </label>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {Object.entries(COLOR_OPTIONS).map(([key, opt]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    title={opt.label}
-                    onClick={() => setSelectedColor(key)}
-                    className={`size-6 rounded-full ${opt.swatchBg} transition-transform ${
-                      selectedColor === key ? "ring-2 ring-offset-2 ring-indigo-500 scale-110" : "opacity-80 hover:opacity-100"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                Knowledge Card Preview
-              </label>
-              <div className="p-3 rounded-xl border border-[var(--border)] bg-card shadow-xs">
-                <div className={`size-8 rounded-lg grid place-items-center mb-2 overflow-hidden ${previewColorDef.bgClass}`}>
-                  {customIcon ? (
-                    <img src={customIcon} alt="Custom icon preview" className="size-full object-contain p-1" />
-                  ) : (
-                    <PreviewIconComp className={`size-4 ${previewColorDef.textClass}`} />
-                  )}
-                </div>
-                <div className="text-xs font-semibold text-foreground truncate">
-                  {displayName || "Domain Title"}
-                </div>
-                <p className="text-2xs text-muted-foreground line-clamp-1 mt-0.5">
-                  {description || "Domain description preview..."}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-foreground mb-1">
-                Jira Project Key (Escalation target project)
-              </label>
-              <input
-                type="text"
-                value={jiraProject}
-                onChange={(e) => setJiraProject(e.target.value)}
-                placeholder="e.g. ITHD (leave blank if unused)"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
-               aria-label="Jira project key"/>
-              <p className="text-2xs text-muted-foreground mt-1">
-                Target Jira Project code for team escalation when the question cannot be answered from Confluence KB.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-foreground mb-1">
-                Status
-              </label>
-              <label className="inline-flex items-center gap-2 mt-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)] w-4 h-4"
-                />
-                <span className="text-xs text-foreground">Active (Included in classifier routing)</span>
-              </label>
-            </div>
-          </div>
-
+        <div className="flex items-center justify-between gap-2 px-4 pb-3 pt-4 sm:px-5">
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">
-              Description / Scope
-            </label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief summary of issues routed to this domain"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
-             aria-label="Description / Scope"/>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-foreground mb-1">
-              Keywords & Phrases (Comma or newline separated)
-            </label>
-            <textarea
-              rows={3}
-              value={keywordsText}
-              onChange={(e) => setKeywordsText(e.target.value)}
-              placeholder="e.g. payroll, leave request, onboarding, tax deduction"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
-             aria-label="Keywords and phrases"/>
-            <p className="text-2xs text-muted-foreground mt-1">
-              Any user prompt containing these phrases will score towards this domain.
+            <h2 className="text-sm font-semibold">Routing domains</h2>
+            <p className="mt-0.5 text-2xs text-muted-foreground">
+              {domains.length} domain{domains.length === 1 ? "" : "s"} configured
             </p>
           </div>
-
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] px-6 py-4">
+          {canManage && (
             <button
               type="button"
-              onClick={cancelForm}
-              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-slate-900 rounded-lg"
+              onClick={() => setSheet({ mode: "create", domain: null })}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--primary)] px-3 text-xs font-medium text-[var(--primary-foreground)] shadow-sm transition hover:opacity-90"
             >
-              Cancel
+              <Plus className="size-3.5" aria-hidden /> Add domain
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
-            >
-              {loading ? "Saving..." : "Save Domain"}
-            </button>
-          </div>
-        </form>
-        </DialogContent>
-      </Dialog>
+          )}
+        </div>
+      )}
 
-      {/* Domain list — one card per domain, order and state owned by the item. */}
       <div className="divide-y divide-[var(--border)]">
         {domains.map((d) => (
           <DomainRoutingItem
             key={d.id}
             domain={d}
             canManage={canManage}
-            onEdit={startEdit}
-            onDelete={handleDelete}
+            onEdit={(domain) => setSheet({ mode: "edit", domain })}
+            onDelete={(domain) => { setDeleting(domain); setDeleteError(null); }}
           />
         ))}
       </div>
+
+      <DomainFormSheet
+        open={sheet !== null}
+        mode={sheet?.mode ?? "create"}
+        domain={sheet?.domain ?? null}
+        onClose={() => setSheet(null)}
+        onSaved={onRefresh}
+      />
+
+      {/* Delete stays a separate, explicit confirmation — no destructive action inside the
+          edit sheet, where it would sit one mis-click away from "Save changes". */}
+      {deleting && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Delete ${deleting.display_name}`}
+          onClick={(e) => { if (e.target === e.currentTarget && !busy) setDeleting(null); }}
+        >
+          <div className="my-auto w-full max-w-sm rounded-2xl border border-[var(--border)] bg-card p-5 shadow-xl">
+            <div className="flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--danger)]/10 text-[var(--danger)]">
+                <AlertCircle className="size-4.5" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">Delete “{deleting.display_name}”?</h3>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  The routing rule is removed. Articles already stored under{" "}
+                  <code className="font-mono">{deleting.domain_key}</code> keep their label until
+                  they are re-saved or re-ingested.
+                </p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <p className="mt-3 rounded-lg border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-2.5 py-2 text-2xs text-[var(--danger)]" role="alert">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setDeleting(null)}
+                className="h-9 rounded-lg border border-[var(--border)] px-3 text-xs font-medium transition hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={confirmDelete}
+                className="h-9 rounded-lg bg-[var(--danger)] px-3 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? "Deleting…" : "Delete domain"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
