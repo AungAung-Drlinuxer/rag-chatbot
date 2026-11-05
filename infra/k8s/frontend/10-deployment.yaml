@@ -57,7 +57,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: harbor.drlinuxer.com/rag-chatbot/frontend:1.0.31
+          image: harbor.drlinuxer.com/rag-chatbot/frontend:1.0.32
           imagePullPolicy: Always
           # The container port is UNNAMED live. Declaring `name: http` here (plus
           # `targetPort: http` on the Service below) would be tidier, but it changes the pod
