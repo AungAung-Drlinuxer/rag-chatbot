@@ -306,7 +306,7 @@ export function FloatingChatPopup() {
       <button
         aria-label="Reopen chat"
         onClick={() => setMinimized(false)}
-        className="fixed bottom-5 right-5 z-50 grid size-14 place-items-center rounded-full bg-blue-600 text-white shadow-2xl shadow-blue-600/40 transition hover:scale-105 hover:bg-blue-700"
+        className="fixed bottom-5 right-5 z-50 grid size-14 place-items-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] shadow-2xl shadow-black/30 transition hover:scale-105 hover:opacity-95"
       >
         <Bot className="size-6" />
         {messages.length > 0 && (
@@ -327,44 +327,44 @@ export function FloatingChatPopup() {
       className="fixed bottom-5 right-5 z-50 flex h-[520px] w-[380px] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[#0B1930] px-4 py-3 dark:bg-[#0B1930]">
-        <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 shadow-lg shadow-blue-600/30">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--primary)] px-4 py-3">
+        <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/15">
           <Bot className="size-5 text-white" strokeWidth={1.8} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-white">IT Knowledge Assistant</div>
+          <div className="text-sm font-semibold text-white">IT Assistant</div>
           <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-emerald-400" />
-            <span className="text-2xs text-slate-400">Online · RBAC protected</span>
+            <span className="size-1.5 rounded-full bg-emerald-300" />
+            <span className="text-2xs text-white/70">IT Knowledge Assistant · RBAC protected</span>
           </div>
         </div>
         <button
           aria-label="Minimize chat"
           title="Minimize"
           onClick={() => setMinimized(true)}
-          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+          className="rounded-lg p-1.5 text-white/70 transition hover:bg-white/15 hover:text-white"
         >
           <Minus className="size-4" />
         </button>
         <button
           aria-label="Close chat"
           onClick={() => setOpen(false)}
-          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+          className="rounded-lg p-1.5 text-white/70 transition hover:bg-white/15 hover:text-white"
         >
           <X className="size-4" />
         </button>
       </div>
 
       {/* Body */}
-      <div ref={bodyRef} className="flex-1 space-y-4 overflow-y-auto bg-[#F7F9FC] p-4 dark:bg-[#0B1220]">
+      <div ref={bodyRef} className="flex-1 space-y-4 overflow-y-auto bg-background p-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="grid size-14 place-items-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+            <div className="grid size-14 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--primary)]">
               <Sparkles className="size-6" />
             </div>
-            <h3 className="mt-3 text-sm font-bold text-[#0F172A] dark:text-slate-100">Hi there! 👋</h3>
-            <p className="mt-1 max-w-[240px] text-xs leading-5 text-muted-foreground">
-              Ask me anything about your IT environment — I&apos;ll search the internal knowledge base.
+            <h3 className="mt-3 text-sm font-bold text-foreground">Ask an IT question</h3>
+            <p className="mt-1 max-w-[250px] text-xs leading-5 text-muted-foreground">
+              I answer from your organization&apos;s knowledge base and cite the pages I used.
             </p>
           </div>
         )}
@@ -373,7 +373,7 @@ export function FloatingChatPopup() {
           <div key={m.id} className={m.role === "user" ? "group flex justify-end" : "group flex justify-start gap-2"}>
             {/* v1.6.38 — brand avatar on assistant turns, matching the Chat page */}
             {m.role !== "user" && (
-              <div className="grid size-7 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm">
+              <div className="grid size-7 shrink-0 place-items-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm">
                 <Bot className="size-3.5" />
               </div>
             )}
@@ -383,8 +383,8 @@ export function FloatingChatPopup() {
                   "min-w-0 max-w-full overflow-hidden rounded-2xl px-3.5 py-3 text-xs leading-relaxed",
                   m.role === "user"
                     ? editingId === m.id
-                      ? "rounded-br-md border-2 border-blue-400 bg-blue-50 dark:bg-blue-950/40"
-                      : "rounded-br-md bg-blue-600 text-white"
+                      ? "rounded-br-md border-2 border-[var(--primary)] bg-[var(--accent-soft)]"
+                      : "rounded-br-md bg-[var(--primary)] text-[var(--primary-foreground)]"
                     : m.failed
                       ? "rounded-tl-none border border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"
                       : "rounded-tl-none border border-slate-200 bg-white text-slate-800 shadow-xs dark:border-slate-800 dark:bg-[#111827] dark:text-slate-100",
@@ -402,7 +402,7 @@ export function FloatingChatPopup() {
                           if (e.key === "Escape") { setEditingId(null); setEditText(""); }
                         }}
                         rows={2}
-                        className="w-full resize-none rounded-lg border border-blue-200 bg-white p-2 text-xs text-[#0F172A] outline-none dark:border-blue-800"
+                        className="w-full resize-none rounded-lg border border-[var(--border)] bg-background p-2 text-xs text-foreground outline-none"
                        aria-label="Edit message"/>
                       <div className="mt-1.5 flex justify-end gap-1.5">
                         <button
@@ -414,7 +414,7 @@ export function FloatingChatPopup() {
                         <button
                           onClick={submitEdit}
                           disabled={!editText.trim()}
-                          className="rounded-md bg-blue-600 px-2.5 py-1 text-2xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                          className="rounded-md bg-[var(--primary)] px-2.5 py-1 text-2xs font-semibold text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
                         >
                           Resend
                         </button>
@@ -447,10 +447,10 @@ export function FloatingChatPopup() {
                     {preferences.show_rag_sources && (m.sources?.length ?? 0) > 0 && (
                       <div className="mt-2 border-t border-[var(--border)] pt-2">
                         <div className="mb-1 flex items-center gap-1 text-2xs font-semibold text-muted-foreground">
-                          <Sparkles className="size-3 text-blue-500" /> Sources
+                          <Sparkles className="size-3 text-[var(--primary)]" /> Sources
                         </div>
                         {m.sources!.slice(0, 3).map((s, i) => (
-                          <div key={i} className="mb-1 truncate rounded-lg bg-[#EFF6FF] px-2 py-1 text-2xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                          <div key={i} className="mb-1 truncate rounded-lg bg-[var(--accent-soft)] px-2 py-1 text-2xs text-[var(--accent-foreground)]">
                             📄 {s.title}
                             {s.relevance != null && <span className="ml-1 text-emerald-600 dark:text-emerald-400">{s.relevance}%</span>}
                           </div>

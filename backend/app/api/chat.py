@@ -165,6 +165,77 @@ def chat_stream(req: ChatRequest, user: str = Depends(_require_chatbot)) -> Stre
                 with suppress(Exception):  # never let cleanup break the stream
                     s.close()
 
+        # --- Small talk shortcut ---------------------------------------------------
+        # "Hi" used to run the whole RAG pipeline: retrieval found nothing relevant, the
+        # model answered the greeting from stray context, and the UI listed KB articles
+        # under it. A greeting gets a greeting — no retrieval, no model call, no
+        # confidence score (a percentage about document relevance is meaningless here).
+        # Whole-message matches only, so "hi how do I reset my VPN password" still
+        # reaches retrieval.
+        _st = None
+        try:
+            from app.smalltalk import classify as _classify_small_talk
+            from app.smalltalk import reply as _small_talk_reply
+
+            _st = _classify_small_talk(req.message)
+        except Exception as _st_err:  # never break chat on this path
+            logger.warning("small talk check failed (%s) — continuing to RAG", _st_err)
+            _st = None
+
+        if _st:
+            from app.smalltalk import reply as _small_talk_reply  # imported here: the guard above may have failed
+            _st_answer = _small_talk_reply(_st)
+            _st_meta = {
+                "domain": "general",
+                "confidence": None,
+                "decision": "small_talk",
+                "tool_used": None,
+                "rewritten": req.message,
+                "hits": [],
+                "top_k": 0,
+                "retrieval": {
+                    "chunks": 0, "cited": 0, "top_k": 0,
+                    "rerank_used": False, "acl_scoped": False,
+                    "role": get_role(user),
+                },
+                "mode": (req.mode or "auto").strip().lower(),
+                "small_talk": _st,
+            }
+            yield _sse("meta", _st_meta)
+            for _chunk in _chunk_text(_st_answer, 24):
+                yield _sse("token", {"token": _chunk})
+                time.sleep(0.012)
+
+            _st_msg_id = ""
+            _s2 = None
+            try:
+                from app.persistence.database import SessionLocal as _SessionLocal
+
+                _s2 = _SessionLocal()
+                _am = ChatMessage(session_id=session_id, role="assistant",
+                                  content=_st_answer, meta=json.dumps(_st_meta))
+                _s2.add(_am)
+                _s2.commit()
+                _st_msg_id = str(_am.id)
+            except Exception as _st_persist_err:
+                logger.warning("persist small talk answer skipped (%s): %s",
+                               type(_st_persist_err).__name__, _st_persist_err)
+            finally:
+                if _s2 is not None:
+                    with suppress(Exception):
+                        _s2.close()
+
+            try:
+                audit("chat", user, "general", 1.0, "small_talk")
+            except Exception:
+                pass
+            yield _sse("done", {
+                "message_id": _st_msg_id or str(uuid.uuid4()),
+                "latency_ms": int((time.time() - t0) * 1000),
+                "small_talk": _st,
+            })
+            return
+
         # Stage feedback (v0.16.4): tell the client what the pipeline is doing so the
         # user sees progress instead of silence during retrieval + rerank.
         _f = _emit_stage("understanding", "Analyzing your question")

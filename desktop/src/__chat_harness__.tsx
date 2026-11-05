@@ -80,6 +80,28 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
 
   if (path === "/api/chat/stream") {
+    let asked = "";
+    try {
+      asked = String(JSON.parse(String(init?.body ?? "{}")).message ?? "");
+    } catch {}
+    if (/^(hi|hello|hey|hi there|good (morning|afternoon|evening))[!. ]*$/i.test(asked.trim())) {
+      const smallTalk = "Hello! I'm your internal IT support assistant. How can I help you today?";
+      const stChunks = [sse([["meta", {
+        confidence: null,
+        decision: "small_talk",
+        hits: [],
+        retrieval: { chunks: 0, cited: 0, top_k: 0, rerank_used: false, acl_scoped: false, role: "admin" },
+        small_talk: "greeting",
+      }]]), sse([["token", { token: smallTalk }]]), sse([["done", { latency_ms: 60, message_id: "srv-st-1" }]])];
+      const stStream = new ReadableStream({
+        async start(controller) {
+          const enc = new TextEncoder();
+          for (const c of stChunks) { controller.enqueue(enc.encode(c)); await new Promise((r) => setTimeout(r, 20)); }
+          controller.close();
+        },
+      });
+      return new Response(stStream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }
     const chunks = [sse([["meta", {
       confidence: 0.88,
       decision: "answer",
@@ -121,5 +143,5 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof window.fetch;
 
 createRoot(document.getElementById("root")!).render(
-  <ChatPage userName="alice" role="admin" onNavigate={() => {}} onLogout={() => {}} />,
+  <ChatPage userName="ith@dmin" role="admin" onNavigate={() => {}} onLogout={() => {}} />,
 );

@@ -58,6 +58,12 @@ data:
   TEMPO_OTLP_URL: ""
   MIMIR_OTLP_URL: ""
 ---
+# WARNING — this Secret carries SAMPLE values, and `kubectl apply -f` on this file
+# overwrites the live Secret with them. Doing that once replaced the real DATABASE_URL,
+# and every new backend pod crash-looped with "password authentication failed for user app"
+# while the old pods kept serving from their already-loaded env. The live secret is the
+# source of truth; re-apply this file with `kubectl apply -f <file> --dry-run=server` and
+# patch only the image, or split the Secret out of this manifest entirely.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -125,7 +131,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: backend
-          image: harbor.drlinuxer.com/rag-chatbot/backend:1.0.1
+          image: harbor.drlinuxer.com/rag-chatbot/backend:1.0.2
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

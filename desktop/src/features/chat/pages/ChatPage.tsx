@@ -13,8 +13,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUpRight,
-  Bot,
   BookOpen,
   CornerDownLeft,
   Database,
@@ -34,7 +32,7 @@ import SystemStatus from "@/features/chat/components/SystemStatusPanel";
 import { runChatStream } from "@/features/chat/hooks/useChatStream";
 import { submitFeedback } from "@/features/chat/api";
 import { getConversationMessages } from "@/features/conversations/api";
-import { createTicketApi, listActiveDomains } from "@/features/tickets/api";
+import { createTicketApi } from "@/features/tickets/api";
 import { currentTime, latestSources, type Message, type Source } from "@/features/chat/model";
 import {
   Dialog,
@@ -81,40 +79,38 @@ const EXAMPLES: { icon: typeof Database; label: string; question: string; hint: 
   },
 ];
 
-function Greeting({ domains, onAsk }: { domains: { key: string; label: string }[]; onAsk: (q: string) => void }) {
+function greetingFor(date = new Date()): string {
+  const h = date.getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+/** "ith@dmin" → "Ith"; "alice.anderson" → "Alice"; falls back to a neutral salutation. */
+function displayName(raw?: string): string {
+  const base = (raw ?? "").split("@")[0].split(/[._-]/)[0].trim();
+  if (!base) return "there";
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+function Greeting({ name, onAsk }: { name: string; onAsk: (q: string) => void }) {
   return (
     <section className="mx-auto w-full max-w-3xl pb-2">
-      <div className="flex items-start gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--primary)]">
-          <Bot className="size-5" aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold leading-tight sm:text-xl">Grounded IT answers, with the source attached.</h1>
-          <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-            Ask about an incident, a procedure or a system. Every answer is retrieved from your
-            knowledge base and cites the pages it used — and can be escalated to Jira in one step.
-          </p>
-        </div>
-      </div>
+      <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-[28px]">
+        {greetingFor()}, {name}
+        <Sparkles className="size-5 text-[var(--primary)]" aria-hidden />
+      </h1>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Ask an IT question. Get a clear answer grounded in your organization&rsquo;s knowledge base.
+      </p>
 
-      {domains.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-1.5">
-          <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Coverage</span>
-          {domains.slice(0, 8).map((d) => (
-            <span key={d.key} className="rounded-md border border-[var(--border)] bg-card px-2 py-0.5 text-2xs text-muted-foreground">
-              {d.label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-6 grid gap-2 sm:grid-cols-2">
+      <div className="mt-7 grid gap-2 sm:grid-cols-2">
         {EXAMPLES.map(({ icon: Icon, label, question, hint }) => (
           <button
             key={label}
             type="button"
             onClick={() => onAsk(question)}
-            className="group flex items-start gap-3 rounded-xl border border-[var(--border)] bg-card p-3 text-left transition hover:border-[var(--primary)]/40 hover:bg-[var(--accent-soft)]/40"
+            className="group flex items-start gap-3 rounded-xl border border-[var(--border)] bg-card p-3.5 text-left transition hover:border-[var(--primary)]/40 hover:bg-[var(--accent-soft)]/40"
           >
             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--muted)] text-muted-foreground transition group-hover:text-[var(--primary)]">
               <Icon className="size-4" aria-hidden />
@@ -124,14 +120,12 @@ function Greeting({ domains, onAsk }: { domains: { key: string; label: string }[
               <span className="mt-1 block text-xs font-medium leading-snug text-foreground">{question}</span>
               <span className="mt-0.5 block text-2xs leading-4 text-muted-foreground">{hint}</span>
             </span>
-            <ArrowUpRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden />
           </button>
         ))}
       </div>
 
-      <p className="mt-4 flex items-center gap-1.5 text-2xs text-muted-foreground">
-        <Sparkles className="size-3" aria-hidden />
-        Example questions — edit before sending, or type your own.
+      <p className="mt-4 text-2xs text-muted-foreground">
+        Example questions — edit before sending, or type your own. Answers cite the pages they used.
       </p>
     </section>
   );
@@ -139,9 +133,8 @@ function Greeting({ domains, onAsk }: { domains: { key: string; label: string }[
 
 /* ---------------------------------------------------------------- page */
 
-export default function Chat({ onNavigate }: Props) {
+export default function Chat({ onNavigate, userName }: Props) {
   const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
-  const [title, setTitle] = useState("New conversation");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streamingId, setStreamingId] = useState<string | null>(null);
@@ -151,7 +144,6 @@ export default function Chat({ onNavigate }: Props) {
   const [feedback, setFeedback] = useState<Record<string, 1 | -1>>({});
   const [toast, setToast] = useState("");
   const [railOpen, setRailOpen] = useState(false);
-  const [domains, setDomains] = useState<{ key: string; label: string }[]>([]);
   const [ticketFor, setTicketFor] = useState<Message | null>(null);
   const [ticketSummary, setTicketSummary] = useState("");
   const [ticketDesc, setTicketDesc] = useState("");
@@ -174,10 +166,6 @@ export default function Chat({ onNavigate }: Props) {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
-  }, []);
-
-  useEffect(() => {
-    listActiveDomains().then((d) => setDomains(Array.isArray(d) ? d : [])).catch(() => setDomains([]));
   }, []);
 
   // Auto-grow the composer up to 8 lines, then it scrolls.
@@ -224,12 +212,9 @@ export default function Chat({ onNavigate }: Props) {
       }));
       setMessages(loaded);
       history.current = loaded.map((m) => ({ role: m.role, content: m.content }));
-      const firstUser = loaded.find((m) => m.role === "user");
-      setTitle(firstUser?.content || "Conversation");
       window.setTimeout(() => scrollToEnd(false), 80);
     } catch {
       notify("Could not load this conversation.");
-      setTitle("Conversation");
     } finally {
       setLoadingConversation(false);
     }
@@ -238,7 +223,6 @@ export default function Chat({ onNavigate }: Props) {
   const startNewChat = useCallback(() => {
     abortRef.current?.abort();
     setSessionId(crypto.randomUUID());
-    setTitle("New conversation");
     setMessages([]);
     setStreamingId(null);
     setStage("");
@@ -293,7 +277,6 @@ export default function Chat({ onNavigate }: Props) {
     setElapsed(0);
     startedAt.current = Date.now();
     setStreamingId(assistantId);
-    if (messages.length === 0) setTitle(question);
 
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -379,7 +362,7 @@ export default function Chat({ onNavigate }: Props) {
       setStage("");
       abortRef.current = null;
     }
-  }, [input, messages.length, notify, sessionId, streamingId]);
+  }, [input, notify, sessionId, streamingId]);
 
   const stop = () => {
     abortRef.current?.abort();
@@ -461,7 +444,7 @@ export default function Chat({ onNavigate }: Props) {
         </p>
       </section>
 
-      {lastAnswer?.retrieval && (
+      {lastAnswer?.retrieval && ((lastAnswer.retrieval.chunks ?? 0) > 0 || (lastAnswer.retrieval.cited ?? 0) > 0) && (
         <section className="rounded-xl border border-[var(--border)] bg-card p-3">
           <h2 className="text-xs font-semibold">Last retrieval</h2>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-2xs">
@@ -490,45 +473,38 @@ export default function Chat({ onNavigate }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      {/* ---------------- header ---------------- */}
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--primary)]" aria-hidden>
-            <Bot className="size-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-2xs text-muted-foreground">Workspace · Support chat</p>
-            <h1 className="truncate text-sm font-semibold leading-tight" title={title}>{title}</h1>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
-          {isStreaming && (
-            <span className="hidden items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-2 py-1 text-2xs font-medium text-[var(--accent-foreground)] sm:inline-flex">
-              <Loader2 className="size-3 animate-spin" aria-hidden /> Answering
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={startNewChat}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-card px-2.5 text-2xs font-semibold transition hover:bg-muted"
-          >
-            <MessageSquarePlus className="size-3.5" aria-hidden /> New chat
-          </button>
-          <button
-            type="button"
-            onClick={() => setRailOpen(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border)] bg-card px-2.5 text-2xs font-semibold transition hover:bg-muted xl:hidden"
-          >
-            <BookOpen className="size-3.5" aria-hidden /> Details
-          </button>
-        </div>
-      </header>
-
       <div className="flex min-h-0 flex-1">
         {/* ---------------- transcript + composer ---------------- */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6" aria-live="polite">
+          <div className="relative min-h-0 flex-1">
+            {(messages.length > 0 || isStreaming) && (
+              <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-1.5 xl:right-4">
+                {isStreaming && (
+                  <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-card px-2 py-1 text-2xs font-medium text-muted-foreground shadow-sm">
+                    <Loader2 className="size-3 animate-spin" aria-hidden /> Answering
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={startNewChat}
+                  title="New chat"
+                  aria-label="New chat"
+                  className="pointer-events-auto grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card text-muted-foreground shadow-sm transition hover:text-foreground"
+                >
+                  <MessageSquarePlus className="size-4" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRailOpen(true)}
+                  title="Conversation details"
+                  aria-label="Conversation details"
+                  className="pointer-events-auto grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card text-muted-foreground shadow-sm transition hover:text-foreground xl:hidden"
+                >
+                  <BookOpen className="size-4" aria-hidden />
+                </button>
+              </div>
+            )}
+          <div ref={scrollRef} className="h-full min-h-0 overflow-y-auto px-4 sm:px-6" aria-live="polite">
             <div className="mx-auto w-full max-w-3xl space-y-5 py-6 sm:py-8">
               {loadingConversation && (
                 <div className="space-y-3">
@@ -539,7 +515,7 @@ export default function Chat({ onNavigate }: Props) {
               )}
 
               {!loadingConversation && messages.length === 0 && (
-                <Greeting domains={domains} onAsk={(q) => void send(q)} />
+                <Greeting name={displayName(userName)} onAsk={(q) => void send(q)} />
               )}
 
               {!loadingConversation &&
@@ -568,6 +544,7 @@ export default function Chat({ onNavigate }: Props) {
 
               <div className="h-2" />
             </div>
+          </div>
           </div>
 
           {/* ---------------- composer ---------------- */}

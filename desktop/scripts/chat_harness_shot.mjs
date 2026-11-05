@@ -68,18 +68,23 @@ const answerText = () =>
   const greet = await page.evaluate(() => {
     const cards = [...document.querySelectorAll("section button")];
     return {
-      heading: document.querySelector("section h1")?.textContent?.trim() ?? "",
+      heading: document.querySelector("section h1")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      subtitle: document.querySelector("section h1 + p")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
       cards: cards.filter((b) => b.type === "button" && b.closest(".grid")).length,
-      chips: [...document.querySelectorAll("span")].map((s) => s.textContent?.trim()).filter((t) => ["Database", "Network", "Identity", "Kubernetes"].includes(t)).length,
-      headerTitle: document.querySelector("header h1")?.textContent?.trim() ?? "",
-      hasMockTitle: /Database support/.test(document.body.innerText),
+      hasHeaderBar: !!document.querySelector("header"),
+      hasWorkspaceLine: /Workspace · Support chat/.test(document.body.innerText),
+      hasNewChatWord: [...document.querySelectorAll("button")].some((b) => /New chat$/.test((b.textContent || "").trim())),
+      toastFree: !document.querySelector('[role="status"]'),
     };
   });
-  if (!/Grounded IT answers/.test(greet.heading)) fail(`greeting heading missing (${greet.heading})`);
+  if (!/^Good (morning|afternoon|evening), Ith/.test(greet.heading)) fail(`greeting heading is "${greet.heading}"`);
+  if (!/Ask an IT question\. Get a clear answer grounded in your organization’s knowledge base\./.test(greet.subtitle)) {
+    fail(`greeting subtitle is "${greet.subtitle}"`);
+  }
   if (greet.cards !== 4) fail(`expected 4 example cards, saw ${greet.cards}`);
-  if (greet.chips < 4) fail(`coverage chips from /api/domains missing (${greet.chips})`);
-  if (greet.headerTitle !== "New conversation") fail(`header title should be neutral, got "${greet.headerTitle}"`);
-  if (greet.hasMockTitle) fail("the old mock conversation title is still rendered");
+  if (greet.hasHeaderBar) fail("the page still renders a header bar");
+  if (greet.hasWorkspaceLine) fail("the old Workspace · Support chat line is still rendered");
+  if (greet.hasNewChatWord) fail("a text New chat button is still in the top bar position");
 
   // Ask by clicking an example card.
   await page.evaluate(() => {
@@ -250,7 +255,7 @@ for (const [w, h, name] of [[390, 844, "390"], [768, 1024, "768"]]) {
     const doc = document.documentElement;
     const form = document.querySelector("#chat-input")?.closest("form");
     const composer = form ? form.parentElement.getBoundingClientRect() : null;
-    const headerBtn = [...document.querySelectorAll("button")].find((b) => /Details/.test(b.textContent || ""));
+    const headerBtn = document.querySelector('button[aria-label="Conversation details"]');
     return {
       overflow: doc.scrollWidth - doc.clientWidth,
       asideVisible: !!document.querySelector("aside") && getComputedStyle(document.querySelector("aside")).display !== "none",
@@ -262,13 +267,13 @@ for (const [w, h, name] of [[390, 844, "390"], [768, 1024, "768"]]) {
   });
   if (m.overflow > 1) fail(`${name}px: horizontal overflow ${m.overflow}px`);
   if (m.asideVisible) fail(`${name}px: the evidence rail should be a sheet, not a column`);
-  if (!m.sourcesBtn) fail(`${name}px: the Details button is not reachable`);
+  if (!m.sourcesBtn) fail(`${name}px: the details control is not reachable`);
   if (m.composerBottom < 0 || m.composerBottom > 2) fail(`${name}px: the composer is not pinned to the bottom (${m.composerBottom}px gap)`);
   await page.screenshot({ path: `${OUT}/chat_${name}.png` });
 
   if (name === "390") {
     await page.evaluate(() => {
-      const b = [...document.querySelectorAll("button")].find((x) => /Details/.test(x.textContent || ""));
+      const b = document.querySelector('button[aria-label="Conversation details"]');
       b?.click();
     });
     await sleep(300);
@@ -281,6 +286,32 @@ for (const [w, h, name] of [[390, 844, "390"], [768, 1024, "768"]]) {
     await page.screenshot({ path: `${OUT}/chat_390_sheet.png` });
   }
   report[name] = m;
+  await page.close();
+}
+
+/* ---- 5. small talk: a greeting must not look like a KB answer -------------------- */
+{
+  const { page } = await open("?theme=light");
+  await page.type("#chat-input", "Hi");
+  await page.keyboard.press("Enter");
+  await sleep(900);
+  const st = await page.evaluate(() => {
+    const last = [...document.querySelectorAll('[data-role="assistant"]')].pop();
+    const text = last?.textContent ?? "";
+    return {
+      text,
+      hasSources: /Sources for this answer/i.test(text),
+      hasConfidence: /answer confidence|confidence/i.test(text),
+      noSourceList: !/PostgreSQL — connection refused/.test(document.body.innerText),
+    };
+  });
+  if (!/Hello! I'm your internal IT support assistant\. How can I help you today\?/.test(st.text)) {
+    fail(`small talk reply is wrong: "${st.text.slice(0, 120)}"`);
+  }
+  if (st.hasSources) fail("the greeting answer still lists KB sources");
+  if (st.hasConfidence) fail("the greeting answer still shows a confidence score");
+  if (!st.noSourceList) fail("unrelated KB titles leaked into the greeting conversation");
+  await page.screenshot({ path: `${OUT}/chat_smalltalk.png` });
   await page.close();
 }
 
