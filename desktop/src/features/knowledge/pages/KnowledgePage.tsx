@@ -42,6 +42,24 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
+ * Numbers for a pager: first, last, current ±1, and a gap marker where pages are skipped.
+ * Returns e.g. [1, "gap", 4, 5, 6, "gap", 20] — never a wall of 20 buttons.
+ */
+function pageWindow(current: number, total: number): (number | "gap")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const keep = new Set<number>([1, total, current, current - 1, current + 1]);
+  if (current <= 3) [2, 3, 4].forEach((n) => keep.add(n));
+  if (current >= total - 2) [total - 1, total - 2, total - 3].forEach((n) => keep.add(n));
+  const nums = [...keep].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  const out: (number | "gap")[] = [];
+  nums.forEach((n, i) => {
+    if (i > 0 && n - (nums[i - 1] as number) > 1) out.push("gap");
+    out.push(n);
+  });
+  return out;
+}
+
+/**
  * Knowledge — the KB article browser, restyled to the workspace mockup.
  *
  * Layout follows the mockup: a Workspace / Knowledge breadcrumb under an ADMINISTRATION
@@ -370,6 +388,14 @@ export default function Knowledge({ role, onToast }: Props) {
   const [listError, setListError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
+  // What the SERVER reported for the last list call. The footer range is derived from
+  // this, not from page × pageSize, so a short last page can never print a range that
+  // runs past the total.
+  const [listMeta, setListMeta] = useState<{ offset: number; returned: number; total: number } | null>(null);
+  // A relevance search is a different mode from paging a sorted list: its hits are not a
+  // slice of the KB, so the pager is replaced by a result count and a way back.
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchTotal, setSearchTotal] = useState(0);
 
   // Row → details dialog. Opens the real fields the list row already carries.
   const [detail, setDetail] = useState<ListItem | null>(null);
@@ -378,7 +404,7 @@ export default function Knowledge({ role, onToast }: Props) {
   const chipsRef = useRef<HTMLDivElement>(null);
 
   /** True when anything is narrowing the list — drives the filter summary row. */
-  const hasFilters = chip !== "all" || providerFilter !== "all" || query.trim().length > 0;
+  const hasFilters = chip !== "all" || providerFilter !== "all" || query.trim().length > 0 || searchMode;
 
   async function loadBrowse() {
     const [domainResponse, syncResponse] = await Promise.all([
@@ -390,53 +416,99 @@ export default function Knowledge({ role, onToast }: Props) {
     if (syncResponse) setStatus(syncResponse);
   }
 
-  /** Build the query string for /api/articles-list from the current controls. */
-  function buildQuery(domain: string, q: string, offset: number) {
+  /** Query string for /api/articles-list. Every narrowing control is explicit here so a
+   *  handler can pass the value it is ABOUT to set — reading state in the same tick would
+   *  send the previous sort/filter/page-size to the server (the pager bug this fixes). */
+  function buildQuery(o: {
+    domain: string; q: string; offset: number; limit: number;
+    sort: "last_synced" | "title" | "domain"; order: "asc" | "desc"; provider: string;
+  }) {
     const parts = new URLSearchParams();
-    if (domain !== "all") parts.set("domain", domain);
-    if (q.trim()) { parts.set("q", q.trim()); parts.set("q_field", qField); }
-    if (providerFilter !== "all") parts.set("provider", providerFilter);
-    parts.set("sort", sortKey);
-    parts.set("order", sortDir);
-    parts.set("limit", String(pageSize));
-    parts.set("offset", String(offset));
+    if (o.domain !== "all") parts.set("domain", o.domain);
+    if (o.q.trim()) { parts.set("q", o.q.trim()); parts.set("q_field", qField); }
+    if (o.provider !== "all") parts.set("provider", o.provider);
+    parts.set("sort", o.sort);
+    parts.set("order", o.order);
+    parts.set("limit", String(o.limit));
+    parts.set("offset", String(o.offset));
     return parts.toString();
   }
 
-  async function loadList(domain: string, q = "", offset = 0) {
+  /**
+   * Fetch one page. `override` lets a click handler apply the value it just set, and
+   * `offset` is explicit so the pager never depends on a stale `page`.
+   */
+  async function fetchList(
+    offset = 0,
+    override: Partial<{
+      domain: string; q: string; limit: number; provider: string;
+      sort: "last_synced" | "title" | "domain"; order: "asc" | "desc";
+    }> = {},
+  ) {
+    const domain = override.domain ?? chip;
+    const q = override.q ?? query;
+    const limit = override.limit ?? pageSize;
+    const provider = override.provider ?? providerFilter;
+    const sort = override.sort ?? sortKey;
+    const order = override.order ?? sortDir;
+
     setListing(true);
     setListError(null);
     try {
-      // Keyword search still goes through the vector/hybrid endpoint when the user
-      // asks for relevance; the plain list endpoint handles filters + paging.
-      const res = await listArticles(buildQuery(domain, q, offset));
-      setItems(res.articles ?? []);
-      if (typeof res.total === "number") setKbTotal(res.total);
-      setPage(Math.floor(offset / pageSize) + 1);
+      const res = await listArticles(buildQuery({ domain, q, offset, limit, sort, order, provider }));
+      const articles: ListItem[] = res.articles ?? [];
+      const reportedTotal = typeof res.total === "number" ? res.total : articles.length;
+      setItems(articles);
+      setKbTotal(reportedTotal);
+      setListMeta({ offset, returned: articles.length, total: reportedTotal });
+      setPage(Math.floor(offset / limit) + 1);
+
+      // A filter or a delete can leave the current offset past the end. Jump to the last
+      // real page instead of showing an empty table under a "3 of 3" footer.
+      if (reportedTotal > 0 && offset >= reportedTotal) {
+        const lastOffset = Math.max(0, Math.floor((reportedTotal - 1) / limit) * limit);
+        if (lastOffset !== offset) await fetchList(lastOffset, override);
+        return;
+      }
     } catch (err) {
       // Kept the toast (it is the app-wide convention for transient failures) AND added
       // the inline state, because a toast disappears and leaves an empty table behind —
       // which reads as "you have no articles" rather than "the request failed".
       setListError(err instanceof Error ? err.message : String(err));
       setItems([]);
+      setListMeta(null);
       onToast("Failed to load article list", "err");
     } finally {
       setListing(false);
     }
   }
 
+  /** Any control that narrows or reorders the list restarts at page 1. */
+  useEffect(() => {
+    if (searchMode) return;
+    void fetchList(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chip, providerFilter, sortKey, sortDir, pageSize, searchMode]);
+
+  /** Go to a 1-based page number, clamped to the real page count. */
+  function goToPage(next: number) {
+    const pages = Math.max(1, Math.ceil((kbTotal ?? 0) / pageSize));
+    const target = Math.min(Math.max(1, next), pages);
+    if (target === page && !listing) return;
+    void fetchList((target - 1) * pageSize);
+  }
+
+  /** Leave relevance results and return to the paged, filtered library. */
+  function clearSearch() {
+    setQuery("");
+    setSearchMode(false);
+    setSearchTotal(0);
+    void fetchList(0, { q: "" });
+  }
 
   useEffect(() => {
     loadBrowse();
   }, []);
-
-  useEffect(() => {
-    // Reloads when the domain chip changes. `query` is read but deliberately not a
-    // dependency: search is submitted explicitly (handleSearch), so re-running on
-    // every keystroke would fire one request per character.
-    loadList(chip, query);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chip]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -455,6 +527,9 @@ export default function Knowledge({ role, onToast }: Props) {
           last_synced: null,
         }))
       );
+      setSearchMode(true);
+      setSearchTotal(articles.length);
+      setListMeta({ offset: 0, returned: articles.length, total: articles.length });
       setPage(1);
       onToast(`${articles.length} search results found`);
     } catch {
@@ -470,7 +545,8 @@ export default function Knowledge({ role, onToast }: Props) {
       await triggerSync();
       onToast("Knowledge base synced");
       await loadBrowse();
-      await loadList(chip);
+      setSearchMode(false);
+      await fetchList(0);
     } catch {
       onToast("Sync failed", "err");
     } finally {
@@ -478,30 +554,50 @@ export default function Knowledge({ role, onToast }: Props) {
     }
   }
 
+  /** Browse chips, deduped by the LABEL the user sees: an article-domain key and a
+   *  classifier key can resolve to the same display name ("General IT"), which used to
+   *  render twice with different counts. The variant that owns articles wins. */
   const chips = useMemo(() => {
-    const list = ["all"];
-    if (domains) {
-      domains.forEach((d) => {
-        if (!list.includes(d.domain)) list.push(d.domain);
-      });
-    }
-    classifierDomains.forEach((d: ClassifierDomainItem) => {
-      if (!list.includes(d.domain_key)) list.push(d.domain_key);
-    });
+    const labelOf = (k: string) => metaFor(k).label.toLowerCase();
+    const countOf = (k: string) =>
+      domains?.find((d) => d.domain === k)?.pages ?? domainCardMap.get(k)?.pages ?? 0;
+    const list: string[] = ["all"];
+    const seen = new Set<string>(["all domains"]);
+    const add = (key: string) => {
+      const label = labelOf(key);
+      if (!seen.has(label)) {
+        seen.add(label);
+        list.push(key);
+        return;
+      }
+      const existing = list.find((k) => k !== "all" && labelOf(k) === label);
+      if (existing && countOf(existing) === 0 && countOf(key) > 0) {
+        list[list.indexOf(existing)] = key;
+      }
+    };
+    domains?.forEach((d) => add(d.domain));
+    classifierDomains.forEach((d: ClassifierDomainItem) => add(d.domain_key));
     return list;
-  }, [domains, classifierDomains]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [domains, classifierDomains, domainCardMap]);
 
   /** Reset every control that narrows the list, and reload from the top. */
   function resetAll() {
     setProviderFilter("all");
     setChip("all");
     setQuery("");
-    void loadList("all", "", 0);
+    setSearchMode(false);
+    setSearchTotal(0);
+    // The filter effect refetches when these land; an explicit call keeps the reset
+    // instant even when the values were already "all".
+    void fetchList(0, { domain: "all", q: "", provider: "all" });
   }
 
   const lastSync = relDuration(status?.last_run?.at);
-  const total = kbTotal ?? items?.length ?? 0;
+  const total = searchMode ? searchTotal : kbTotal ?? items?.length ?? 0;
   const totalPages = Math.max(1, Math.ceil((kbTotal ?? 0) / pageSize));
+  const rangeStart = listMeta ? listMeta.offset + 1 : 0;
+  const rangeEnd = listMeta ? listMeta.offset + listMeta.returned : 0;
 
   return (
     <PageShell>
@@ -519,14 +615,14 @@ export default function Knowledge({ role, onToast }: Props) {
               className={[
                 "hidden items-center gap-2 rounded-xl border px-3 py-1.5 text-xs sm:flex",
                 status?.healthy
-                  ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
-                  : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
+                  ? "border-[var(--ok)]/35 bg-[var(--ok)]/10"
+                  : "border-[var(--warn)]/35 bg-[var(--warn)]/10",
               ].join(" ")}
             >
               <span
                 className={[
                   "size-2 rounded-full",
-                  status?.healthy ? "bg-emerald-500" : "bg-amber-500",
+                  status?.healthy ? "bg-[var(--ok)]" : "bg-[var(--warn)]",
                 ].join(" ")}
               />
               <span className="font-semibold text-foreground">
@@ -595,10 +691,10 @@ export default function Knowledge({ role, onToast }: Props) {
           const noDesc = (domains ?? []).filter((d) => !d.description || d.description.trim().length < 25);
           if (gen === 0 && noDesc.length === 0) return null;
           return (
-            <div className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-200">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-2xl border border-[var(--warn)]/35 bg-[var(--warn)]/10 px-4 py-3 text-xs text-foreground">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--warn)]" />
               <div className="min-w-0 flex-1">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                <div className="text-2xs font-semibold uppercase tracking-wide text-[var(--warn)]">
                   Needs review
                 </div>
                 <p className="mt-0.5 font-semibold">A little organization goes a long way</p>
@@ -618,10 +714,10 @@ export default function Knowledge({ role, onToast }: Props) {
                   onClick={() => {
                     setChip("general");
                     setPage(1);
-                    void loadList("general", query, 0);
+                    void fetchList(0, { domain: "general" });
                     chipsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
                   }}
-                  className="shrink-0 rounded-lg border border-amber-300/70 bg-white/60 px-3 py-1.5 font-medium transition hover:bg-white/90 dark:border-amber-800 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+                  className="shrink-0 rounded-lg border border-[var(--warn)]/40 bg-card px-3 py-1.5 font-medium transition hover:bg-muted"
                 >
                   Review General IT →
                 </button>
@@ -633,7 +729,7 @@ export default function Knowledge({ role, onToast }: Props) {
         {/* P3c — LLM re-classification audit. Gated on manage_domains, since this changes
             domain assignment (the same capability as the Domains & Routing engine). */}
         {canManageDomains && (
-          <ReclassifyPanel onApplied={() => { void loadList(chip, query); void loadBrowse(); }} />
+          <ReclassifyPanel onApplied={() => { void fetchList((page - 1) * pageSize); void loadBrowse(); }} />
         )}
 
         {/* THE PANEL — heading, toolbar, domain chips, bulk bar, table and footer all live
@@ -670,8 +766,8 @@ export default function Knowledge({ role, onToast }: Props) {
 
           {/* 2. toolbar: search (flex 1) + source + sort + Reset */}
           <div className="flex flex-wrap items-center gap-2.5 border-y border-[var(--border)] px-5 py-4">
-            <form onSubmit={handleSearch} className="flex min-w-[120px] flex-1 items-center gap-2.5">
-              <div className="relative min-w-[120px] flex-1">
+            <form onSubmit={handleSearch} className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={query}
@@ -687,14 +783,14 @@ export default function Knowledge({ role, onToast }: Props) {
                 onChange={(e) => setQField(e.target.value as "all" | "title" | "body")}
                 title="Where to look for the search text"
                 aria-label="Search field"
-                className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+                className="hidden h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)] sm:block"
               >
                 <option value="all">Title + body</option>
                 <option value="title">Title only</option>
                 <option value="body">Body only</option>
               </select>
 
-              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-9 rounded-lg px-4 text-xs">
+              <Button type="submit" size="sm" disabled={busy || !query.trim()} className="h-9 w-full rounded-lg px-4 text-xs sm:w-auto">
                 Search
               </Button>
             </form>
@@ -703,10 +799,10 @@ export default function Knowledge({ role, onToast }: Props) {
                 select communicates the same thing in one row. */}
             <select
               value={providerFilter}
-              onChange={(e) => { setProviderFilter(e.target.value); void loadList(chip, query, 0); }}
+              onChange={(e) => { setProviderFilter(e.target.value); setSearchMode(false); setPage(1); }}
               title="Filter by knowledge source"
               aria-label="Filter by knowledge source"
-              className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)] sm:flex-none"
             >
               <option value="all">All sources</option>
               {allProviders().map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -719,11 +815,12 @@ export default function Knowledge({ role, onToast }: Props) {
                 const [k, d] = e.target.value.split(":") as [typeof sortKey, "asc" | "desc"];
                 setSortKey(k);
                 setSortDir(d);
-                void loadList(chip, query, 0);
+                setSearchMode(false);
+                setPage(1);
               }}
               title="Sort order"
               aria-label="Sort order"
-              className="h-9 shrink-0 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)]"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none transition focus:border-[var(--primary)] sm:flex-none"
             >
               <option value="last_synced:desc">Recently synced</option>
               <option value="last_synced:asc">Oldest synced</option>
@@ -765,8 +862,8 @@ export default function Knowledge({ role, onToast }: Props) {
                   aria-pressed={active}
                   onClick={() => {
                     setChip(domain);
+                    setSearchMode(false);
                     setPage(1);
-                    void loadList(domain, query, 0);
                   }}
                   /* P0#1 — the per-domain colour and wording come from the DB, so a
                      domain whose display_name is wrong is visible at a glance instead
@@ -795,10 +892,10 @@ export default function Knowledge({ role, onToast }: Props) {
           {hasFilters && (
             <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-5 py-2.5 text-xs">
               <span className="text-muted-foreground">Filtered by</span>
-              {query.trim() && <FilterPill label={`"${query.trim()}"`} onClear={() => { setQuery(""); void loadList(chip, "", 0); }} />}
-              {chip !== "all" && <FilterPill label={metaFor(chip).label} onClear={() => { setChip("all"); void loadList("all", query, 0); }} />}
+              {query.trim() && <FilterPill label={`"${query.trim()}"`} onClear={clearSearch} />}
+              {chip !== "all" && <FilterPill label={metaFor(chip).label} onClear={() => setChip("all")} />}
               {providerFilter !== "all" && (
-                <FilterPill label={allProviders().find((p) => p.key === providerFilter)?.label ?? providerFilter} onClear={() => { setProviderFilter("all"); void loadList(chip, query, 0); }} />
+                <FilterPill label={allProviders().find((p) => p.key === providerFilter)?.label ?? providerFilter} onClear={() => setProviderFilter("all")} />
               )}
               <button
                 type="button"
@@ -812,16 +909,16 @@ export default function Knowledge({ role, onToast }: Props) {
 
           {/* 5. the table — scrolls horizontally on narrow screens. */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-xs">
+            <table className="w-full min-w-0 text-xs md:min-w-[720px]">
               {/* Sticky: the list is long and paging scrolls the header out of view, so the
                   column names — and the sort control inside them — have to stay reachable. */}
               <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-muted/60 backdrop-blur-sm">
                 <tr className="text-left text-2xs uppercase tracking-wide text-muted-foreground">
                   {([
                     { k: "title", l: "Article title", cls: "px-5 py-3.5 font-semibold" },
-                    { k: null, l: "Source", cls: "px-4 py-3.5 font-semibold" },
+                    { k: null, l: "Source", cls: "hidden px-4 py-3.5 font-semibold md:table-cell" },
                     { k: "domain", l: "Domain", cls: "px-4 py-3.5 font-semibold" },
-                    { k: "last_synced", l: "Last sync", cls: "px-4 py-3.5 font-semibold" },
+                    { k: "last_synced", l: "Last sync", cls: "hidden px-4 py-3.5 font-semibold lg:table-cell" },
                   ] as const).map((h) => (
                     <th key={h.l} className={h.cls}>
                       {h.k ? (
@@ -833,7 +930,8 @@ export default function Knowledge({ role, onToast }: Props) {
                             const nextDir = sortKey === h.k && sortDir === "desc" ? "asc" : "desc";
                             setSortKey(h.k as typeof sortKey);
                             setSortDir(nextDir);
-                            void loadList(chip, query, 0);
+                            setSearchMode(false);
+                            setPage(1);
                           }}
                           className="inline-flex items-center gap-1 transition hover:text-foreground"
                           aria-label={`Sort by ${h.l}`}
@@ -867,7 +965,7 @@ export default function Knowledge({ role, onToast }: Props) {
                         compact
                         title="Could not load the knowledge base"
                         detail={listError}
-                        onRetry={() => void loadList(chip, query, (page - 1) * pageSize)}
+                        onRetry={() => void fetchList((page - 1) * pageSize)}
                       />
                     </td>
                   </tr>
@@ -889,7 +987,7 @@ export default function Knowledge({ role, onToast }: Props) {
                           title="No articles match this filter"
                           description={kbTotal && kbTotal > 0 ? `${kbTotal} article${kbTotal === 1 ? "" : "s"} in the knowledge base, but none match the current filters.` : "No articles match the current filters."}
                           actionLabel="Clear filters"
-                          onAction={() => { setChip("all"); setProviderFilter("all"); setQuery(""); void loadList("all", "", 0); }}
+                          onAction={() => { resetAll(); }}
                         />
                       )}
                     </td>
@@ -920,7 +1018,7 @@ export default function Knowledge({ role, onToast }: Props) {
                             </span>
                           </button>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="hidden px-4 py-3 md:table-cell">
                           {/* The badge IS the link to the source. Previously a separate
                               "Actions" column held a lone external-link icon pointing at
                               the same URL. */}
@@ -933,7 +1031,7 @@ export default function Knowledge({ role, onToast }: Props) {
                               className="inline-flex items-center gap-1 rounded-md transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                             >
                               <Badge variant="outline" className={`text-2xs ${providerOf(article).className}`}>
-                                {providerOf(article).label}
+                                {providerOf(article).key === "unknown" ? "Internal" : providerOf(article).label}
                               </Badge>
                               <ExternalLink className="size-2.5 text-muted-foreground" />
                             </a>
@@ -949,7 +1047,7 @@ export default function Knowledge({ role, onToast }: Props) {
                           </Badge>
                         </td>
                         <td
-                          className="px-4 py-3 text-xs text-muted-foreground"
+                          className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell"
                           title={article.last_synced ? new Date(article.last_synced).toLocaleString() : "never synced"}
                         >
                           {relTime(article.last_synced)}
@@ -962,44 +1060,93 @@ export default function Knowledge({ role, onToast }: Props) {
             </table>
           </div>
 
-          {/* 6. footer — range on the left, rows-per-page + pager on the right. */}
-          {items && kbTotal != null && kbTotal > 0 && (
+          {/* 6. footer — the range comes from what the SERVER returned, and the pager
+              offers real page numbers. In relevance-search mode the hits are not a slice
+              of the KB, so paging would be a lie: it shows the match count instead. */}
+          {searchMode ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3.5">
-              <p className="text-xs text-muted-foreground">
-                Showing {(page - 1) * pageSize + 1}–{Math.min((page - 1) * pageSize + items.length, kbTotal)} of {kbTotal}
+              <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                {searchTotal === 0 ? (
+                  <>No matches{query.trim() ? <> for “{query.trim()}”</> : null}</>
+                ) : (
+                  <>
+                    Showing <span className="font-semibold text-foreground">1–{items?.length ?? 0}</span> of{" "}
+                    <span className="font-semibold text-foreground">{searchTotal}</span> best match{searchTotal === 1 ? "" : "es"}
+                    {query.trim() ? <> for “{query.trim()}”</> : null}
+                  </>
+                )}
               </p>
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-card px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
+              >
+                <X className="size-3.5" /> Clear search
+              </button>
+            </div>
+          ) : kbTotal != null && kbTotal > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-3.5">
+              <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                Showing <span className="font-semibold text-foreground">{rangeStart}–{rangeEnd}</span> of{" "}
+                <span className="font-semibold text-foreground">{kbTotal.toLocaleString()}</span>
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={pageSize}
-                  onChange={(e) => { setPageSize(Number(e.target.value)); void loadList(chip, query, 0); }}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); setSearchMode(false); }}
                   className="h-8 rounded-lg border border-[var(--border)] bg-background px-2 text-xs outline-none focus:border-[var(--primary)]"
                   title="Rows per page" aria-label="Rows per page">
                   {[10, 25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} / page</option>)}
                 </select>
-                <div className="flex items-center gap-1.5">
+
+                <nav aria-label="Pagination" className="flex items-center gap-1">
                   <button
                     type="button"
                     aria-label="Previous page"
                     disabled={page <= 1 || listing}
-                    onClick={() => { void loadList(chip, query, (page - 2) * pageSize); }}
-                    className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
+                    onClick={() => goToPage(page - 1)}
+                    className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground/40"
                   >
                     <ChevronLeft className="size-3.5" />
                   </button>
-                  <span className="px-1 text-xs text-muted-foreground">{page} / {totalPages}</span>
+
+                  {pageWindow(page, totalPages).map((n, i) =>
+                    n === "gap" ? (
+                      <span key={`gap-${i}`} aria-hidden className="px-1 text-xs text-muted-foreground">…</span>
+                    ) : (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-label={`Page ${n}`}
+                        aria-current={n === page ? "page" : undefined}
+                        disabled={listing}
+                        onClick={() => goToPage(n)}
+                        className={[
+                          "grid size-8 place-items-center rounded-lg border text-xs font-medium transition disabled:opacity-40",
+                          n === page
+                            ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                            : "border-[var(--border)] bg-card hover:bg-muted",
+                        ].join(" ")}
+                      >
+                        {n}
+                      </button>
+                    ),
+                  )}
+
                   <button
                     type="button"
                     aria-label="Next page"
                     disabled={page >= totalPages || listing}
-                    onClick={() => { void loadList(chip, query, page * pageSize); }}
-                    className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:opacity-40"
+                    onClick={() => goToPage(page + 1)}
+                    className="grid size-8 place-items-center rounded-lg border border-[var(--border)] bg-card transition hover:bg-muted disabled:cursor-not-allowed disabled:border-transparent disabled:bg-muted disabled:text-muted-foreground/40"
                   >
                     <ChevronRight className="size-3.5" />
                   </button>
-                </div>
+                </nav>
               </div>
             </div>
-          )}
+          ) : null}
         </section>
 
         {/* Where the numbers above come from. Stated plainly so a count is never read as a

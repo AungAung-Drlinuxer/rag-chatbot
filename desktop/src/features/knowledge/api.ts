@@ -56,7 +56,19 @@ export async function getSyncStatus() {
 
 export async function listArticles(queryString: string) {
   const r = await apiFetch(`${BASE}/api/articles-list?${queryString}`, { headers: authHeaders() });
-  return r.json(); // { articles }
+  // A 5xx from the list endpoint must THROW, not resolve to a body the page can mistake
+  // for "0 articles" — an outage is not an empty knowledge base.
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try {
+      const body = await r.json();
+      detail = body?.detail ?? body?.error ?? detail;
+    } catch {
+      /* body was not JSON — keep the status line */
+    }
+    throw new Error(String(detail));
+  }
+  return r.json(); // { articles, total, returned, offset, limit }
 }
 
 // --- v1.6.47 — bulk operations for the Manage table -------------------------
