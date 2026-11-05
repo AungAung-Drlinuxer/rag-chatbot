@@ -1,29 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Plus,
-  Tag,
-  Trash2,
-  Edit2,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Upload,
-  Database,
-  Network,
-  Lock,
-  Monitor,
-  Cloud,
-  Server,
-  BookOpen,
-  Headphones,
-  Boxes,
-  Mail,
-  Shield,
-  Layers,
-  Wrench,
-  Cpu,
-  Key,
-} from "lucide-react";
+import { AlertCircle, BookOpen, Plus, Upload } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +11,8 @@ import {
   deleteClassifierDomain,
   renameClassifierDomain,
 } from "@/features/domains/api";
+import { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/domainMeta";
+import { DomainRoutingItem } from "@/features/domains/components/DomainRoutingItem";
 
 interface Props {
   domains: ClassifierDomainItem[];
@@ -46,85 +24,8 @@ interface Props {
   openCreateSignal?: number;
 }
 
-export const ICON_OPTIONS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
-  Database: { label: "Database", icon: Database },
-  Network: { label: "Network", icon: Network },
-  Lock: { label: "Security / Lock", icon: Lock },
-  Monitor: { label: "Server / Monitor", icon: Monitor },
-  Cloud: { label: "Cloud / K8s", icon: Cloud },
-  Server: { label: "Storage / Server", icon: Server },
-  Headphones: { label: "Help Desk", icon: Headphones },
-  Boxes: { label: "Inventory / Assets", icon: Boxes },
-  Mail: { label: "Email", icon: Mail },
-  Shield: { label: "Shield / Security", icon: Shield },
-  Layers: { label: "Layers / Apps", icon: Layers },
-  Wrench: { label: "Wrench / Maintenance", icon: Wrench },
-  Cpu: { label: "CPU / Hardware", icon: Cpu },
-  Key: { label: "Key / Identity", icon: Key },
-  BookOpen: { label: "General / Book", icon: BookOpen },
-};
-
-export const COLOR_OPTIONS: Record<
-  string,
-  { label: string; textClass: string; bgClass: string; borderClass: string; swatchBg: string }
-> = {
-  blue: {
-    label: "Blue",
-    textClass: "text-blue-600 dark:text-blue-400",
-    bgClass: "bg-blue-50 dark:bg-blue-950/40",
-    borderClass: "border-blue-200 dark:border-blue-900/50",
-    swatchBg: "bg-blue-500",
-  },
-  emerald: {
-    label: "Emerald",
-    textClass: "text-emerald-600 dark:text-emerald-400",
-    bgClass: "bg-emerald-50 dark:bg-emerald-950/40",
-    borderClass: "border-emerald-200 dark:border-emerald-900/50",
-    swatchBg: "bg-emerald-500",
-  },
-  amber: {
-    label: "Amber",
-    textClass: "text-amber-600 dark:text-amber-400",
-    bgClass: "bg-amber-50 dark:bg-amber-950/40",
-    borderClass: "border-amber-200 dark:border-amber-900/50",
-    swatchBg: "bg-amber-500",
-  },
-  violet: {
-    label: "Violet",
-    textClass: "text-violet-600 dark:text-violet-400",
-    bgClass: "bg-violet-50 dark:bg-violet-950/40",
-    borderClass: "border-violet-200 dark:border-violet-900/50",
-    swatchBg: "bg-violet-500",
-  },
-  sky: {
-    label: "Sky",
-    textClass: "text-sky-600 dark:text-sky-400",
-    bgClass: "bg-sky-50 dark:bg-sky-950/40",
-    borderClass: "border-sky-200 dark:border-sky-900/50",
-    swatchBg: "bg-sky-500",
-  },
-  orange: {
-    label: "Orange",
-    textClass: "text-orange-600 dark:text-orange-400",
-    bgClass: "bg-orange-50 dark:bg-orange-950/40",
-    borderClass: "border-orange-200 dark:border-orange-900/50",
-    swatchBg: "bg-orange-500",
-  },
-  rose: {
-    label: "Rose",
-    textClass: "text-rose-600 dark:text-rose-400",
-    bgClass: "bg-rose-50 dark:bg-rose-950/40",
-    borderClass: "border-rose-200 dark:border-rose-900/50",
-    swatchBg: "bg-rose-500",
-  },
-  slate: {
-    label: "Slate",
-    textClass: "text-slate-600 dark:text-slate-400",
-    bgClass: "bg-slate-100 dark:bg-slate-900",
-    borderClass: "border-slate-200 dark:border-slate-800",
-    swatchBg: "bg-slate-500",
-  },
-};
+// Presentation metadata lives in one place; re-exported for older imports.
+export { ICON_OPTIONS, COLOR_OPTIONS } from "@/features/domains/components/domainMeta";
 
 export function DomainClassifierManager({
   domains,
@@ -142,16 +43,6 @@ export function DomainClassifierManager({
   const [description, setDescription] = useState("");
   const [jiraProject, setJiraProject] = useState("");
   const [keywordsText, setKeywordsText] = useState("");
-  // v1.5.4 — per-domain keyword chip expansion
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  function toggleExpanded(id: number) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
   const [selectedIcon, setSelectedIcon] = useState("BookOpen");
   const [selectedColor, setSelectedColor] = useState("blue");
   const [customIcon, setCustomIcon] = useState<string | null>(null);
@@ -300,7 +191,7 @@ export function DomainClassifierManager({
       {!hideHeader && (
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Configured Routing Domains</h4>
+          <h4 className="text-sm font-semibold text-foreground">Configured Routing Domains</h4>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Real-time keyword triggers, domain classifier thresholds, custom icons/colors, and Jira escalation project mapping.
           </p>
@@ -323,7 +214,7 @@ export function DomainClassifierManager({
         <DialogContent side="right" className="gap-0 p-0">
         <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
           <div className="border-b border-[var(--border)] px-6 py-4 pr-12">
-            <h5 className="text-sm font-semibold text-slate-900 dark:text-white">
+            <h5 className="text-sm font-semibold text-foreground">
               {isCreating ? "Add New Domain" : `Edit Domain: ${editingDomain?.display_name}`}
             </h5>
             <p className="mt-0.5 text-xs text-muted-foreground">Changes apply immediately to the classification engine & Knowledge Base</p>
@@ -339,7 +230,7 @@ export function DomainClassifierManager({
 
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="flex items-center gap-2 text-xs font-medium text-foreground mb-1">
                 Domain Key (Unique Identifier)
                 {!isCreating && domainKey !== (editingDomain?.domain_key || "") && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 text-2xs font-semibold text-amber-700 dark:text-amber-300">
@@ -352,7 +243,7 @@ export function DomainClassifierManager({
                 value={domainKey}
                 onChange={(e) => setDomainKey(e.target.value.toLowerCase())}
                 placeholder="e.g. help_desk, inventory, hr"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground font-mono"
                 required
                aria-label="Rename — cascades to KB & vectors"/>
               {!isCreating && (
@@ -364,7 +255,7 @@ export function DomainClassifierManager({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-medium text-foreground mb-1">
                 Display Name
               </label>
               <input
@@ -372,7 +263,7 @@ export function DomainClassifierManager({
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="e.g. Help Desk & End-User Support"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
                 required
                aria-label="Display Name"/>
             </div>
@@ -382,14 +273,14 @@ export function DomainClassifierManager({
           <div className="grid grid-cols-1 gap-4 rounded-xl border border-[var(--border)] bg-background p-4">
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-foreground mb-1">
                   Built-in Icon
                 </label>
                 <select
                   disabled={!!customIcon}
                   value={selectedIcon}
                   onChange={(e) => setSelectedIcon(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-slate-900 dark:text-white outline-none disabled:opacity-50" aria-label="Built-in Icon">
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground outline-none disabled:opacity-50" aria-label="Built-in Icon">
                   {Object.entries(ICON_OPTIONS).map(([key, opt]) => (
                     <option key={key} value={key}>
                       {opt.label}
@@ -399,7 +290,7 @@ export function DomainClassifierManager({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-foreground mb-1">
                   Custom Icon Upload (PNG/JPG)
                 </label>
                 <div className="flex items-center gap-2">
@@ -441,7 +332,7 @@ export function DomainClassifierManager({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-medium text-foreground mb-1">
                 Accent Theme Color
               </label>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -471,7 +362,7 @@ export function DomainClassifierManager({
                     <PreviewIconComp className={`size-4 ${previewColorDef.textClass}`} />
                   )}
                 </div>
-                <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                <div className="text-xs font-semibold text-foreground truncate">
                   {displayName || "Domain Title"}
                 </div>
                 <p className="text-2xs text-muted-foreground line-clamp-1 mt-0.5">
@@ -483,7 +374,7 @@ export function DomainClassifierManager({
 
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-medium text-foreground mb-1">
                 Jira Project Key (Escalation target project)
               </label>
               <input
@@ -491,7 +382,7 @@ export function DomainClassifierManager({
                 value={jiraProject}
                 onChange={(e) => setJiraProject(e.target.value)}
                 placeholder="e.g. ITHD (leave blank if unused)"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
                aria-label="Jira project key"/>
               <p className="text-2xs text-muted-foreground mt-1">
                 Target Jira Project code for team escalation when the question cannot be answered from Confluence KB.
@@ -499,7 +390,7 @@ export function DomainClassifierManager({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-medium text-foreground mb-1">
                 Status
               </label>
               <label className="inline-flex items-center gap-2 mt-2 cursor-pointer">
@@ -507,15 +398,15 @@ export function DomainClassifierManager({
                   type="checkbox"
                   checked={isActive}
                   onChange={(e) => setIsActive(e.target.checked)}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                  className="rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)] w-4 h-4"
                 />
-                <span className="text-xs text-slate-700 dark:text-slate-300">Active (Included in classifier routing)</span>
+                <span className="text-xs text-foreground">Active (Included in classifier routing)</span>
               </label>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-medium text-foreground mb-1">
               Description / Scope
             </label>
             <input
@@ -523,12 +414,12 @@ export function DomainClassifierManager({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief summary of issues routed to this domain"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
              aria-label="Description / Scope"/>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-medium text-foreground mb-1">
               Keywords & Phrases (Comma or newline separated)
             </label>
             <textarea
@@ -536,7 +427,7 @@ export function DomainClassifierManager({
               value={keywordsText}
               onChange={(e) => setKeywordsText(e.target.value)}
               placeholder="e.g. payroll, leave request, onboarding, tax deduction"
-              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              className="w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-background text-foreground"
              aria-label="Keywords and phrases"/>
             <p className="text-2xs text-muted-foreground mt-1">
               Any user prompt containing these phrases will score towards this domain.
@@ -549,14 +440,14 @@ export function DomainClassifierManager({
             <button
               type="button"
               onClick={cancelForm}
-              className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 rounded-lg"
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-slate-900 rounded-lg"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
             >
               {loading ? "Saving..." : "Save Domain"}
             </button>
@@ -565,94 +456,17 @@ export function DomainClassifierManager({
         </DialogContent>
       </Dialog>
 
-      {/* Domain Cards List */}
-      <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-        {domains.map((d) => {
-          const IconComp = (d.icon && ICON_OPTIONS[d.icon]?.icon) || BookOpen;
-          const colorDef = (d.color && COLOR_OPTIONS[d.color]) || COLOR_OPTIONS.blue;
-          return (
-            <div key={d.id} className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition">
-              <div className="space-y-2 min-w-0 flex items-start gap-4">
-                <div className={`size-10 rounded-xl grid place-items-center shrink-0 mt-0.5 overflow-hidden ${colorDef.bgClass}`}>
-                  {d.custom_icon ? (
-                    <img src={d.custom_icon} alt={d.display_name} className="size-full object-contain p-1" />
-                  ) : (
-                    <IconComp className={`size-5 ${colorDef.textClass}`} />
-                  )}
-                </div>
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-sm text-slate-900 dark:text-white">{d.display_name}</span>
-                    <span className="px-2 py-0.5 rounded-full text-2xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                      {d.domain_key}
-                    </span>
-                    {d.is_active ? (
-                      <span className="inline-flex items-center gap-1 text-2xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="w-3 h-3" /> Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-2xs text-slate-400">
-                        <XCircle className="w-3 h-3" /> Inactive
-                      </span>
-                    )}
-                    {d.jira_project && (
-                      <span className="px-1.5 py-0.5 rounded text-2xs bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
-                        Jira: {d.jira_project}
-                      </span>
-                    )}
-                  </div>
-
-                  {d.description && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{d.description}</p>
-                  )}
-
-                  {/* Keywords badge preview — v1.5.4 collapsible (first 8, +N more) */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {(expanded.has(d.id) ? d.keywords : d.keywords.slice(0, 8)).map((kw, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
-                      >
-                        <Tag className="w-2.5 h-2.5 opacity-40" />
-                        {kw}
-                      </span>
-                    ))}
-                    {d.keywords.length > 8 && (
-                      <button
-                        type="button"
-                        onClick={() => toggleExpanded(d.id)}
-                        className="px-2 py-0.5 rounded-md text-2xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/50 border border-indigo-200/60 dark:border-indigo-900/60"
-                      >
-                        {expanded.has(d.id) ? "Show less" : `+${d.keywords.length - 8} more`}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {canManage && (
-                <div className="flex items-center gap-2 self-end sm:self-start shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => startEdit(d)}
-                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition"
-                    title="Edit domain"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(d)}
-                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition"
-                    title="Delete domain"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Domain list — one card per domain, order and state owned by the item. */}
+      <div className="divide-y divide-[var(--border)]">
+        {domains.map((d) => (
+          <DomainRoutingItem
+            key={d.id}
+            domain={d}
+            canManage={canManage}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+          />
+        ))}
       </div>
     </div>
   );
