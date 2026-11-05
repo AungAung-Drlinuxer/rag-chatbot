@@ -74,7 +74,7 @@ export function KpiCard({
         )}
       </div>
 
-      <div className="mt-1 flex items-center gap-1.5 text-2xs">
+      {(change != null || description) && <div className="mt-1 flex items-center gap-1.5 text-2xs">
 
         {change != null && (
           positive ? (
@@ -96,11 +96,13 @@ export function KpiCard({
           </span>
         )}
 
-        <span className="text-muted-foreground">
-          {description}
-        </span>
+        {description && (
+          <span className="truncate text-muted-foreground" title={description}>
+            {description}
+          </span>
+        )}
 
-      </div>
+      </div>}
 
     </Card>
   );

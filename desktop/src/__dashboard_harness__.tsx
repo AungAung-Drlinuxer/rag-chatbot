@@ -78,8 +78,15 @@ const gateSeries = (startIso: string, n: number) =>
     cautioned: 3 + (i % 4),
   }));
 
+/** `?state=degraded` flips the live-looking fixtures into a failing dependency and a low
+ *  confidence gate, so the attention strip can be proven to react to real signals.
+ *  `?state=empty` is a fresh install with nothing recorded yet. */
+const STATE = new URLSearchParams(location.search).get("state") ?? "healthy";
+const EMPTY = STATE === "empty";
+const DEGRADED = STATE === "degraded";
+
 const ROUTES: Record<string, (url: URL) => unknown> = {
-  "/api/dashboard/stats": () => ({
+  "/api/dashboard/stats": () => (EMPTY ? null : {
     total_conversations: 412,
     resolved_by_bot: 331,
     escalated_to_tickets: 46,
@@ -96,13 +103,15 @@ const ROUTES: Record<string, (url: URL) => unknown> = {
   }),
   "/api/dashboard/conversations": (url) => {
     const w = resolveWindow(url);
-    return { days: w.n, start: w.start, end: w.end, series: convSeries(w.start, w.n) };
+    return { days: w.n, start: w.start, end: w.end, series: EMPTY ? [] : convSeries(w.start, w.n) };
   },
   "/api/dashboard/gate-trend": (url) => {
     const w = resolveWindow(url);
-    return { days: w.n, start: w.start, end: w.end, series: gateSeries(w.start, w.n) };
+    if (EMPTY) return { days: w.n, start: w.start, end: w.end, series: [] };
+    const series = gateSeries(w.start, w.n).map((d) => (DEGRADED ? { ...d, cautioned: d.answered, answered: Math.round(d.answered * 0.55) } : d));
+    return { days: w.n, start: w.start, end: w.end, series };
   },
-  "/api/dashboard/domains": () => ({
+  "/api/dashboard/domains": () => (EMPTY ? { total: 0, domains: [] } : {
     total: 412,
     domains: [
       { name: "Database", count: 148, percentage: 35.9 },
@@ -112,17 +121,17 @@ const ROUTES: Record<string, (url: URL) => unknown> = {
       { name: "Other", count: 35, percentage: 8.5 },
     ],
   }),
-  "/api/dashboard/recent-conversations": () => ({
+  "/api/dashboard/recent-conversations": () => (EMPTY ? { conversations: [] } : {
     conversations: [
-      { time: "2026-10-30T09:41:00+08:00", user: "aung.lae", message: "How do I fix a PostgreSQL connection timeout?" },
-      { time: "2026-10-30T09:12:00+08:00", user: "kyaw.zin", message: "VPN drops every ten minutes since this morning." },
-      { time: "2026-10-30T08:55:00+08:00", user: "su.myat", message: "Reset my AD password please." },
-      { time: "2026-10-29T17:20:00+08:00", user: "htet.naing", message: "Printer queue is stuck again." },
-      { time: "2026-10-29T16:02:00+08:00", user: "nilar.win", message: "Server disk usage above 85% on app-02." },
-      { time: "2026-10-29T14:38:00+08:00", user: "zaw.min", message: "Kubectl get nodes shows one node NotReady." },
+      { time: "2026-10-30T09:41:00+08:00", user: "aung.lae", question: "How do I fix a PostgreSQL connection timeout?", result: "Escalated" },
+      { time: "2026-10-30T09:12:00+08:00", user: "kyaw.zin", question: "VPN drops every ten minutes since this morning.", result: "Escalated" },
+      { time: "2026-10-30T08:55:00+08:00", user: "su.myat", question: "Reset my AD password please.", result: "Cautioned" },
+      { time: "2026-10-29T17:20:00+08:00", user: "htet.naing", question: "Printer queue is stuck again.", result: "Resolved" },
+      { time: "2026-10-29T16:02:00+08:00", user: "nilar.win", question: "Server disk usage above 85% on app-02.", result: "Resolved" },
+      { time: "2026-10-29T14:38:00+08:00", user: "zaw.min", question: "Kubectl get nodes shows one node NotReady.", result: "Resolved" },
     ],
   }),
-  "/api/dashboard/recent-tickets": () => ({
+  "/api/dashboard/recent-tickets": () => (EMPTY ? { tickets: [] } : {
     tickets: [
       { id: "ITHD-4821", subject: "Outlook cannot connect after password reset", status: "Open", priority: "High" },
       { id: "ITHD-4790", subject: "Laptop will not resume from sleep", status: "Pending", priority: "Medium" },
@@ -132,15 +141,16 @@ const ROUTES: Record<string, (url: URL) => unknown> = {
     ],
   }),
   "/api/dashboard/health": () => ({
-    overall: "Healthy",
-    down: [],
+    overall: DEGRADED ? "Degraded" : "Healthy",
+    down: DEGRADED ? ["Redis"] : [],
     services: [
       { key: "postgres", name: "PostgreSQL", status: "Healthy", detail: null, latency_ms: 4 },
+      { key: "redis", name: "Redis", status: DEGRADED ? "Down" : "Healthy", detail: DEGRADED ? "connection refused" : null, latency_ms: DEGRADED ? null : 2 },
       { key: "rerank", name: "Rerank service", status: "Healthy", detail: null, latency_ms: 38 },
       { key: "llm", name: "LLM gateway", status: "Healthy", detail: null, latency_ms: 210 },
       { key: "neo4j", name: "Neo4j", status: "Healthy", detail: null, latency_ms: 9 },
     ],
-    security: { guardrail_events_7d: 12 },
+    security: { guardrail_events_7d: DEGRADED ? 27 : 12 },
   }),
 };
 
