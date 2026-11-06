@@ -1,6 +1,6 @@
 {
   "name": "it-help-chatbot-desktop",
-  "version": "0.21.98",
+  "version": "dev-1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
