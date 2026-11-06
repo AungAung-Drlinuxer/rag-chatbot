@@ -14,11 +14,9 @@ import {
   Users,
   X,
   Sparkles,
-  ChevronRight,
   RefreshCw,
-  CloudDownload,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState, ErrorState, PageShell, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
@@ -36,7 +34,6 @@ import {
   listTickets,
   listTicketDestinations,
   syncJiraTickets,
-  syncOpenProjectTickets,
   listActiveDomains,
   createTicketApi,
   ticketComments,
@@ -135,7 +132,7 @@ export default function Tickets({
     due_date: "",
     destination: "jira",
   });
-  // v1.6.4 — where the ticket is created: Jira / OpenProject (local-only removed)
+  // Where the ticket is created: Jira (the only connected tracker).
   const [destinations, setDestinations] = useState<
     { key: string; label: string; configured: boolean }[]
   >([{ key: "jira", label: "Jira", configured: true }]);
@@ -492,115 +489,34 @@ export default function Tickets({
 
     setCreateOpen(false);
 
-    onToast(`Ticket created in ${newTicket.destination === "openproject" ? "OpenProject" : "Jira"}`);
+    onToast("Ticket created in Jira");
   }
 
-/* v1.6.20 — consolidated Sync dropdown (professional, low-noise header):
-   one trigger button; a small popover lists Jira + OpenProject targets with
-   their last-run state. Closes on outside click / Esc / selection. */
-function SyncMenu({
-  busy,
-  onSync,
-}: {
-  busy: "" | "jira" | "openproject";
-  onSync: (src: "jira" | "openproject") => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const items: { key: "jira" | "openproject"; label: string; desc: string }[] = [
-    { key: "jira", label: "Jira", desc: "Pull issues & JSM requests" },
-    { key: "openproject", label: "OpenProject", desc: "Pull work packages" },
-  ];
-
+/* Jira is the only connected tracker, so the two-item Sync dropdown became one button:
+   a menu with a single entry is a click tax, not a choice. */
+function JiraSyncButton({ busy, onSync }: { busy: boolean; onSync: () => void }) {
   return (
-    <div ref={ref} className="relative">
-      <Button
-        size="sm"
-        variant="outline"
-        className="rounded-lg"
-        disabled={busy !== ""}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        title="Import latest tickets from connected trackers"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <RefreshCw className={`mr-2 size-4 ${busy !== "" ? "animate-spin" : ""}`} />
-        {busy === "jira"
-          ? "Syncing Jira…"
-          : busy === "openproject"
-            ? "Syncing OpenProject…"
-            : "Sync"}
-        <ChevronDown className={`ml-1.5 size-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-      </Button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-[var(--border)] bg-card shadow-lg"
-        >
-          <div className="border-b border-[var(--border)] px-4 py-2.5">
-            <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Sync from external tracker
-            </p>
-          </div>
-          {items.map((it) => (
-            <button
-              key={it.key}
-              role="menuitem"
-              disabled={busy !== ""}
-              onClick={() => {
-                setOpen(false);
-                onSync(it.key);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/60 disabled:opacity-50"
-            >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)]">
-                <CloudDownload className="size-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs font-semibold text-foreground">
-                  {it.label}
-                </span>
-                <span className="block text-2xs text-muted-foreground">{it.desc}</span>
-              </span>
-              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Button
+      size="sm"
+      variant="outline"
+      className="rounded-lg"
+      disabled={busy}
+      onClick={onSync}
+      title="Import the latest issues from Jira"
+    >
+      <RefreshCw className={`mr-2 size-4 ${busy ? "animate-spin" : ""}`} />
+      {busy ? "Syncing Jira…" : "Sync Jira"}
+    </Button>
   );
 }
 
-// v1.6.9/v1.6.20 — sync state + handler (used by SyncMenu in the header)
-  const [syncBusy, setSyncBusy] = useState<"" | "jira" | "openproject">("");
-  async function syncTickets(source: "jira" | "openproject") {
-    setSyncBusy(source);
+  const [syncBusy, setSyncBusy] = useState(false);
+  async function syncTickets() {
+    setSyncBusy(true);
     try {
-      const res = source === "jira"
-        ? await syncJiraTickets()
-        : await syncOpenProjectTickets();
+      const res = await syncJiraTickets();
       if (res.total === 0) {
-        onToast(source === "jira"
-          ? "No tickets returned — check Jira in Settings → Integrations"
-          : "No work packages returned — check OpenProject in Settings → Integrations", "err");
+        onToast("No tickets returned — check Jira in Settings → Integrations", "err");
         return;
       }
       onToast(`Synced ${res.total} tickets (${res.created} new, ${res.updated} updated)`);
@@ -610,7 +526,7 @@ function SyncMenu({
     } catch (e) {
       onToast(e instanceof Error ? e.message : "Sync failed", "err");
     } finally {
-      setSyncBusy("");
+      setSyncBusy(false);
     }
   }
 
@@ -624,10 +540,7 @@ function SyncMenu({
           <div className="flex items-center gap-2">
             {/* v1.6.20 — consolidated sync menu: one button instead of two separate ones */}
             {canManage && (
-              <SyncMenu
-                busy={syncBusy}
-                onSync={syncTickets}
-              />
+              <JiraSyncButton busy={syncBusy} onSync={syncTickets} />
             )}
             <Button size="sm" className="rounded-lg" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-1.5 size-4" />
@@ -755,14 +668,14 @@ function SyncMenu({
               />
             ) : filteredTickets.length === 0 ? (
               /* Two situations, two messages: an empty result set the user caused by
-                 filtering is fixable with Clear filters; an empty Jira/OpenProject has
+                 filtering is fixable with Clear filters; an empty Jira project has
                  nothing to clear and points at the integration instead. */
               <EmptyState
                 icon={<Filter className="size-5" />}
                 title={tickets.length === 0 ? "No tickets yet" : "No tickets found"}
                 description={
                   tickets.length === 0
-                    ? "Nothing has been synced from Jira or OpenProject yet. Use Sync above, or check the integration in Settings → Integrations."
+                    ? "Nothing has been synced from Jira yet. Use Sync above, or check the integration in Settings → Integrations."
                     : "Try changing your search or filter criteria."
                 }
                 actionLabel={tickets.length === 0 ? undefined : "Clear filters"}
@@ -1185,7 +1098,7 @@ function SyncMenu({
                 aria-label="Ticket description" />
             </div>
 
-            {/* v1.6.4 — ticket destination: Jira or OpenProject (no local-only) */}
+            {/* Ticket destination: Jira (the only connected tracker) */}
             <div>
               <label className="mb-2 block text-xs font-medium">
                 Create in

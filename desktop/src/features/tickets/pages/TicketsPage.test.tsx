@@ -23,7 +23,6 @@ vi.mock("@/features/tickets/api", () => ({
   listTickets: vi.fn(),
   listTicketDestinations: vi.fn(),
   syncJiraTickets: vi.fn(),
-  syncOpenProjectTickets: vi.fn(),
   listActiveDomains: vi.fn(),
   createTicketApi: vi.fn(),
   ticketComments: vi.fn(),
@@ -189,7 +188,7 @@ describe("TicketsPage — empty vs error vs filtered-to-nothing", () => {
     const el = await mount("admin");
     const text = el.textContent!;
     expect(text).toContain("No tickets yet");
-    expect(text).toContain("Jira or OpenProject");
+    expect(text).toContain("Jira");
     expect(button(el, "Clear filters")).toBeUndefined();
   });
 

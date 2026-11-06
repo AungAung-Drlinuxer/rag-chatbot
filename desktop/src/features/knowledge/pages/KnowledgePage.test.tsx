@@ -41,6 +41,7 @@ vi.mock("@/features/domains/api", () => ({
 import * as kbApi from "@/features/knowledge/api";
 import * as domainsApi from "@/features/domains/api";
 import Knowledge from "./KnowledgePage";
+import { allProviders } from "@/lib/kbProvider";
 
 const m = kbApi as unknown as Record<string, any>;
 const domains = domainsApi as unknown as Record<string, any>;
@@ -171,7 +172,9 @@ describe("KnowledgePage — header, results and rows", () => {
     expect(text).toContain("Domains");
     expect(text).toContain("Sources");
     expect(text).toContain("Last sync");
-    expect(text).toContain("6"); // allProviders().length
+    // Derived, not hardcoded: the strip must count whatever providers exist, so removing
+    // an integration never leaves a stale figure asserted in a test.
+    expect(text).toContain(String(allProviders().length));
     expect(text).toContain("Runs every 30 min");
   });
 });

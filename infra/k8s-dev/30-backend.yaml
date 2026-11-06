@@ -31,7 +31,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: harbor.drlinuxer.com/rag-chatbot/backend:dev-1.0.0
+          image: harbor.drlinuxer.com/rag-chatbot/backend:dev-1.0.1
           imagePullPolicy: Always
           ports:
             - name: http

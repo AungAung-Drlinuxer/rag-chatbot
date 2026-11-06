@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BookOpen, CheckCircle2, ClipboardList, ExternalLink, FileText, Info, KeyRound,
-  Loader2, Loader as LoaderIcon, Lock, NotebookPen, Pencil, Plus, Power, RefreshCw,
-  Rss, Save, Search, Settings2, Shapes, ShieldCheck, Ticket, Trash2, Users, X, XCircle,
-  Eye, EyeOff, ListChecks, ChevronRight, Sparkles,
+  BookOpen, CheckCircle2, ExternalLink, Info, Loader2, Loader as LoaderIcon, Lock,
+  Pencil, Plus, Power, Save, Search, Settings2, ShieldCheck, Ticket, Trash2, X, XCircle,
+  Eye, EyeOff, ChevronRight, Sparkles,
 } from "lucide-react";
 import {
-  deleteIntegrationSettings, getIntegrationSettings, getMySettings, putIntegrationSettings,
-  syncOpenProjectTickets, testIntegration, updateMySettings,
+  deleteIntegrationSettings, getIntegrationSettings, getMySettings, putIntegrationSettings, testIntegration, updateMySettings,
 } from "@/features/settings/api";
 
 /* ============================================================
@@ -25,9 +23,7 @@ import {
    credentials — removal stays an explicit, confirmed action inside the panel.
 ============================================================ */
 
-type ProviderKey =
-  | "confluence" | "jira" | "openproject" | "xwiki" | "notion"
-  | "clickup" | "anytype" | "hashnode" | "ldap" | "keycloak";
+type ProviderKey = "confluence" | "jira";
 
 type Field = { key: string; label: string; placeholder: string; type?: string; isSecret?: boolean };
 
@@ -42,9 +38,9 @@ type Provider = {
   fields: Field[];
 };
 
-type Category = "Knowledge & docs" | "Work tracking" | "Identity & access";
+type Category = "Knowledge & docs" | "Work tracking";
 
-const CATEGORIES: Category[] = ["Knowledge & docs", "Work tracking", "Identity & access"];
+const CATEGORIES: Category[] = ["Knowledge & docs", "Work tracking"];
 
 /**
  * Field groups. Every integration's fields answer one of three different questions,
@@ -89,80 +85,6 @@ const PROVIDERS: Provider[] = [
     ],
   },
   {
-    key: "notion",
-    name: "Notion",
-    tagline: "Import shared pages and databases",
-    desc:
-      "Import Notion pages into the knowledge base with an internal integration token. A page must be shared with the " +
-      "integration (page → … → Connections) or it returns 404 even with a valid token. Nested blocks are parsed " +
-      "recursively and sub-pages become their own articles.",
-    category: "Knowledge & docs",
-    icon: NotebookPen,
-    docs: "https://www.notion.so/my-integrations",
-    fields: [
-      { key: "api_token", label: "Internal Integration Secret", placeholder: "ntn_... or secret_...", isSecret: true },
-      { key: "source_ids", label: "Page / Database IDs (empty = all shared)", placeholder: "1f2a...c9, 8b7d...42" },
-      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
-      { key: "max_pages", label: "Max pages per sync", placeholder: "300" },
-    ],
-  },
-  {
-    key: "anytype",
-    name: "Anytype",
-    tagline: "Read objects from a local-first space",
-    desc:
-      "Import objects from a local-first Anytype space. Anytype runs on YOUR machine, so the base URL is usually " +
-      "http://127.0.0.1:31009 for the desktop app (CLI: 31012) — a containerised backend cannot reach loopback. " +
-      "Every request also needs an Anytype-Version header; leave it blank for the dated default. Reads only.",
-    category: "Knowledge & docs",
-    icon: Shapes,
-    docs: "https://developers.anytype.io/docs/reference",
-    fields: [
-      { key: "base_url", label: "Anytype API base URL", placeholder: "http://127.0.0.1:31009" },
-      { key: "api_key", label: "API Key (Anytype → Settings → API Keys)", placeholder: "your Anytype API key", isSecret: true },
-      { key: "api_version", label: "Anytype-Version header (blank = 2025-11-08)", placeholder: "2025-11-08" },
-      { key: "space_ids", label: "Space IDs or names (empty = all spaces)", placeholder: "My Space, 6f2a...c9" },
-      { key: "object_types", label: "Object types (empty = all)", placeholder: "page, note" },
-      { key: "domain", label: "KB Domain Tag (empty = auto-classify)", placeholder: "general" },
-      { key: "max_objects", label: "Max objects per sync", placeholder: "300" },
-    ],
-  },
-  {
-    key: "xwiki",
-    name: "XWiki",
-    tagline: "Ingest pages from a self-hosted wiki",
-    desc: "Connect an external XWiki instance. Pages from the configured spaces are ingested into the knowledge base alongside Confluence.",
-    category: "Knowledge & docs",
-    icon: FileText,
-    docs: "https://www.xwiki.org/xwiki/bin/view/Documentation/UserGuide/Features/XWikiRESTfulAPIReferenceGuide/",
-    fields: [
-      { key: "base_url", label: "Base URL", placeholder: "https://xwiki.drlinuxer.com" },
-      { key: "username", label: "Username", placeholder: "xwiki service user" },
-      { key: "api_token", label: "API Token / Password", placeholder: "xwiki access token", isSecret: true },
-      { key: "wiki", label: "Wiki Name", placeholder: "xwiki" },
-      { key: "spaces", label: "Spaces (comma separated)", placeholder: "Main,IT,Help" },
-    ],
-  },
-  {
-    key: "hashnode",
-    name: "Hashnode",
-    tagline: "Ingest published blog posts",
-    desc:
-      "Ingest a Hashnode blog's published posts. Reads go through the GraphQL API at gql.hashnode.com — Hashnode " +
-      "retired free API access on 2026-05-13, so every query now needs a Pro plan on the publication. The PAT is write-only.",
-    category: "Knowledge & docs",
-    icon: Rss,
-    docs: "https://hashnode.com/settings/developer",
-    fields: [
-      { key: "publication_host", label: "Publication host", placeholder: "blog.example.com" },
-      { key: "api_key", label: "Personal Access Token", placeholder: "your Hashnode PAT", isSecret: true },
-      { key: "base_url", label: "GraphQL endpoint", placeholder: "https://gql.hashnode.com" },
-      { key: "domain", label: "KB domain tag", placeholder: "engineering (empty = auto-classify)" },
-      { key: "max_posts", label: "Max posts per sync", placeholder: "200" },
-      { key: "include_drafts", label: "Include drafts", placeholder: "false" },
-    ],
-  },
-  {
     key: "jira",
     name: "Jira",
     tagline: "Auto-create escalation tickets",
@@ -177,76 +99,6 @@ const PROVIDERS: Provider[] = [
       { key: "project_key", label: "Default Project Key", placeholder: "ITHD" },
     ],
   },
-  {
-    key: "openproject",
-    name: "OpenProject",
-    tagline: "Sync work packages and wiki pages",
-    desc: "Connect a self-hosted OpenProject instance. Syncs work packages as tickets and optionally ingests wiki pages into the knowledge base.",
-    category: "Work tracking",
-    icon: ClipboardList,
-    docs: "https://www.openproject.org/docs/api/",
-    fields: [
-      { key: "base_url", label: "Base URL", placeholder: "https://openproject.drlinuxer.com" },
-      { key: "api_key", label: "API Key", placeholder: "OpenProject access token", isSecret: true },
-      { key: "project_id", label: "Project ID", placeholder: "1 or project identifier" },
-      { key: "wiki_enabled", label: "Ingest wiki pages (true/false)", placeholder: "true" },
-    ],
-  },
-  {
-    key: "clickup",
-    name: "ClickUp",
-    tagline: "Import docs and tasks from Lists",
-    desc:
-      "Import ClickUp Docs and/or tasks from named Lists using a personal token (pk_...) — the raw token goes in the " +
-      "Authorization header, never with a 'Bearer ' prefix. Docs come from the whole workspace (leave Doc IDs empty " +
-      "for all). Tasks are only read from Lists you name: enter real LIST ids, not the workspace id.",
-    category: "Work tracking",
-    icon: ListChecks,
-    docs: "https://developer.clickup.com/docs/authentication",
-    fields: [
-      { key: "api_token", label: "Personal API Token", placeholder: "pk_12345678_ABCDEF...", isSecret: true },
-      { key: "doc_ids", label: "Doc IDs (empty = all docs)", placeholder: "8c9c4a1-1018" },
-      { key: "list_ids", label: "List IDs for tasks (NOT the workspace id)", placeholder: "901804099497" },
-      { key: "workspace_ids", label: "Workspace ID (optional)", placeholder: "9018580345" },
-      { key: "include_comments", label: "Include task comments (true/false)", placeholder: "false" },
-      { key: "min_chars", label: "Minimum task text length", placeholder: "120" },
-      { key: "domain", label: "KB Domain Tag (e.g. general)", placeholder: "general" },
-      { key: "max_tasks", label: "Max tasks per sync", placeholder: "500" },
-    ],
-  },
-  {
-    key: "ldap",
-    name: "LDAP / Active Directory",
-    tagline: "Corporate directory login",
-    desc: "Authenticate users against your corporate directory (AD). Used for login plus group-based role mapping.",
-    category: "Identity & access",
-    icon: Users,
-    docs: "https://ldap3.readthedocs.io/",
-    fields: [
-      { key: "host", label: "LDAP Server Host", placeholder: "ldaps://ad.your-domain.local or 10.10.10.10" },
-      { key: "port", label: "Port", placeholder: "389 or 636 (LDAPS)" },
-      { key: "bind_dn", label: "Bind DN (service account)", placeholder: "CN=svc-chatbot,OU=Service,DC=corp,DC=local" },
-      { key: "bind_password", label: "Bind Password", placeholder: "service account password", isSecret: true },
-      { key: "base_dn", label: "Base DN (search root)", placeholder: "DC=corp,DC=local" },
-      { key: "user_filter", label: "User Filter", placeholder: "(sAMAccountName={username})" },
-    ],
-  },
-  {
-    key: "keycloak",
-    name: "Keycloak SSO",
-    tagline: "Single sign-on over OpenID Connect",
-    desc: "Single sign-on via Keycloak. Users sign in with the realm identity provider instead of local passwords.",
-    category: "Identity & access",
-    icon: KeyRound,
-    docs: "https://www.keycloak.org/documentation",
-    fields: [
-      { key: "issuer", label: "Issuer / Base URL", placeholder: "https://keycloak-chatbot.drlinuxer.com" },
-      { key: "realm", label: "Realm", placeholder: "ith-chatbot" },
-      { key: "client_id", label: "Client ID", placeholder: "it-help-chatbot" },
-      { key: "client_secret", label: "Client Secret", placeholder: "OIDC client secret", isSecret: true },
-      { key: "redirect_uri", label: "Redirect URI", placeholder: "https://chat.drlinuxer.com/auth/callback" },
-    ],
-  },
 ];
 
 /**
@@ -255,12 +107,6 @@ const PROVIDERS: Provider[] = [
  * exist server-side and re-appear the moment they are added to this list; hiding them
  * here only stops the UI from offering a sync that has no destination configured.
  */
-const VISIBLE_PROVIDER_KEYS: ProviderKey[] = ["confluence", "jira"];
-const VISIBLE_PROVIDERS: Provider[] = PROVIDERS.filter((p) => VISIBLE_PROVIDER_KEYS.includes(p.key));
-const VISIBLE_CATEGORIES: Category[] = CATEGORIES.filter((c) =>
-  VISIBLE_PROVIDERS.some((p) => p.category === c),
-);
-
 const BY_KEY = Object.fromEntries(PROVIDERS.map((p) => [p.key, p])) as Record<ProviderKey, Provider>;
 
 /** Per-user opt-in map, stored in the user's preference blob. */
@@ -332,7 +178,6 @@ function ProviderEditor({ provider, onConfigured }: {
   const [tokenSet, setTokenSet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -425,20 +270,7 @@ function ProviderEditor({ provider, onConfigured }: {
     }
   }
 
-  async function syncTickets() {
-    setSyncing(true);
-    setResult(null);
-    try {
-      const res = await syncOpenProjectTickets();
-      setResult(res?.ok
-        ? { ok: true, message: `Synced: ${res.created ?? 0} created, ${res.updated ?? 0} updated (total ${res.total ?? 0})` }
-        : { ok: false, message: res?.message || "Sync failed" });
-    } catch (e: any) {
-      setResult({ ok: false, message: e?.message || "Sync failed" });
-    } finally {
-      setSyncing(false);
-    }
-  }
+
 
   function renderField(f: Field) {
     const configured = isConfigured(f.key);
@@ -610,18 +442,7 @@ function ProviderEditor({ provider, onConfigured }: {
           {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LoaderIcon className="h-3.5 w-3.5" />}
           Test connection
         </button>
-        {provider.key === "openproject" && (
-          <button
-            onClick={syncTickets}
-            disabled={syncing}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--accent)] px-3.5 py-2 text-xs font-medium text-[var(--accent-foreground)] transition hover:opacity-90 disabled:opacity-50"
-            title="Pull work packages from OpenProject into the tickets board"
-          >
-            {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Sync tickets now
-          </button>
-        )}
-        {fieldsSet.length > 0 && (
+                {fieldsSet.length > 0 && (
           <button
             onClick={clear}
             disabled={clearing}
@@ -669,7 +490,7 @@ function Catalog({ enabled, status, onToggle, onConfigure, personal }: {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return VISIBLE_PROVIDERS.filter((p) =>
+    return PROVIDERS.filter((p) =>
       (category === "All" || p.category === category) &&
       (!q || `${p.name} ${p.tagline} ${p.category} ${p.desc}`.toLowerCase().includes(q))
     );
@@ -690,7 +511,7 @@ function Catalog({ enabled, status, onToggle, onConfigure, personal }: {
           />
         </div>
         <div className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-muted/30 p-1">
-          {(["All", ...VISIBLE_CATEGORIES] as const).map((c) => (
+          {(["All", ...CATEGORIES] as const).map((c) => (
             <button
               key={c}
               type="button"
@@ -810,10 +631,10 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
         const map = all?.[PREF_KEY];
         const clean: Record<string, boolean> = {};
         if (map && typeof map === "object") {
-          for (const p of VISIBLE_PROVIDERS) if (map[p.key] === true) clean[p.key] = true;
+          for (const p of PROVIDERS) if (map[p.key] === true) clean[p.key] = true;
         }
         setEnabled(clean);
-        const first = VISIBLE_PROVIDERS.find((p) => clean[p.key]);
+        const first = PROVIDERS.find((p) => clean[p.key]);
         setSelected(first ? first.key : null);
         // Nothing switched on yet is the honest first-run state: open the catalogue.
         // A member's view IS the catalogue, so it starts open either way.
@@ -836,7 +657,7 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
   useEffect(() => {
     let cancelled = false;
     Promise.allSettled(
-      VISIBLE_PROVIDERS.map(async (p) => {
+      PROVIDERS.map(async (p) => {
         const res = await getIntegrationSettings(p.key);
         return [p.key, (res.fields_set || []).length > 0] as const;
       }),
@@ -871,13 +692,13 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
       setSelected(key);
       setBrowsing(false);
     } else if (selected === key) {
-      const rest = VISIBLE_PROVIDERS.find((p) => map[p.key]);
+      const rest = PROVIDERS.find((p) => map[p.key]);
       setSelected(rest ? rest.key : null);
     }
     void persist(map);
   }
 
-  const enabledList = VISIBLE_PROVIDERS.filter((p) => enabled[p.key]);
+  const enabledList = PROVIDERS.filter((p) => enabled[p.key]);
   const activeProvider = selected ? BY_KEY[selected] : null;
 
   if (loading) {
@@ -898,7 +719,7 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
           </div>
           <div>
             <p className="text-xs font-semibold text-foreground">
-              {enabledList.length} of {VISIBLE_PROVIDERS.length} integrations enabled
+              {enabledList.length} of {PROVIDERS.length} integrations enabled
             </p>
             <p className="text-2xs text-muted-foreground">
               {personal

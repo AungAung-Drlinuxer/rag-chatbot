@@ -3,23 +3,16 @@
  *
  * Resolution order:
  *   1. the `source_url` host — authoritative and provider-specific
- *      (aungaungxero.atlassian.net = Confluence, app.clickup.com = ClickUp, ...)
- *   2. the `page_id` prefix, for records whose URL is missing
- *      (notion-…, clickup-…, xwiki-…, openproject-…, manual-…)
+ *      (aungaungxero.atlassian.net = Confluence)
+ *   2. the `page_id` prefix, for records whose URL is missing (manual-…)
  *
  * The legacy Confluence rows created before the prefix convention existed have
  * bare numeric page ids, so the host check has to come first — keying off the id
  * alone reports those 78 articles as unknown.
  */
 
-export type ProviderKey =
-  | "confluence"
-  | "clickup"
-  | "notion"
-  | "xwiki"
-  | "openproject"
-  | "manual"
-  | "unknown";
+// Only Confluence ingests documents here; "manual" covers pages an admin added by hand.
+export type ProviderKey = "confluence" | "manual" | "unknown";
 
 export type ProviderMeta = {
   key: ProviderKey;
@@ -33,26 +26,6 @@ const PROVIDERS: Record<ProviderKey, ProviderMeta> = {
     key: "confluence",
     label: "Confluence",
     className: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
-  },
-  clickup: {
-    key: "clickup",
-    label: "ClickUp",
-    className: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
-  },
-  notion: {
-    key: "notion",
-    label: "Notion",
-    className: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200",
-  },
-  xwiki: {
-    key: "xwiki",
-    label: "XWiki",
-    className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
-  },
-  openproject: {
-    key: "openproject",
-    label: "OpenProject",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
   },
   manual: {
     key: "manual",
@@ -68,17 +41,9 @@ const PROVIDERS: Record<ProviderKey, ProviderMeta> = {
 
 const HOST_MAP: Array<[RegExp, ProviderKey]> = [
   [/atlassian\.net/i, "confluence"],
-  [/api\.clickup\.com|app\.clickup\.com/i, "clickup"],
-  [/notion\.so|app\.notion\.com|notion\.site/i, "notion"],
-  [/xwiki/i, "xwiki"],
-  [/openproject/i, "openproject"],
 ];
 
 const PREFIX_MAP: Array<[string, ProviderKey]> = [
-  ["notion-", "notion"],
-  ["clickup-", "clickup"],
-  ["xwiki-", "xwiki"],
-  ["openproject-", "openproject"],
   ["manual-", "manual"],
 ];
 
@@ -104,10 +69,6 @@ export function providerOf(article: { page_id?: string; source_url?: string }): 
 export function allProviders(): ProviderMeta[] {
   return [
     PROVIDERS.confluence,
-    PROVIDERS.clickup,
-    PROVIDERS.notion,
-    PROVIDERS.xwiki,
-    PROVIDERS.openproject,
     PROVIDERS.manual,
   ];
 }

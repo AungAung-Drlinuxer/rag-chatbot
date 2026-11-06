@@ -192,9 +192,11 @@ def send_test_email(payload: dict, user: str = Depends(get_current_user)) -> dic
 
 
 # === v0.21.40 — integration settings (Confluence / Jira) ===
-INTEGRATION_KEYS = {"confluence", "jira", "ldap", "keycloak", "llm", "redis", "ollama",
-                    "openproject", "xwiki", "notion", "clickup", "anytype", "hashnode",
-                    "mcp"}
+# This deployment syncs from Confluence and raises tickets in Jira. Everything else was
+# removed: a provider the product does not run is not a setting, and accepting its key here
+# would let an admin save a sync that has nowhere to go. `ldap` stays because it is the
+# authentication backend, not a content connector.
+INTEGRATION_KEYS = {"confluence", "jira", "ldap", "llm", "redis", "ollama", "mcp"}
 
 # ClinePass is an OpenAI-compatible gateway (api.cline.bot). Two things make it
 # different from the other providers and are handled below:
@@ -459,51 +461,6 @@ def test_integration(key: str, user: str = Depends(get_current_user)) -> dict:
             conn.open()
             conn.unbind()
             status, detail = 200, ""
-        elif key == "keycloak":
-            # Keycloak SSO connectivity: OIDC discovery on the realm issuer
-            issuer = (cfg.get("issuer") or cfg.get("base_url") or "").rstrip("/")
-            if not issuer:
-                raise ValueError("issuer not set")
-            realm = cfg.get("realm") or "ith-chatbot"
-            r = httpx.get(f"{issuer}/realms/{realm}/.well-known/openid-configuration", timeout=15)
-            status = r.status_code
-            detail = "" if r.status_code == 200 else r.text[:200]
-        elif key == "openproject":
-            from app.integrations.openproject import test_connection as _op_test
-            result = _op_test()
-            status = 200 if result.get("ok") else 502
-            detail = result.get("message", "")
-        elif key == "xwiki":
-            from app.integrations.xwiki import test_connection as _xw_test
-            result = _xw_test()
-            status = 200 if result.get("ok") else 502
-            detail = result.get("message", "")
-        elif key == "notion":
-            from app.integrations.notion import test_connection as _no_test
-            result = _no_test()
-            status = 200 if result.get("ok") else 502
-            detail = result.get("message", "")
-        elif key == "clickup":
-            from app.integrations.clickup import test_connection as _cu_test
-            result = _cu_test()
-            status = 200 if result.get("ok") else 502
-            detail = result.get("message", "")
-        elif key == "anytype":
-            # Anytype is local-first: the usual failure is that nothing is listening on
-            # the base URL at all, or the mandatory Anytype-Version header is missing.
-            # The module separates those outcomes so the message names the fix.
-            from app.integrations.anytype import test_connection as _at_test
-            result = _at_test()
-            status = 200 if result.get("ok") else 502
-            detail = result.get("message", "")
-        elif key == "hashnode":
-            # Hashnode reports GraphQL application errors inside an HTTP 200, and since
-            # 2026-05-13 every read needs a Pro plan. The module tells those apart so the
-            # operator sees "not on Pro" rather than a generic failure.
-            from app.integrations.hashnode import test_connection as _hn_test
-            result = _hn_test()
-            status = 200 if result.get("ok") else 502
-            detail = result.get("message", "")
         elif key == "mcp":
             # Live probe of the MCP server: handshake + tool catalogue. Reports the
             # curated subset so an admin can see the feature actually works rather

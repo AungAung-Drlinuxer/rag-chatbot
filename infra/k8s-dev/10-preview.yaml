@@ -1,6 +1,6 @@
 # === rag-chatbot DEV — namespace + frontend-only preview =====================
-# The dev line (branch `dev`, version dev-1.0.0) serves ONLY the frontend from
-# harbor.drlinuxer.com/rag-chatbot/frontend:dev-1.0.0. It deliberately owns no
+# The dev line (branch `dev`, version dev-1.0.1) serves ONLY the frontend from
+# harbor.drlinuxer.com/rag-chatbot/frontend:dev-1.0.1. It deliberately owns no
 # database, cache or model runtime: `/api/*` is proxied to the production backend, so a
 # dev build never writes to a second, half-seeded copy of the knowledge base.
 #
@@ -41,7 +41,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: harbor.drlinuxer.com/rag-chatbot/frontend:dev-1.0.0
+          image: harbor.drlinuxer.com/rag-chatbot/frontend:dev-1.0.1
           imagePullPolicy: Always
           ports:
             - containerPort: 80

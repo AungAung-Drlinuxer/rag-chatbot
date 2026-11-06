@@ -10,7 +10,6 @@ Covers:
     bind failure here would break the whole ticket board.
   * It writes ONE statement per distinct status, not one per ticket.
   * It leaves rows whose status already matches untouched.
-  * `_is_op_key` is case-insensitive (the two call sites disagreed on case).
 """
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ import uuid
 import pytest
 from sqlalchemy import text
 
-from app.api.tickets import _is_op_key, _persist_status_changes
+from app.api.tickets import _persist_status_changes
 from app.persistence.database import SessionLocal, init_db
 
 
@@ -55,24 +54,6 @@ def _cleanup(keys: list[str]) -> None:
             text("DELETE FROM jira_tickets WHERE jira_key = ANY(:keys)"), {"keys": keys}
         )
         s.commit()
-
-
-# --------------------------------------------------------------------------- #
-# _is_op_key
-# --------------------------------------------------------------------------- #
-
-@pytest.mark.parametrize(
-    "key,expected",
-    [
-        ("OP-12", True),
-        ("op-12", True),
-        ("Op-12", True),
-        ("ITHD-7", False),
-        ("", False),
-    ],
-)
-def test_is_op_key_is_case_insensitive(key, expected):
-    assert _is_op_key(key) is expected
 
 
 # --------------------------------------------------------------------------- #

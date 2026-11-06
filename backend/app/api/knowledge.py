@@ -231,10 +231,6 @@ def articles_list(domain: str | None = None, q: str | None = None, limit: int = 
     # provider -> source_url pattern (mirrors the frontend badge resolution)
     provider_like = {
         "confluence": "%atlassian.net%",
-        "clickup": "%clickup.com%",
-        "notion": "%notion.%",
-        "xwiki": "%xwiki%",
-        "openproject": "%openproject%",
     }.get((provider or "").strip().lower())
 
     where = ["1=1"]

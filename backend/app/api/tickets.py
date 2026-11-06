@@ -33,8 +33,8 @@ class TicketCreate(BaseModel):
     assignee: str | None = None
     due_date: str | None = None
     # v1.6.4 — where the ticket must be created. Per user policy there is no
-    # "internal only" option: every manual ticket must exist in Jira or OpenProject.
-    destination: str = "jira"  # jira | openproject
+    # Tickets are raised in Jira; there is no internal-only mode.
+    destination: str = "jira"
     # v1.6.8 — chat session the request came from (chat dialog only); used to
     # drop the "ticket created" notice into the user's chat history.
     session_id: str | None = None
@@ -58,19 +58,17 @@ class AttachmentRequest(BaseModel):
 
 @router.get("/ticket-destinations")
 def list_ticket_destinations(user: str = Depends(get_current_user)) -> dict:
-    """v1.6.4 — configured external ticket destinations for the create dialogs.
+    """Configured external ticket destinations for the create dialogs.
 
-    Local-only creation was removed by policy: the UI shows Jira / OpenProject
-    and disables whichever is not configured (with a hint to Settings)."""
+    Jira is the only destination this deployment raises tickets in. The endpoint stays
+    (the UI reads it to know whether to enable "Create ticket") but it can no longer
+    advertise a connector the product does not run."""
     from app.integrations.jira import _jira_cfg
-    from app.integrations.openproject import get_op_cfg
+
     j = _jira_cfg()
-    o = get_op_cfg()
     return {"destinations": [
         {"key": "jira", "label": "Jira",
          "configured": bool(j.get("base_url") and j.get("email") and j.get("api_token"))},
-        {"key": "openproject", "label": "OpenProject",
-         "configured": bool(o.get("base_url") and o.get("api_key") and o.get("project_id"))},
     ]}
 
 
@@ -146,33 +144,21 @@ def _persist_status_changes(s, mapped_by_key: dict[str, str]) -> None:
         s.commit()
 
 
-def _is_op_key(jira_key: str) -> bool:
-    """OpenProject mirrors are stored as OP-<id>; case has drifted in the past."""
-    return (jira_key or "").upper().startswith("OP-")
-
-
 def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
     """v1.6.13 — auto-resync statuses from upstream on every list read.
 
-    Jira: per-issue live fetch, status-name mapped through the canonical model
-    (cached 60s per key so rapid page loads do not hammer Jira).
-    OpenProject: statuses already arrive with the pulled work packages, but a
-    full sync only runs when an admin clicks Sync — so here we re-read the
-    live status of OP rows too (single search call, cached 60s).
-    Rows are only updated when the canonical status differs from the mirror.
+    Per-issue live fetch, status-name mapped through the canonical model and cached
+    60s per key so rapid page loads do not hammer Jira. Rows are only updated when the
+    canonical status differs from the mirror.
 
     v1.6.14 — all DB writes for the batch go through one session and two
     statements (see `_persist_status_changes`); the per-ticket session in the
     loop was an N+1 that also leaked a session per unchanged ticket.
     """
-    from app.integrations.ticket_status import (
-        canonical_from_jira_status,
-        canonical_from_op_status,
-    )
+    from app.integrations.ticket_status import canonical_from_jira_status
 
     now = time.time()
     jira_keys: list[str] = []
-    op_ids: list[str] = []
     for r in rows:
         jk = r.get("jira_key")
         if not jk:
@@ -181,10 +167,7 @@ def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
         if cached and (time.time() - cached[0]) < _JIRA_SYNC_TTL:
             r["status"] = cached[1]
             continue
-        if _is_op_key(jk):
-            op_ids.append(jk)
-        else:
-            jira_keys.append(jk)
+        jira_keys.append(jk)
 
     if jira_keys:
         from app.integrations.jira import fetch_issue_status
@@ -205,37 +188,6 @@ def _bulk_upstream_status_refresh(rows: list[dict]) -> None:
             if r.get("jira_key") in mapped_by_key:
                 r["status"] = mapped_by_key[r["jira_key"]]
 
-    if op_ids:
-        from app.integrations.openproject import get_op_cfg
-        import httpx
-        c = get_op_cfg()
-        base = (c.get("base_url") or "").rstrip("/")
-        key = c.get("api_key") or ""
-        if base and key:
-            try:
-                # v1.6.13 - the work_packages listing endpoint rejects id filters
-                # (InvalidQuery: got Array), so fetch each WP individually.
-                # N is small (mirrored OP tickets) and results are 60s-cached.
-                mapped_by_key = {}
-                with httpx.Client(timeout=30, auth=("apikey", key),
-                                  headers={"Accept": "application/hal+json"}) as client:
-                    for jk in op_ids:
-                        wp_id = jk.split("-", 1)[-1]
-                        r = client.get(f"{base}/api/v3/work_packages/{wp_id}")
-                        if r.status_code != 200:
-                            continue
-                        live_name = ((r.json().get("_links", {}).get("status", {}) or {})
-                                     .get("title", ""))
-                        mapped = canonical_from_op_status(live_name)
-                        _jira_status_cache[jk] = (time.time(), mapped)
-                        mapped_by_key[jk] = mapped
-                with SessionLocal() as s:
-                    _persist_status_changes(s, mapped_by_key)
-                for r2 in rows:
-                    if r2.get("jira_key") in mapped_by_key:
-                        r2["status"] = mapped_by_key[r2["jira_key"]]
-            except Exception as exc:
-                logger.warning("op bulk status refresh failed: %s", exc)
 
 
 @router.get("/tickets")
@@ -303,7 +255,7 @@ def create_ticket(
     """Manual ticket creation — gated by the admin RBAC matrix (v0.21.57).
 
     v1.6.4 — destination policy (user mandate): a manual ticket MUST exist in
-    Jira or OpenProject. Local-only tickets are no longer accepted: if the
+    Jira. Local-only tickets are no longer accepted: if the
     external create fails, the request fails with 502 and nothing is saved.
     (A mirror row is still kept in jira_tickets so the Tickets board, filters
     and audit keep working — the external key is the source of truth.)
@@ -316,39 +268,25 @@ def create_ticket(
             raise HTTPException(status_code=400, detail="Ticket subject is required")
         summary = subj[:120]
         destination = (req.destination or "jira").lower().strip()
-        if destination not in ("jira", "openproject"):
+        if destination != "jira":
             raise HTTPException(status_code=400,
-                                detail="destination must be 'jira' or 'openproject'")
+                                detail="destination must be 'jira' — it is the only configured tracker")
 
-        ext_key: str | None = None
-        ext_link: str = ""
-        ext_mode: str = ""
-        if destination == "openproject":
-            from app.integrations.openproject import create_issue as op_create
-            res = op_create(summary=summary, description=req.description,
-                            priority=req.priority)
-            ext_key, ext_link, ext_mode = res.get("op_key"), res.get("link", ""), res.get("mode", "")
-            if not ext_key:
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"OpenProject ticket creation failed"
-                           f"{(': ' + res['error']) if res.get('error') else ' (integration not configured — check Settings → Integrations)'}")
-        else:
-            from app.integrations.jira import escalate as jira_escalate
-            res = jira_escalate(
-                summary=summary,
-                description=req.description,
-                reporter=user,
-                project=None,  # jira_route(domain) decides inside escalate
-                assignee=req.assignee or None,  # v0.21.98 — honor chosen assignee in Jira
-                domain=req.domain,
-            )
-            ext_key, ext_link, ext_mode = res.get("jira_key"), res.get("link", ""), res.get("mode", "")
-            if not ext_key:
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Jira ticket creation failed"
-                           f"{(': ' + res['error']) if res.get('error') else ' (integration not configured — check Settings → Integrations)'}")
+        from app.integrations.jira import escalate as jira_escalate
+        res = jira_escalate(
+            summary=summary,
+            description=req.description,
+            reporter=user,
+            project=None,  # jira_route(domain) decides inside escalate
+            assignee=req.assignee or None,  # v0.21.98 — honor chosen assignee in Jira
+            domain=req.domain,
+        )
+        ext_key, ext_link, ext_mode = res.get("jira_key"), res.get("link", ""), res.get("mode", "")
+        if not ext_key:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Jira ticket creation failed"
+                       f"{(': ' + res['error']) if res.get('error') else ' (integration not configured — check Settings → Integrations)'}")
 
         from datetime import datetime as _dt
 
@@ -379,7 +317,7 @@ def create_ticket(
                 from app.persistence.models import ChatMessage
                 notice = (
                     f"✅ Ticket {ext_key} created in "
-                    f"{'OpenProject' if destination == 'openproject' else 'Jira'}."
+                    "Jira."
                     + (f" Follow: {ext_link}" if ext_link else "")
                     + " The IT team will follow up."
                 )
@@ -411,16 +349,12 @@ def create_ticket(
 # ---------------------------------------------------------------------------
 
 def _resolve_ticket(ticket_ref: str, user: str):
-    """Map 'ITHD-2', 'OP-40' or 'IT-7' to the jira_tickets row (RBAC-checked)."""
+    """Map 'ITHD-2' or 'IT-7' to the jira_tickets row (RBAC-checked)."""
     from app.persistence.models import JiraTicket
 
     with SessionLocal() as s:
         if ticket_ref.startswith("ITHD-"):
             row = s.query(JiraTicket).filter(JiraTicket.jira_key == ticket_ref).first()
-        elif ticket_ref.upper().startswith("OP-"):
-            # v1.6.9 — OpenProject mirror rows (jira_key='OP-<id>')
-            row = s.query(JiraTicket).filter(
-                JiraTicket.jira_key == ticket_ref.upper()).first()
         else:
             try:
                 tid = int(ticket_ref.replace("IT-", ""))
@@ -448,7 +382,7 @@ def _sync_jira_status(row):
     jira_status = (live.get("status") or "").strip().lower()
     if not jira_status:
         return None
-    # v1.6.9 — canonical mapping (shared with OpenProject, ticket_status.py)
+    # v1.6.9 — canonical status mapping (ticket_status.py)
     from app.integrations.ticket_status import canonical_from_jira_status
     local = canonical_from_jira_status(jira_status) or None
     if local and row.status != local:
@@ -561,8 +495,8 @@ def ticket_update(ticket_ref: str, req: TicketUpdateRequest,
 
         # v1.6.9 — push status change to BOTH integrations (best-effort each).
         # The canonical status model (ticket_status.py) maps open/pending/resolved/
-        # closed onto real Jira transitions AND OpenProject status IDs, so the two
-        # systems stay in step no matter where the change was made.
+        # closed onto real Jira transitions, so a change made here and a change made in
+        # Jira agree.
         sync_notes: list[str] = []
         if req.status and row.jira_key:
             from app.integrations.jira import transition_issue
@@ -573,15 +507,6 @@ def ticket_update(ticket_ref: str, req: TicketUpdateRequest,
             else:
                 sync_notes.append(f"Jira sync failed ({tr.get('detail')})")
                 logger.warning("jira transition failed for %s: %s", row.jira_key, tr.get("detail"))
-        if req.status and row.jira_key and row.jira_key.startswith("OP-"):
-            from app.integrations.openproject import update_status as op_update_status
-
-            opr = op_update_status(row.jira_key, req.status)
-            if opr.get("ok"):
-                sync_notes.append("synced to OpenProject")
-            else:
-                sync_notes.append(f"OpenProject sync failed ({opr.get('detail')})")
-                logger.warning("op status update failed for %s: %s", row.jira_key, opr.get("detail"))
         jira_note = (" · " + " · ".join(sync_notes)) if sync_notes else ""
 
         if changes or jira_note:
@@ -704,56 +629,12 @@ def get_attachment(att_id: str, user: str = Depends(get_current_user)):
                     headers={"Content-Disposition": f'inline; filename="{row[0]}"'})
 
 
-# === v1.1.0 — OpenProject work-package ticket sync ===========================
-@router.post("/tickets/openproject/sync")
-def openproject_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
-    """Pull OpenProject work packages into jira_tickets (jira_key='op-<id>').
-
-    Idempotent: existing op-* keys are updated in place; new ones inserted.
-    Admin/agent-triggered from Settings -> Integrations -> OpenProject.
-    """
-    from app.integrations.openproject import fetch_work_packages
-    from app.integrations.ticket_status import canonical_from_op_status
-
-    tickets = fetch_work_packages()
-    if not tickets:
-        return {"ok": True, "created": 0, "updated": 0, "total": 0,
-                "message": "No work packages returned — check OpenProject config"}
-
-    created = updated = 0
-    with SessionLocal() as s:
-        for t in tickets:
-            existing = s.execute(
-                text("SELECT id FROM jira_tickets WHERE jira_key = :k"),
-                {"k": t["ticket_id"]},
-            ).first()
-            if existing:
-                s.execute(text(
-                    "UPDATE jira_tickets SET status=:st, subject=:sj, description=:ds, "
-                    "assignee=:asg WHERE jira_key=:k"
-                ), {"st": canonical_from_op_status(t["status"]),
-                    "sj": t["title"], "ds": t["body"],
-                    "asg": t["assignee"], "k": t["ticket_id"]})
-                updated += 1
-            else:
-                s.execute(text(
-                    "INSERT INTO jira_tickets (jira_key, domain, status, created_by, "
-                    "created_at, subject, description, priority, assignee) "
-                    "VALUES (:k, :dm, :st, :cb, NOW(), :sj, :ds, :pr, :asg)"
-                ), {"k": t["ticket_id"], "dm": "general", "st": t["status"],
-                    "cb": "openproject-sync", "sj": t["title"], "ds": t["body"],
-                    "pr": "medium", "asg": t["assignee"]})
-                created += 1
-        s.commit()
-    return {"ok": True, "created": created, "updated": updated, "total": len(tickets)}
-
-
 # === v1.6.8 — Jira ticket sync (pull upstream -> local mirror) ================
 @router.post("/tickets/jira/sync")
 def jira_sync(user: str = Depends(require_cap("manage_kb"))) -> dict:
     """Pull Jira issues/requests into jira_tickets (jira_key='<KEY>').
 
-    Idempotent like the OpenProject sync: existing keys are updated in place,
+    Idempotent: existing keys are updated in place,
     new ones inserted with created_by='jira-sync'. Admin/agent-triggered from
     Settings -> Integrations -> Jira.
     """

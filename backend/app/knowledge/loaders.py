@@ -69,55 +69,21 @@ def load_fileshare(base_dir: str | None = None) -> list[dict]:
 
 
 def load_all() -> list[dict]:
-    """Aggregate KB sources: Confluence + OpenProject wiki + XWiki + Notion + ClickUp
-    + Anytype.
+    """Aggregate KB sources: Confluence, plus the mounted file share when configured.
 
-    Each loader returns article dicts with the standard shape; missing/empty
-    integrations simply contribute nothing (safe no-op)."""
+    This deployment has exactly one document connector. The previous version stitched
+    together OpenProject/XWiki/Notion/ClickUp/Anytype/Hashnode behind individual
+    try/excepts — six integrations kept alive for nobody, each one a dependency that could
+    fail an ingest. They are gone; a new connector belongs here only when the product
+    actually runs it.
+    """
     articles: list[dict] = []
     articles.extend(load_confluence())
 
-    try:
-        from app.integrations.openproject import fetch_wiki_pages as _fetch_op_wiki
-        articles.extend(_fetch_op_wiki())
-    except Exception as exc:  # pragma: no cover — never break the whole ingest
-        logger.warning("openproject wiki load skipped: %s", exc)
-
-    try:
-        from app.integrations.xwiki import fetch_pages as _fetch_xwiki
-        articles.extend(_fetch_xwiki())
-    except Exception as exc:  # pragma: no cover
-        logger.warning("xwiki load skipped: %s", exc)
-
-    # v1.6.34 — Notion (cloud SaaS). Recursive block walk; skipped entirely when
-    # no token is configured, so air-gapped deployments are unaffected.
-    try:
-        from app.integrations.notion import fetch_pages as _fetch_notion
-        articles.extend(_fetch_notion())
-    except Exception as exc:  # pragma: no cover
-        logger.warning("notion load skipped: %s", exc)
-
-    # v1.6.34 — ClickUp (cloud SaaS): Docs (plan-gated) + explicitly designated Lists.
-    try:
-        from app.integrations.clickup import fetch_pages as _fetch_clickup
-        articles.extend(_fetch_clickup())
-    except Exception as exc:  # pragma: no cover
-        logger.warning("clickup load skipped: %s", exc)
-
-    # Anytype (local-first wiki). No key configured → returns [] and costs nothing, so
-    # air-gapped deployments and anyone not running Anytype are unaffected.
-    try:
-        from app.integrations.anytype import fetch_pages as _fetch_anytype
-        articles.extend(_fetch_anytype())
-    except Exception as exc:  # pragma: no cover
-        logger.warning("anytype load skipped: %s", exc)
-
-    # Hashnode (hosted blog). GraphQL reads need a Pro plan and a PAT; with neither
-    # configured this returns [] and costs nothing.
-    try:
-        from app.integrations.hashnode import fetch_pages as _fetch_hashnode
-        articles.extend(_fetch_hashnode())
-    except Exception as exc:  # pragma: no cover
-        logger.warning("hashnode load skipped: %s", exc)
+    if SETTINGS.fileshare_dir:
+        try:
+            articles.extend(load_fileshare())
+        except Exception as exc:  # pragma: no cover — never break the whole ingest
+            logger.warning("fileshare load skipped: %s", exc)
 
     return articles
