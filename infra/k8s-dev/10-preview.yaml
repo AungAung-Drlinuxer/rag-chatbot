@@ -1,0 +1,112 @@
+# === rag-chatbot DEV — namespace + frontend-only preview =====================
+# The dev line (branch `dev`, version dev-1.0.0) serves ONLY the frontend from
+# harbor.drlinuxer.com/rag-chatbot/frontend:dev-1.0.0. It deliberately owns no
+# database, cache or model runtime: `/api/*` is proxied to the production backend, so a
+# dev build never writes to a second, half-seeded copy of the knowledge base.
+#
+# Reachability: the ingress host is dev-chat.drlinuxer.com. It needs a DNS record for
+# that name pointing at the ingress controller; until that exists the deployment is
+# healthy but not publicly resolvable (use `kubectl -n rag-chatbot-dev port-forward`).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rag-chatbot-dev
+  labels:
+    app.kubernetes.io/part-of: rag-chatbot
+    environment: dev
+---
+# nginx.conf in the frontend image hardcodes `proxy_pass http://backend:8000` and resolves
+# that name at startup. An ExternalName Service satisfies it inside this namespace without
+# a second backend: DNS CNAMEs to the production ClusterIP service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: rag-chatbot-dev
+spec:
+  type: ExternalName
+  externalName: backend.rag-chatbot.svc.cluster.local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: rag-chatbot-dev
+  labels:
+    app: frontend
+    app.kubernetes.io/name: frontend
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        app.kubernetes.io/name: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: harbor.drlinuxer.com/rag-chatbot/frontend:dev-1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests: { cpu: 25m, memory: 48Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: rag-chatbot-dev
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+# TLS: the cluster already holds a wildcard certificate (*.drlinuxer.com). It is copied
+# into this namespace by the deploy step rather than re-issued — a cert-manager request
+# would need the DNS record to exist first, and the wildcard already covers this host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: rag-chatbot-dev
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "32m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [dev-chat.drlinuxer.com]
+      secretName: drlinuxer-tls
+  rules:
+    - host: dev-chat.drlinuxer.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
