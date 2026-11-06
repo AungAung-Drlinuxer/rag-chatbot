@@ -249,6 +249,18 @@ const PROVIDERS: Provider[] = [
   },
 ];
 
+/**
+ * DEV BUILD — this deployment runs two connectors: Confluence (documents in) and Jira
+ * (tickets out). The other providers stay defined below because their settings still
+ * exist server-side and re-appear the moment they are added to this list; hiding them
+ * here only stops the UI from offering a sync that has no destination configured.
+ */
+const VISIBLE_PROVIDER_KEYS: ProviderKey[] = ["confluence", "jira"];
+const VISIBLE_PROVIDERS: Provider[] = PROVIDERS.filter((p) => VISIBLE_PROVIDER_KEYS.includes(p.key));
+const VISIBLE_CATEGORIES: Category[] = CATEGORIES.filter((c) =>
+  VISIBLE_PROVIDERS.some((p) => p.category === c),
+);
+
 const BY_KEY = Object.fromEntries(PROVIDERS.map((p) => [p.key, p])) as Record<ProviderKey, Provider>;
 
 /** Per-user opt-in map, stored in the user's preference blob. */
@@ -657,7 +669,7 @@ function Catalog({ enabled, status, onToggle, onConfigure, personal }: {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return PROVIDERS.filter((p) =>
+    return VISIBLE_PROVIDERS.filter((p) =>
       (category === "All" || p.category === category) &&
       (!q || `${p.name} ${p.tagline} ${p.category} ${p.desc}`.toLowerCase().includes(q))
     );
@@ -678,7 +690,7 @@ function Catalog({ enabled, status, onToggle, onConfigure, personal }: {
           />
         </div>
         <div className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-muted/30 p-1">
-          {(["All", ...CATEGORIES] as const).map((c) => (
+          {(["All", ...VISIBLE_CATEGORIES] as const).map((c) => (
             <button
               key={c}
               type="button"
@@ -798,10 +810,10 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
         const map = all?.[PREF_KEY];
         const clean: Record<string, boolean> = {};
         if (map && typeof map === "object") {
-          for (const p of PROVIDERS) if (map[p.key] === true) clean[p.key] = true;
+          for (const p of VISIBLE_PROVIDERS) if (map[p.key] === true) clean[p.key] = true;
         }
         setEnabled(clean);
-        const first = PROVIDERS.find((p) => clean[p.key]);
+        const first = VISIBLE_PROVIDERS.find((p) => clean[p.key]);
         setSelected(first ? first.key : null);
         // Nothing switched on yet is the honest first-run state: open the catalogue.
         // A member's view IS the catalogue, so it starts open either way.
@@ -824,7 +836,7 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
   useEffect(() => {
     let cancelled = false;
     Promise.allSettled(
-      PROVIDERS.map(async (p) => {
+      VISIBLE_PROVIDERS.map(async (p) => {
         const res = await getIntegrationSettings(p.key);
         return [p.key, (res.fields_set || []).length > 0] as const;
       }),
@@ -859,13 +871,13 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
       setSelected(key);
       setBrowsing(false);
     } else if (selected === key) {
-      const rest = PROVIDERS.find((p) => map[p.key]);
+      const rest = VISIBLE_PROVIDERS.find((p) => map[p.key]);
       setSelected(rest ? rest.key : null);
     }
     void persist(map);
   }
 
-  const enabledList = PROVIDERS.filter((p) => enabled[p.key]);
+  const enabledList = VISIBLE_PROVIDERS.filter((p) => enabled[p.key]);
   const activeProvider = selected ? BY_KEY[selected] : null;
 
   if (loading) {
@@ -886,7 +898,7 @@ export function IntegrationsConfig({ variant = "admin" }: { variant?: "admin" | 
           </div>
           <div>
             <p className="text-xs font-semibold text-foreground">
-              {enabledList.length} of {PROVIDERS.length} integrations enabled
+              {enabledList.length} of {VISIBLE_PROVIDERS.length} integrations enabled
             </p>
             <p className="text-2xs text-muted-foreground">
               {personal
