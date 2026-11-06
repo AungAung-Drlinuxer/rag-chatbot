@@ -1,0 +1,75 @@
+# === rag-chatbot DEV — backend API ===========================================
+# A real backend for the preview, wired to the private `postgres-dev` cluster. It shares
+# nothing that holds state with production:
+#
+#   database   postgres-dev-rw (own cluster, own credentials)
+#   redis      production service, DB **3** — a cache/rate-limit store, not data; a
+#              separate DB index keeps dev keys from evicting production sessions
+#   ollama     production service (read-only embeddings; no state to isolate)
+#   secrets    own JWT_SECRET (dev sessions cannot be replayed against prod) and its own
+#              DEV_PASSWORD; the production secret values are not copied
+#
+# The Service is named `backend` on purpose: nginx in the frontend image resolves
+# `http://backend:8000` at startup, so nothing in the image has to change.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: rag-chatbot-dev
+  labels:
+    app.kubernetes.io/name: backend
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+    spec:
+      containers:
+        - name: backend
+          image: harbor.drlinuxer.com/rag-chatbot/backend:dev-1.0.0
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef: { name: backend-config }
+            - secretRef:    { name: backend-secrets }
+          env:
+            - { name: PORT,            value: "8000" }
+            # One worker: the schema is created on first boot (`create_all`), and two
+            # workers racing that DDL on a cold database is a needless way to fail.
+            - { name: UVICORN_WORKERS, value: "1" }
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits:   { cpu: "1",  memory: 1536Mi }
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: rag-chatbot-dev
+spec:
+  selector:
+    app.kubernetes.io/name: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

@@ -15,17 +15,9 @@ metadata:
     app.kubernetes.io/part-of: rag-chatbot
     environment: dev
 ---
-# nginx.conf in the frontend image hardcodes `proxy_pass http://backend:8000` and resolves
-# that name at startup. An ExternalName Service satisfies it inside this namespace without
-# a second backend: DNS CNAMEs to the production ClusterIP service.
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend
-  namespace: rag-chatbot-dev
-spec:
-  type: ExternalName
-  externalName: backend.rag-chatbot.svc.cluster.local
+# The `backend` Service this image proxies to is defined in 30-backend.yaml — a real
+# dev API, not an ExternalName pointing at production.
+
 ---
 apiVersion: apps/v1
 kind: Deployment
