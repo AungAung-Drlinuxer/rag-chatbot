@@ -16,6 +16,10 @@ metadata:
 data:
   # Non-secret runtime config
   APP_ENV: "prod"
+  # Embeddings + fallback LLM. The in-cluster Ollama service; the image default is
+  # localhost:11434, which has no listener inside the backend pod, so every embedding
+  # call and the health panel's Ollama probe failed with ConnectError.
+  OLLAMA_URL: "http://ollama:11434"
   LOG_LEVEL: "info"
   # The in-cluster MCP servers (infra/k8s/mcp/) were removed on request, so the assistant must
   # not attempt MCP calls. Declared explicitly because the app's own default is true — without
@@ -131,7 +135,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: backend
-          image: harbor.drlinuxer.com/rag-chatbot/backend:1.0.2
+          image: harbor.drlinuxer.com/rag-chatbot/backend:1.0.3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

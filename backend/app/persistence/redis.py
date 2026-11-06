@@ -44,18 +44,41 @@ def _sentinel_kombu_url(db: int) -> str:
     return f"sentinel://{auth}{host}:{port}{alts}/{db}"
 
 
+def _with_password(url: str) -> str:
+    """Return `url` carrying REDIS_PASSWORD when it does not already carry one.
+
+    WHY: the deployment keeps the password in its own `REDIS_PASSWORD` secret key and
+    leaves `REDIS_URL` credential-free (`redis://redis-service…:6379/0`). The client used
+    to be built from that bare URL, so it never sent AUTH and every call failed with
+    "AuthenticationError: Authentication required" — the health panel then reported Redis
+    as Down while `redis-cli -a <the same password>` answered PING. One connection path
+    must own the credentials.
+    """
+    from urllib.parse import quote, urlsplit, urlunsplit
+
+    pw = SETTINGS.redis_password
+    parts = urlsplit(url)
+    if not pw or parts.password:
+        return url
+    user = quote(parts.username or "", safe="")
+    netloc = f"{user}:{quote(pw, safe='')}@{parts.hostname}"
+    if parts.port:
+        netloc += f":{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
 def broker_url() -> str:
     """Celery broker connection string (DB 0)."""
     if SETTINGS.redis_mode == "sentinel":
         return _sentinel_kombu_url(0)
-    return SETTINGS.redis_url
+    return _with_password(SETTINGS.redis_url)
 
 
 def result_backend_url() -> str:
     """Celery results backend (DB 1 — standalone keeps the /0 → /1 split)."""
     if SETTINGS.redis_mode == "sentinel":
         return _sentinel_kombu_url(1)
-    return SETTINGS.redis_url.replace("/0", "/1")
+    return _with_password(SETTINGS.redis_url.replace("/0", "/1"))
 
 
 def transport_options() -> dict:
@@ -86,4 +109,4 @@ def get_redis():
             socket_timeout=5,
         )
         return sentinel.master_for(SETTINGS.redis_master_name, redis.Redis)
-    return redis.Redis.from_url(SETTINGS.redis_url)
+    return redis.Redis.from_url(_with_password(SETTINGS.redis_url))
