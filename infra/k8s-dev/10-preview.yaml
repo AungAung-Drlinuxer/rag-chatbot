@@ -89,7 +89,10 @@ metadata:
 spec:
   ingressClassName: nginx
   tls:
-    - hosts: [dev-chat.drlinuxer.com]
+    # Both names terminate here: `dev-chat` is what Cloudflare currently routes, and
+    # `dev-chatbot` is the name operators type — one ingress serves both so a DNS change
+    # never needs a manifest change. drlinuxer-tls is the wildcard, so no new cert.
+    - hosts: [dev-chat.drlinuxer.com, dev-chatbot.drlinuxer.com]
       secretName: drlinuxer-tls
   rules:
     - host: dev-chat.drlinuxer.com
@@ -98,7 +101,11 @@ spec:
           - path: /
             pathType: Prefix
             backend:
-              service:
-                name: frontend
-                port:
-                  number: 80
+              service: { name: frontend, port: { number: 80 } }
+    - host: dev-chatbot.drlinuxer.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: frontend, port: { number: 80 } }
