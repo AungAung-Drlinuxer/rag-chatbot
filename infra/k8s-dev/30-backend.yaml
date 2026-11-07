@@ -6,8 +6,12 @@
 #   redis      production service, DB **3** — a cache/rate-limit store, not data; a
 #              separate DB index keeps dev keys from evicting production sessions
 #   ollama     production service (read-only embeddings; no state to isolate)
-#   secrets    own JWT_SECRET (dev sessions cannot be replayed against prod) and its own
-#              DEV_PASSWORD; the production secret values are not copied
+#   secrets    own JWT_SECRET (dev sessions cannot be replayed against prod).
+#              LDAP_BIND_PASSWORD is NOT the placeholder from the production manifest: the
+#              login path binds the directory service account before it can search a user,
+#              and an empty/placeholder bind makes every AD login fail with 401. Set it to
+#              the real service password (the value the Settings UI stores in
+#              system_settings['ldap'].bind_password) or AD logins cannot work.
 #
 # The Service is named `backend` on purpose: nginx in the frontend image resolves
 # `http://backend:8000` at startup, so nothing in the image has to change.
